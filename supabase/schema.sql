@@ -407,3 +407,16 @@ language sql stable security invoker set search_path = public as $$
   limit 100
 $$;
 grant execute on function public.conversas_sem_retorno(date, date, integer) to authenticated;
+
+-- =====================================================================
+-- Sinal de vida do worker: ele atualiza visto_em a cada ciclo de conexoes.
+-- A tela WhatsApp usa isso para avisar quando o worker esta desligado.
+-- =====================================================================
+create table if not exists public.worker_status (
+  id         integer primary key default 1 check (id = 1),
+  visto_em   timestamptz not null default now(),
+  conexoes   integer not null default 0
+);
+alter table public.worker_status enable row level security;
+drop policy if exists worker_status_select on public.worker_status;
+create policy worker_status_select on public.worker_status for select to authenticated using (public.eh_gestor());

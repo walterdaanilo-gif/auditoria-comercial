@@ -16,7 +16,11 @@ const loop = (nome, ms, fn) => {
   setTimeout(tick, 2000); setInterval(tick, ms);
 };
 
-loop("conexoes", 15_000, () => syncInstances(supa));
+loop("conexoes", 15_000, async () => {
+  await syncInstances(supa);
+  // sinal de vida: a tela WhatsApp mostra "worker desligado" quando isso para de atualizar
+  await supa.insert("worker_status", [{ id: 1, visto_em: new Date().toISOString(), conexoes: statusAtual().length }], { onConflict: "id", returning: false });
+});
 loop("transcricao", 20_000, () => transcribePending(supa));
 loop("auditoria", cfg.auditEveryMin * 60_000, async () => { const n = await runAudits(supa); if (n) console.log(`[auditoria] ${n} auditorias novas`); });
 loop("analise", 30_000, () => processAnalyses(supa));
