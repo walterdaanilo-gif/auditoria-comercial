@@ -157,8 +157,8 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
                   <span className={`ml-auto chip ${w?.status === "conectado" ? "border-ok text-ok" : "border-line text-mute"}`}>WhatsApp {w?.status === "conectado" ? "conectado" : w ? w.status.replace("_", " ") : "não criado"}</span>
                 </div>
                 <div className="space-y-3">
-                  {METAS.map(({ chave, rotulo, meta }) => {
-                    const feito = Number(t[chave as ChaveMeta]); const alvo = meta * uteis; const ok = feito >= alvo;
+                  {METAS.map(({ chave, rotulo, meta, soma }) => {
+                    const feito = soma.reduce((n, k: ChaveMeta) => n + Number(t[k]), 0); const alvo = meta * uteis; const ok = feito >= alvo;
                     return (
                       <div key={chave}>
                         <div className="mb-1 flex items-baseline justify-between text-sm">

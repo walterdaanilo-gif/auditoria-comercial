@@ -1,12 +1,11 @@
-// Metas diarias por SDR (as mesmas da aba SDR da planilha, celulas B4:B13).
+// Metas diarias por SDR (definidas pelo Walter em 2026-10-16).
+// "Contatos" soma conversas em que o SDR mandou mensagem e ligacoes feitas: o contato pode ser por qualquer um dos dois.
 // Confirmados e presentes ficam de fora: o sistema ainda nao mede isso.
 export const METAS = [
-  { chave: "contatadas", rotulo: "Contatadas", meta: 20 },
-  { chave: "ligacoes", rotulo: "Ligações", meta: 20 },
-  { chave: "respostas", rotulo: "Respostas no privado", meta: 20 },
-  { chave: "agendados", rotulo: "Agendados", meta: 5 },
+  { chave: "contatos", rotulo: "Contatos (ligação ou mensagem)", meta: 30, soma: ["contatadas", "ligacoes"] },
+  { chave: "agendados", rotulo: "Agendados no workshop", meta: 5, soma: ["agendados"] },
 ] as const;
-export type ChaveMeta = (typeof METAS)[number]["chave"];
+export type ChaveMeta = (typeof METAS)[number]["soma"][number];
 
 // Dias uteis (seg a sex) entre duas datas YYYY-MM-DD, inclusive. Minimo 1 para nao zerar a meta num fim de semana.
 export function diasUteis(de: string, ate: string) {
