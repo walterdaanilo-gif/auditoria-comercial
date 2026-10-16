@@ -23,12 +23,12 @@ async function pedirAnalise(fd: FormData) {
   revalidatePath("/");
 }
 
-type Dia = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; auditadas: number; nota_soma: number; agendados: number; efetivas: number };
+type Dia = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; auditadas: number; nota_soma: number; agendados: number; efetivas: number; workshop: number; imersao: number };
 type Totais = Omit<Dia, "dia" | "vendedor_id">;
 type Aud = { vendedor_id: string; gatilhos: Record<string, boolean>; etapa: string | null; objecoes: string | null };
 type Atividade = { vendedor_id: string; ultima_msg_em: string | null; ultima_ligacao_em: string | null; conversas_hoje: number };
 
-const ZERO: Totais = { contatadas: 0, enviadas: 0, respostas: 0, ligacoes: 0, auditadas: 0, nota_soma: 0, agendados: 0, efetivas: 0 };
+const ZERO: Totais = { contatadas: 0, enviadas: 0, respostas: 0, ligacoes: 0, auditadas: 0, nota_soma: 0, agendados: 0, efetivas: 0, workshop: 0, imersao: 0 };
 const somar = (linhas: Dia[]): Totais => linhas.reduce((t, l) => {
   const o = { ...t }; for (const k of Object.keys(ZERO) as (keyof Totais)[]) o[k] = Number(o[k]) + Number(l[k] || 0); return o;
 }, { ...ZERO });
@@ -45,7 +45,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   const supabase = await createClient();
 
   const [rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt] = await Promise.all([
-    supabase.rpc("resumo_diario", { p_from: de, p_to: ate }),
+    supabase.rpc("resumo_sdr", { p_from: de, p_to: ate }),
     supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
     supabase.from("profiles").select("id,nome,papel,ativo").order("nome"),
     supabase.rpc("ultima_atividade"),
@@ -68,7 +68,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   const doFiltro = <T extends { vendedor_id: string }>(l: T[]) => l.filter((x) => !filtroV || x.vendedor_id === filtroV);
   const sdrs = sdrsTodos.filter((s) => !filtroV || s.id === filtroV);
 
-  const linhas = doFiltro((rDia.data ?? []) as Dia[]);
+  const linhas = doFiltro(((rDia.data ?? []) as any[]).map((l) => ({ ...l, agendados: l.marcacoes })) as Dia[]);
   const auds = doFiltro((rAud.data ?? []) as unknown as Aud[]);
   const ativ = new Map(((rAtiv.data ?? []) as Atividade[]).map((a) => [a.vendedor_id, a]));
   const inst = new Map(((rInst.data ?? []) as { vendedor_id: string; status: string; numero: string | null }[]).map((i) => [i.vendedor_id, i]));
@@ -134,9 +134,9 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {kpi("Contatadas", total.contatadas, `${total.enviadas} mensagens enviadas`)}
-        {kpi("Respostas no privado", total.respostas, `${pct(total.respostas, total.contatadas)} das contatadas`)}
+        {kpi("Responderam", total.respostas, `${pct(total.respostas, total.contatadas)} das conversas`)}
         {kpi("Ligações", total.ligacoes, "gravações enviadas")}
-        {kpi("Agendados", total.agendados, `${pct(total.agendados, total.contatadas)} das contatadas`)}
+        {kpi("Marcações", total.agendados, `${total.workshop} workshop · ${total.imersao} imersão`)}
         {kpi("Nota média", nota(media(total)), `${total.auditadas} auditadas`, corNota(media(total)))}
       </div>
 
@@ -158,11 +158,19 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
                 </div>
                 <div className="space-y-3">
                   {METAS.map(({ chave, rotulo, meta, soma }) => {
-                    const feito = soma.reduce((n, k: ChaveMeta) => n + Number(t[k]), 0); const alvo = meta * uteis; const ok = feito >= alvo;
+                    const feito = soma.reduce((n, k: ChaveMeta) => n + Number(t[k]), 0);
+                    if (meta === null) return ( // sem meta propria: numero e taxa sobre os contatos
+                      <div key={chave}>
+                        <div className="mb-1 flex items-baseline justify-between text-sm"><span>{rotulo}</span>
+                          <span className="tabular-nums"><b className="text-base">{feito}</b><span className="ml-2 text-mute">{pct(feito, Number(t.contatadas))} das conversas</span></span></div>
+                        <div className="h-2.5 overflow-hidden rounded-full bg-track"><div className="h-full rounded-full bg-side-edge" style={{ width: `${Math.min(100, t.contatadas ? (feito / Number(t.contatadas)) * 100 : 0)}%` }} /></div>
+                      </div>
+                    );
+                    const alvo = meta * uteis; const ok = feito >= alvo;
                     return (
                       <div key={chave}>
                         <div className="mb-1 flex items-baseline justify-between text-sm">
-                          <span>{rotulo}</span>
+                          <span>{rotulo}{chave === "agendados" && feito > 0 && <span className="ml-2 text-xs text-mute">{t.workshop} workshop · {t.imersao} imersão</span>}</span>
                           <span className="tabular-nums"><b className="text-base">{feito}</b><span className="text-mute"> / {alvo}</span>
                             {ok ? <span className="ml-2 inline-flex items-center gap-1 text-ok"><CheckCircle2 size={14} />meta batida</span> : <span className="ml-2 text-mute">{pct(feito, alvo)}</span>}</span>
                         </div>

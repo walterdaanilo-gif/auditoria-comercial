@@ -2,18 +2,18 @@ import { cfg, today, addDays, dayStart } from "./config.js";
 
 export const CRITERIOS_PADRAO = ["abertura", "descoberta", "beneficio", "objecoes", "chamada_para_acao", "tom"];
 
-const system = (roteiro, criterios) => `Voce e um auditor de conversas comerciais (WhatsApp e ligacoes) de uma equipe que convida leads indicados para um workshop. Responda em portugues do Brasil, direto e informal.
+const system = (roteiro, criterios) => `Voce e um auditor de conversas comerciais (WhatsApp e ligacoes) de uma equipe que convida leads indicados para um workshop ou para uma reuniao de imersao. Responda em portugues do Brasil, direto e informal.
 
 Roteiro usado como regua:
 ${roteiro}
 
 Analise o texto (VENDEDOR = nosso vendedor, CLIENTE = a pessoa contatada; em ligacoes a transcricao pode vir sem separar quem fala). Responda APENAS com um JSON valido, sem texto fora dele:
-{"nota_geral": 0 a 10, "notas": {${criterios.map(c => `"${c}": 0 a 10`).join(", ")}}, "qualidade": "boa"|"regular"|"ruim", "etapa": "abertura"|"descoberta"|"proposta"|"objecao"|"agendamento"|"perdido"|"sem_resposta", "efetiva": true|false, "agendou": true|false,
+{"nota_geral": 0 a 10, "notas": {${criterios.map(c => `"${c}": 0 a 10`).join(", ")}}, "qualidade": "boa"|"regular"|"ruim", "etapa": "abertura"|"descoberta"|"proposta"|"objecao"|"agendamento"|"perdido"|"sem_resposta", "efetiva": true|false, "agendou": true|false, "tipo_agendamento": "workshop"|"imersao"|null,
 "gatilhos": {"personalizacao": bool, "pergunta_aberta": bool, "beneficio_claro": bool, "prova_social": bool, "autoridade": bool, "escassez_urgencia": bool, "reciprocidade": bool, "tratamento_objecao": bool, "chamada_para_acao": bool, "followup": bool},
 "resumo": "ate 2 frases", "pontos_fortes": "ate 2 pontos curtos", "pontos_melhoria": "ate 2 acoes praticas", "objecoes": "objecoes do cliente ou vazio"}
 
 Gatilhos (true so se o vendedor usou de fato): personalizacao = nome, indicacao ou contexto do lead; pergunta_aberta = perguntou para entender o momento; beneficio_claro = explicou o ganho; prova_social = indicacao, outros participantes, resultados; autoridade = quem conduz ou credencial; escassez_urgencia = vagas ou data limite; reciprocidade = deu algo util antes de pedir; tratamento_objecao = respondeu bem a objecao; chamada_para_acao = propos data e horario; followup = retomou contato apos silencio.
-"efetiva" = houve troca real com o cliente. "agendou" = o cliente aceitou data ou horario. Nao invente fatos que nao estao no texto.`;
+"efetiva" = houve troca real com o cliente. "agendou" = o cliente aceitou data ou horario. "tipo_agendamento" = o que foi marcado quando agendou=true: "workshop" (convite para o workshop) ou "imersao" (reuniao para a imersao); null quando nao agendou. Nao invente fatos que nao estao no texto.`;
 
 export async function callClaude(roteiro, criterios, conversa, fetchImpl = fetch) {
   const r = await fetchImpl("https://api.anthropic.com/v1/messages", {
@@ -36,6 +36,8 @@ function normalizar(a, criterios) {
     gatilhos: a.gatilhos && typeof a.gatilhos === "object" ? a.gatilhos : {},
     qualidade: ["boa", "regular", "ruim"].includes(a.qualidade) ? a.qualidade : nota >= 7 ? "boa" : nota >= 4 ? "regular" : "ruim",
     etapa: String(a.etapa || ""), efetiva: !!a.efetiva, agendou: !!a.agendou,
+    // marcacao conta na meta de 6 por dia; sem tipo claro, conta como workshop (o convite padrao)
+    tipo_agendamento: a.agendou ? (a.tipo_agendamento === "imersao" ? "imersao" : "workshop") : null,
     resumo: String(a.resumo || ""), pontos_fortes: String(a.pontos_fortes || ""), pontos_melhoria: String(a.pontos_melhoria || ""), objecoes: String(a.objecoes || ""),
     modelo: cfg.model, atualizado_em: new Date().toISOString(), sheet_ok: false,
   };

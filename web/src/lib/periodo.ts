@@ -12,7 +12,12 @@ export function lerPeriodo(sp: { p?: string; de?: string; ate?: string }, padrao
     if (de < somaDias(ate, -365)) de = somaDias(ate, -365);
     return { p: "livre", de, ate, rotulo: de === ate ? fmtData(de) : `${fmtData(de)} a ${fmtData(ate)}` };
   }
-  const p = ["hoje", "7", "30"].includes(sp.p ?? "") ? (sp.p as string) : padrao;
+  const p = ["hoje", "7", "30", "semana", "mes"].includes(sp.p ?? "") ? (sp.p as string) : padrao;
+  if (p === "semana") { // segunda-feira desta semana ate hoje
+    const dow = new Date(hoje + "T12:00:00Z").getUTCDay();
+    return { p, de: somaDias(hoje, -((dow + 6) % 7)), ate: hoje, rotulo: "Semana atual" };
+  }
+  if (p === "mes") return { p, de: hoje.slice(0, 8) + "01", ate: hoje, rotulo: "Mês atual" };
   const de = somaDias(hoje, p === "30" ? -29 : p === "7" ? -6 : 0);
   return { p, de, ate: hoje, rotulo: p === "30" ? "Últimos 30 dias" : p === "7" ? "Últimos 7 dias" : "Hoje" };
 }

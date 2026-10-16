@@ -513,3 +513,58 @@ language sql stable security invoker set search_path = public as $$
   order by u.enviada_em
   limit 100
 $$;
+
+-- =====================================================================
+-- Marcacoes: a IA classifica o agendamento em workshop ou reuniao de imersao.
+-- resumo_sdr: numeros por dia e por SDR para o Painel e a Apresentacao.
+-- =====================================================================
+alter table public.auditorias add column if not exists tipo_agendamento text check (tipo_agendamento in ('workshop','imersao'));
+
+create or replace function public.resumo_sdr(p_from date, p_to date)
+returns table (dia date, vendedor_id uuid, contatadas bigint, enviadas bigint, respostas bigint, ligacoes bigint,
+               auditadas bigint, nota_soma numeric, efetivas bigint, marcacoes bigint, workshop bigint, imersao bigint)
+language sql stable security invoker set search_path = public as $$
+  with msgs as (
+    select c.data as dia, m.conversa_id, m.vendedor_id,
+      sum((m.remetente = 'vendedor')::int) as env,
+      sum((m.remetente = 'cliente')::int) as rec
+    from public.conversas c join public.mensagens m on m.conversa_id = c.id
+    where c.data between p_from and p_to and c.canal <> 'importada'
+    group by c.data, m.conversa_id, m.vendedor_id
+  ), conv as (
+    select dia, vendedor_id,
+      count(*) filter (where env > 0) as contatadas,
+      coalesce(sum(env), 0)::bigint as enviadas,
+      count(*) filter (where env > 0 and rec > 0) as respostas
+    from msgs group by dia, vendedor_id
+  ), lig as (
+    select (iniciada_em at time zone 'America/Sao_Paulo')::date as dia, vendedor_id, count(*) as ligacoes
+    from public.ligacoes
+    where (iniciada_em at time zone 'America/Sao_Paulo')::date between p_from and p_to
+    group by 1, 2
+  ), aud as (
+    select coalesce(c.data, (l.iniciada_em at time zone 'America/Sao_Paulo')::date) as dia, a.vendedor_id,
+      count(*) as auditadas, sum(a.nota_geral) as nota_soma, count(*) filter (where a.efetiva) as efetivas,
+      count(*) filter (where a.agendou) as marcacoes,
+      count(*) filter (where a.agendou and coalesce(a.tipo_agendamento, 'workshop') = 'workshop') as workshop,
+      count(*) filter (where a.agendou and a.tipo_agendamento = 'imersao') as imersao
+    from public.auditorias a
+    left join public.conversas c on c.id = a.conversa_id
+    left join public.ligacoes l on l.id = a.ligacao_id
+    where coalesce(c.data, (l.iniciada_em at time zone 'America/Sao_Paulo')::date) between p_from and p_to
+      and coalesce(c.canal, '') <> 'importada'
+    group by 1, 2
+  ), chaves as (
+    select dia, vendedor_id from conv union select dia, vendedor_id from lig union select dia, vendedor_id from aud
+  )
+  select k.dia, k.vendedor_id,
+    coalesce(conv.contatadas, 0), coalesce(conv.enviadas, 0), coalesce(conv.respostas, 0), coalesce(lig.ligacoes, 0),
+    coalesce(aud.auditadas, 0), coalesce(aud.nota_soma, 0), coalesce(aud.efetivas, 0),
+    coalesce(aud.marcacoes, 0), coalesce(aud.workshop, 0), coalesce(aud.imersao, 0)
+  from chaves k
+  left join conv using (dia, vendedor_id)
+  left join lig using (dia, vendedor_id)
+  left join aud using (dia, vendedor_id)
+  order by k.dia, k.vendedor_id
+$$;
+grant execute on function public.resumo_sdr(date, date) to authenticated;
