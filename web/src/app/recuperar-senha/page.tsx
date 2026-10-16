@@ -12,7 +12,7 @@ export default function RecuperarSenha() {
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
     setCarregando(true);
-    const base = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+    const base = window.location.origin; // o proprio endereco do site: nao depende de variavel na Vercel
     const { error } = await createClient().auth.resetPasswordForEmail(email.trim(), { redirectTo: `${base}/auth/callback?next=/redefinir-senha` });
     setCarregando(false);
     // e-mail inexistente nao gera erro (mesma resposta). Erro aqui e configuracao, limite de envio ou servidor

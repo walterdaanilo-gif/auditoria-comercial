@@ -1,10 +1,11 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./config";
 
 // Cliente do servidor com a sessao do usuario (a RLS do banco vale para ele)
 export async function createClient() {
   const store = await cookies();
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  return createServerClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     cookies: {
       getAll: () => store.getAll(),
       setAll: (list: { name: string; value: string; options: CookieOptions }[]) => {
