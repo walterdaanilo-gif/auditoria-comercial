@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import AbasPainel from "@/components/AbasPainel";
 import { revalidatePath } from "next/cache";
 import { AlertTriangle, ArrowDownLeft, ArrowUpRight, CheckCircle2, CircleDot, Clock, MessageCircleWarning, Phone, ThumbsDown } from "lucide-react";
 import AutoRefresh from "@/components/AutoRefresh";
@@ -128,7 +130,10 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   return (
     <div className="space-y-6">
       <AutoRefresh segundos={30} />
-      <div><h1 className="page-title">Painel</h1><p className="page-sub">O que o time está fazendo, comparado com as metas. Atualiza sozinho a cada 30 segundos.</p></div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h1 className="page-title">Painel</h1><p className="page-sub">O que o time está fazendo, comparado com as metas. Atualiza sozinho a cada 30 segundos.</p></div>
+        {gestor && <Suspense><AbasPainel atual="painel" /></Suspense>}
+      </div>
 
       <FiltroPeriodo base="/" periodo={periodo} vendedores={gestor ? sdrsTodos.map((s) => [s.id, s.nome]) : undefined} vendedor={filtroV} />
 

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import AbasPainel from "@/components/AbasPainel";
 import AutoRefresh from "@/components/AutoRefresh";
 import { corNota, fmtHora, nota, telefone, um } from "@/lib/format";
 import { corSdr, diasUteis } from "@/lib/metas";
@@ -106,6 +108,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, marcacoes, s
           <Link href="/" className="flex items-center" title="Voltar ao painel"><img src="/weevo-logo.png" alt="Weevo" className="h-[1.5em] w-auto" /></Link>
           <i className="h-[1.6em] w-px bg-line" />
           <h1 className="whitespace-nowrap text-[0.72em] font-semibold uppercase tracking-[0.3em] text-brand">Auditoria comercial · SDRs</h1>
+          <Suspense><AbasPainel atual="apresentacao" /></Suspense>
         </div>
         <Controles p={periodo.p} de={de} ate={ate} atualizadoEm={atualizadoEm} />
       </header>
