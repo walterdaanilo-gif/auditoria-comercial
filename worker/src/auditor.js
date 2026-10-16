@@ -44,7 +44,8 @@ function normalizar(a, criterios) {
 const linha = m => `${m.remetente === "vendedor" ? "VENDEDOR" : "CLIENTE"}: ${m.tipo === "audio" ? `[audio] ${m.transcricao || ""}` : m.texto || `[${m.tipo}]`}`;
 const cortar = t => (t.length > 14000 ? t.slice(t.length - 14000) : t);
 
-// Audita conversas paradas ha AUDIT_IDLE_MINUTES (com mensagens novas desde a ultima nota) e ligacoes ja transcritas
+// Audita conversas paradas ha AUDIT_IDLE_MINUTES (com mensagens novas desde a ultima nota) e ligacoes ja transcritas.
+// Conversa so e auditada quando o lead respondeu: precisa ter mensagem do SDR e do lead.
 export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}) {
   if (!cfg.anthropicKey && fetchImpl === fetch) return 0;
   const [cfgRow] = await db.select("config_auditoria", { filters: { id: "eq.1" } });
@@ -58,15 +59,15 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}
   if (convs.length) {
     const resumo = new Map();
     for (const m of await db.selectAll("mensagens", { select: "conversa_id,remetente,tipo,transcricao,audio_url", filters: { enviada_em: `gte.${dayStart(from)}` }, order: "id" })) {
-      const r = resumo.get(m.conversa_id) || { n: 0, vend: 0, pendAudio: 0 };
-      r.n++; if (m.remetente === "vendedor") r.vend++;
+      const r = resumo.get(m.conversa_id) || { n: 0, vend: 0, cli: 0, pendAudio: 0 };
+      r.n++; if (m.remetente === "vendedor") r.vend++; else r.cli++;
       if (m.tipo === "audio" && m.audio_url && m.transcricao == null) r.pendAudio++;
       resumo.set(m.conversa_id, r);
     }
     const auds = new Map((await db.selectAll("auditorias", { select: "conversa_id,msg_count", filters: { conversa_id: "not.is.null", atualizado_em: `gte.${dayStart(addDays(from, -1))}` } })).map(a => [a.conversa_id, a.msg_count]));
     for (const c of convs) {
       const r = resumo.get(c.id);
-      if (!r || !r.vend) continue;
+      if (!r || !r.vend || !r.cli) continue; // so audita quando o lead respondeu (mensagem dos dois lados)
       const parada = now - new Date(c.ultima_msg_em).getTime();
       if (parada < cfg.idleMin * 60000) continue;
       if (r.pendAudio && parada < 30 * 60000) continue; // espera a transcricao dos audios
@@ -88,7 +89,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}
       if (ja.has(c.id)) continue;
       try {
         const msgs = await db.select("mensagens", { select: "remetente,texto,tipo,transcricao", filters: { conversa_id: `eq.${c.id}` }, order: "enviada_em" });
-        if (!msgs.some(m => m.remetente === "vendedor")) continue;
+        if (!msgs.some(m => m.remetente === "vendedor") || !msgs.some(m => m.remetente === "cliente")) continue; // sem resposta do lead
         const a = normalizar(await callClaude(roteiro, criterios, cortar(msgs.map(linha).join("\n")), fetchImpl), criterios);
         // sheet_ok: importadas sao teste e nao vao para a planilha
         await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: msgs.length, ...a, sheet_ok: true }], { onConflict: "conversa_id", returning: false });

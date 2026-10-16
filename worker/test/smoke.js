@@ -40,7 +40,11 @@ const ia = async (_u, o) => {
   const conv = JSON.parse(o.body).messages[0].content; const ok = conv.includes("topo sim");
   return { ok: true, json: async () => ({ content: [{ text: "```json\n" + JSON.stringify({ nota_geral: ok ? 8.5 : 4, notas: { abertura: 9, descoberta: 7 }, qualidade: ok ? "boa" : "ruim", etapa: ok ? "agendamento" : "sem_resposta", efetiva: ok, agendou: ok, gatilhos: { personalizacao: true, chamada_para_acao: ok, prova_social: ok }, resumo: "r", pontos_fortes: "f", pontos_melhoria: "m", objecoes: ok ? "" : "sem tempo" }) + "\n```" }] }) };
 };
-assert.equal(await runAudits(db, { fetchImpl: ia }), 2);
+assert.equal(await runAudits(db, { fetchImpl: ia }), 1); // so a Ana respondeu; o Carlos nao, entao nao e auditado
+assert.ok(!db.tables.auditorias.some(a => a.conversa_id === db.tables.conversas.find(c => c.contato === B).id), "conversa sem resposta nao e auditada");
+// quando o Carlos responder, a conversa dele entra na fila
+await saveMessage(db, INST, m(B, 2, false, "Oi, quem fala?"));
+assert.equal(await runAudits(db, { fetchImpl: ia }), 1);
 const audA = db.tables.auditorias.find(a => a.conversa_id === db.tables.conversas.find(c => c.contato === A).id);
 assert.equal(audA.nota_geral, 8.5); assert.equal(audA.agendou, true); assert.equal(audA.notas.abertura, 9); assert.equal(audA.notas.tom, 0);
 assert.equal(await runAudits(db, { fetchImpl: ia }), 0); // sem mensagem nova: nao reaudita
@@ -67,7 +71,7 @@ db.tables.auditorias = db.tables.auditorias.filter(a => a.conversa_id !== "imp1"
 // ----- metricas do espelho -----
 const msgs = db.tables.mensagens.map(x => ({ conversa_id: x.conversa_id, vendedor_id: x.vendedor_id, remetente: x.remetente, enviada_em: x.enviada_em }));
 const d = calcDay(msgs, db.tables.auditorias);
-assert.equal(d.contatadas, 2); assert.equal(d.respondidas, 1); assert.equal(d.agendadosMsg, 1);
+assert.equal(d.contatadas, 2); assert.equal(d.respondidas, 2); assert.equal(d.agendadosMsg, 1);
 
 // ----- analise do time -----
 db.tables.analises_time = [{ id: "a1", periodo: "7", status: "pendente", criado_em: new Date().toISOString() }];
