@@ -317,3 +317,93 @@ exception when others then null; end $$;
 -- 2) Rode (troque o e-mail):
 --    update public.profiles set papel = 'admin', nome = 'Seu nome' where email = 'voce@empresa.com';
 -- =====================================================================
+
+-- =====================================================================
+-- PAINEL DOS SDRs: numeros por dia, atividade ao vivo e conversas sem retorno
+-- Todas SECURITY INVOKER: a RLS continua valendo (vendedor ve so os proprios dados).
+-- Pode rodar de novo sem quebrar.
+-- =====================================================================
+
+create index if not exists ix_msg_vendedor_env on public.mensagens(vendedor_id, enviada_em desc) where remetente = 'vendedor';
+
+-- Numeros por dia e por vendedor no periodo
+-- contatadas: conversas em que o vendedor enviou mensagem
+-- respostas: conversas em que o lead respondeu depois da primeira mensagem do vendedor
+-- agendados, auditadas e nota: auditorias de conversas e de ligacoes do dia
+create or replace function public.resumo_diario(p_from date, p_to date)
+returns table (dia date, vendedor_id uuid, contatadas bigint, enviadas bigint, respostas bigint, ligacoes bigint,
+               auditadas bigint, nota_soma numeric, agendados bigint, efetivas bigint)
+language sql stable security invoker set search_path = public as $$
+  with msgs as (
+    select c.data as dia, m.conversa_id, m.vendedor_id,
+      sum((m.remetente = 'vendedor')::int) as env,
+      min(m.enviada_em) filter (where m.remetente = 'vendedor') as primeira_v,
+      max(m.enviada_em) filter (where m.remetente = 'cliente')  as ultima_c
+    from public.conversas c join public.mensagens m on m.conversa_id = c.id
+    where c.data between p_from and p_to
+    group by c.data, m.conversa_id, m.vendedor_id
+  ), conv as (
+    select dia, vendedor_id,
+      count(*) filter (where env > 0) as contatadas,
+      coalesce(sum(env), 0)::bigint as enviadas,
+      count(*) filter (where env > 0 and ultima_c > primeira_v) as respostas
+    from msgs group by dia, vendedor_id
+  ), lig as (
+    select (iniciada_em at time zone 'America/Sao_Paulo')::date as dia, vendedor_id, count(*) as ligacoes
+    from public.ligacoes
+    where (iniciada_em at time zone 'America/Sao_Paulo')::date between p_from and p_to
+    group by 1, 2
+  ), aud as (
+    select coalesce(c.data, (l.iniciada_em at time zone 'America/Sao_Paulo')::date) as dia, a.vendedor_id,
+      count(*) as auditadas, sum(a.nota_geral) as nota_soma,
+      count(*) filter (where a.agendou) as agendados, count(*) filter (where a.efetiva) as efetivas
+    from public.auditorias a
+    left join public.conversas c on c.id = a.conversa_id
+    left join public.ligacoes l on l.id = a.ligacao_id
+    where coalesce(c.data, (l.iniciada_em at time zone 'America/Sao_Paulo')::date) between p_from and p_to
+    group by 1, 2
+  ), chaves as (
+    select dia, vendedor_id from conv union select dia, vendedor_id from lig union select dia, vendedor_id from aud
+  )
+  select k.dia, k.vendedor_id,
+    coalesce(conv.contatadas, 0), coalesce(conv.enviadas, 0), coalesce(conv.respostas, 0), coalesce(lig.ligacoes, 0),
+    coalesce(aud.auditadas, 0), coalesce(aud.nota_soma, 0), coalesce(aud.agendados, 0), coalesce(aud.efetivas, 0)
+  from chaves k
+  left join conv using (dia, vendedor_id)
+  left join lig using (dia, vendedor_id)
+  left join aud using (dia, vendedor_id)
+  order by k.dia, k.vendedor_id
+$$;
+grant execute on function public.resumo_diario(date, date) to authenticated;
+
+-- Ultima acao de cada vendedor (para a atividade ao vivo)
+create or replace function public.ultima_atividade()
+returns table (vendedor_id uuid, ultima_msg_em timestamptz, ultima_ligacao_em timestamptz, conversas_hoje bigint)
+language sql stable security invoker set search_path = public as $$
+  select p.id,
+    (select max(m.enviada_em) from public.mensagens m where m.vendedor_id = p.id and m.remetente = 'vendedor'),
+    (select max(l.iniciada_em) from public.ligacoes l where l.vendedor_id = p.id),
+    (select count(*) from public.conversas c where c.vendedor_id = p.id and c.data = (now() at time zone 'America/Sao_Paulo')::date)
+  from public.profiles p
+  where p.ativo
+$$;
+grant execute on function public.ultima_atividade() to authenticated;
+
+-- Conversas do periodo em que a ultima mensagem e do lead e ninguem respondeu ha mais de p_min minutos
+create or replace function public.conversas_sem_retorno(p_from date, p_to date, p_min integer default 15)
+returns table (conversa_id uuid, vendedor_id uuid, contato text, contato_nome text, ultima_msg_em timestamptz, texto text)
+language sql stable security invoker set search_path = public as $$
+  select c.id, c.vendedor_id, c.contato, c.contato_nome, u.enviada_em,
+    coalesce(u.texto, u.transcricao, '[' || u.tipo || ']')
+  from public.conversas c
+  cross join lateral (
+    select m.remetente, m.texto, m.transcricao, m.tipo, m.enviada_em
+    from public.mensagens m where m.conversa_id = c.id order by m.enviada_em desc limit 1
+  ) u
+  where c.data between p_from and p_to
+    and u.remetente = 'cliente'
+    and u.enviada_em < now() - make_interval(mins => p_min)
+  order by u.enviada_em
+  limit 100
+$$;
+grant execute on function public.conversas_sem_retorno(date, date, integer) to authenticated;
