@@ -35,6 +35,8 @@ begin
   return new;
 end $$;
 
+revoke all on function public.handle_new_user() from public, anon, authenticated;
+
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
@@ -52,7 +54,7 @@ create or replace function public.eh_gestor() returns boolean
 language sql stable security definer set search_path = public as $$
   select coalesce((select papel in ('admin', 'gestor') from public.profiles where id = auth.uid() and ativo), false)
 $$;
-revoke all on function public.papel_atual(), public.eh_admin(), public.eh_gestor() from public;
+revoke all on function public.papel_atual(), public.eh_admin(), public.eh_gestor() from public, anon;
 grant execute on function public.papel_atual(), public.eh_admin(), public.eh_gestor() to authenticated;
 
 -- ---------- instancias_whatsapp ----------
