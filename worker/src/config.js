@@ -25,6 +25,8 @@ export const cfg = {
   // espelho no Google Sheets
   sheetId: env.SHEET_ID || "",
   saFile: env.GOOGLE_SERVICE_ACCOUNT_FILE || "./secrets/service-account.json",
+  // alternativa ao arquivo (Railway so tem variaveis): o JSON inteiro da conta de servico
+  saJson: env.GOOGLE_SERVICE_ACCOUNT_JSON || "",
   sheetTab: env.SHEET_TAB || "SDR",
   auditTab: env.AUDIT_TAB || "Auditoria",
   messagesTab: env.MESSAGES_TAB || "Mensagens",

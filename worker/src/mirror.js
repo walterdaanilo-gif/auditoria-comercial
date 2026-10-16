@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import { cfg, today, addDays, dayStart, dayOf, phoneOf } from "./config.js";
-import { writeDayRow, appendMessages, upsertAudit } from "./google.js";
+import { writeDayRow, appendMessages, upsertAudit, temChaveGoogle } from "./google.js";
 
-export const mirrorEnabled = () => !!cfg.sheetId && fs.existsSync(cfg.saFile);
+export const mirrorEnabled = () => !!cfg.sheetId && temChaveGoogle();
 const lastSent = {};
 const hora = iso => new Intl.DateTimeFormat("pt-BR", { timeZone: cfg.tz, hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(iso));
 

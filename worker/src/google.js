@@ -6,11 +6,12 @@ import { cfg, sheetSerial } from "./config.js";
 let sa = null, tok = null, tokExp = 0;
 const b64 = o => Buffer.from(typeof o === "string" ? o : JSON.stringify(o)).toString("base64url");
 
-export const googleEnabled = () => !!cfg.sheetId && fs.existsSync(cfg.saFile);
+export const temChaveGoogle = () => !!cfg.saJson || fs.existsSync(cfg.saFile);
+export const googleEnabled = () => !!cfg.sheetId && temChaveGoogle();
 
 async function token() {
   if (tok && Date.now() < tokExp - 60000) return tok;
-  sa ||= JSON.parse(fs.readFileSync(cfg.saFile, "utf8"));
+  sa ||= JSON.parse(cfg.saJson || fs.readFileSync(cfg.saFile, "utf8"));
   const now = Math.floor(Date.now() / 1000);
   const head = b64({ alg: "RS256", typ: "JWT" });
   const body = b64({ iss: sa.client_email, scope: "https://www.googleapis.com/auth/spreadsheets", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 });
