@@ -15,7 +15,11 @@ export default function LoginForm() {
     e.preventDefault();
     setErro(""); setCarregando(true);
     const { error } = await createClient().auth.signInWithPassword({ email: email.trim(), password: senha });
-    if (error) { setErro("E-mail ou senha incorretos."); setCarregando(false); return; }
+    if (error) {
+      // 400 = credenciais erradas. Outros codigos (401, 5xx, rede) sao problema de configuracao ou do servidor
+      setErro(error.status === 400 ? "E-mail ou senha incorretos." : "Não foi possível conectar ao servidor. Avise o administrador.");
+      setCarregando(false); return;
+    }
     router.replace("/");
     router.refresh();
   }

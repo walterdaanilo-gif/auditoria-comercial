@@ -7,13 +7,17 @@ export default function RecuperarSenha() {
   const [email, setEmail] = useState("");
   const [enviado, setEnviado] = useState(false);
   const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
     setCarregando(true);
     const base = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
-    await createClient().auth.resetPasswordForEmail(email.trim(), { redirectTo: `${base}/auth/callback?next=/redefinir-senha` });
-    setEnviado(true); setCarregando(false); // mesma resposta exista o e-mail ou nao
+    const { error } = await createClient().auth.resetPasswordForEmail(email.trim(), { redirectTo: `${base}/auth/callback?next=/redefinir-senha` });
+    setCarregando(false);
+    // e-mail inexistente nao gera erro (mesma resposta). Erro aqui e configuracao, limite de envio ou servidor
+    if (error) return setErro(error.status === 429 ? "Muitos pedidos seguidos. Espere alguns minutos e tente de novo." : "Não foi possível enviar agora. Avise o administrador.");
+    setEnviado(true);
   }
 
   return (
@@ -25,6 +29,7 @@ export default function RecuperarSenha() {
       ) : (
         <form onSubmit={enviar} className="card space-y-3">
           <div><label className="label">E-mail</label><input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+          {erro && <p className="text-sm text-bad">{erro}</p>}
           <button className="btn w-full" disabled={carregando}>{carregando ? "Enviando..." : "Enviar link"}</button>
         </form>
       )}
