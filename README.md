@@ -29,8 +29,8 @@ Gravação de ligação ┘        │  transcreve (Whisper) e audita (Claude)
    - A função `resumo_por_vendedor`, que respeita a RLS.
 3. **Desligue o cadastro público:** Authentication → Sign In / Providers → desligue **Allow new users to sign up** (em algumas versões do painel fica em Providers → Email, com o nome **Enable sign ups**). O admin continua criando usuários pelo painel.
 4. **URLs do login:** Authentication → URL Configuration
-   - Site URL: `https://auditoria-comercial.vercel.app`
-   - Redirect URLs: `https://auditoria-comercial.vercel.app/auth/callback`
+   - Site URL: `https://auditoria-comercial-omega.vercel.app`
+   - Redirect URLs: `https://auditoria-comercial-omega.vercel.app/auth/callback`
 5. **Primeiro admin:** Authentication → Users → Add user (e-mail, senha, marque Auto Confirm). Depois, no SQL Editor:
    ```sql
    update public.profiles set papel = 'admin', nome = 'Seu nome' where email = 'voce@empresa.com';
@@ -64,7 +64,7 @@ Regras da service_role key:
 1. Suba esta pasta para um repositório no GitHub (privado).
 2. vercel.com → Add New → Project → importe o repositório.
 3. **Root Directory:** `web`. Framework: Next.js (detecta sozinho).
-4. **Project Name:** `auditoria-comercial`. O endereço fica `auditoria-comercial.vercel.app`. Se o nome já existir, a Vercel sugere outro. Atualize então as URLs do passo 1.4.
+4. **Project Name:** `auditoria-comercial`. O endereço fica `auditoria-comercial-omega.vercel.app`. Se o nome já existir, a Vercel sugere outro. Atualize então as URLs do passo 1.4.
 5. Environment Variables: as 4 da tabela marcadas como Vercel.
 6. Deploy.
 
