@@ -1,0 +1,317 @@
+-- =====================================================================
+-- AUDITORIA COMERCIAL: schema completo para o SQL Editor do Supabase
+-- Rode este arquivo inteiro uma vez. Pode rodar de novo sem quebrar.
+-- =====================================================================
+
+create extension if not exists pgcrypto;
+
+-- ---------- Tipos ----------
+do $$ begin
+  create type public.papel_usuario as enum ('admin', 'gestor', 'vendedor');
+exception when duplicate_object then null; end $$;
+
+-- ---------- profiles ----------
+create table if not exists public.profiles (
+  id        uuid primary key references auth.users(id) on delete cascade,
+  nome      text not null default '',
+  email     text not null default '',
+  papel     public.papel_usuario not null default 'vendedor',
+  ativo     boolean not null default true,
+  criado_em timestamptz not null default now()
+);
+
+-- Cria o profile automaticamente quando o admin cria um usuario (cadastro publico fica desativado no painel)
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, nome, email, papel)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'nome', split_part(new.email, '@', 1)),
+    new.email,
+    'vendedor' -- nunca confiar no papel vindo do cadastro: so o admin promove (Server Action)
+  )
+  on conflict (id) do nothing;
+  return new;
+end $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- ---------- Funcoes de papel (usadas nas politicas de RLS) ----------
+create or replace function public.papel_atual() returns public.papel_usuario
+language sql stable security definer set search_path = public as $$
+  select papel from public.profiles where id = auth.uid() and ativo
+$$;
+create or replace function public.eh_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select papel = 'admin' from public.profiles where id = auth.uid() and ativo), false)
+$$;
+create or replace function public.eh_gestor() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select papel in ('admin', 'gestor') from public.profiles where id = auth.uid() and ativo), false)
+$$;
+revoke all on function public.papel_atual(), public.eh_admin(), public.eh_gestor() from public;
+grant execute on function public.papel_atual(), public.eh_admin(), public.eh_gestor() to authenticated;
+
+-- ---------- instancias_whatsapp ----------
+create table if not exists public.instancias_whatsapp (
+  id            uuid primary key default gen_random_uuid(),
+  vendedor_id   uuid not null references public.profiles(id) on delete cascade,
+  nome          text not null,
+  numero        text,
+  status        text not null default 'aguardando' check (status in ('aguardando','aguardando_qr','conectando','conectado','desconectado','erro')),
+  qr            text,                       -- texto do QR atual, escrito pelo worker
+  comando       text check (comando in ('reset')),  -- 'reset' = desconectar e gerar novo QR
+  atualizado_em timestamptz not null default now(),
+  criado_em     timestamptz not null default now()
+);
+create index if not exists ix_inst_vendedor on public.instancias_whatsapp(vendedor_id);
+
+-- ---------- conversas (um contato por dia por instancia) ----------
+create table if not exists public.conversas (
+  id            uuid primary key default gen_random_uuid(),
+  vendedor_id   uuid not null references public.profiles(id) on delete cascade,
+  instancia_id  uuid references public.instancias_whatsapp(id) on delete set null,
+  contato       text not null,              -- numero ou id do WhatsApp
+  contato_nome  text,
+  canal         text not null default 'whatsapp',
+  data          date not null,
+  ultima_msg_em timestamptz not null default now(),
+  criado_em     timestamptz not null default now(),
+  unique (instancia_id, contato, data)
+);
+create index if not exists ix_conv_vendedor_data on public.conversas(vendedor_id, data desc);
+
+-- ---------- mensagens ----------
+create table if not exists public.mensagens (
+  id          uuid primary key default gen_random_uuid(),
+  conversa_id uuid not null references public.conversas(id) on delete cascade,
+  vendedor_id uuid not null references public.profiles(id) on delete cascade,
+  wa_id       text not null,
+  remetente   text not null check (remetente in ('vendedor','cliente')),
+  texto       text,
+  tipo        text not null default 'texto' check (tipo in ('texto','audio','imagem','video','documento','outro')),
+  audio_url   text,                         -- caminho no bucket 'audios'
+  transcricao text,
+  enviada_em  timestamptz not null,
+  espelhada   boolean not null default false,   -- ja foi para a planilha
+  unique (conversa_id, wa_id)
+);
+create index if not exists ix_msg_conversa on public.mensagens(conversa_id, enviada_em);
+create index if not exists ix_msg_pend_audio on public.mensagens(tipo) where tipo = 'audio' and transcricao is null;
+create index if not exists ix_msg_espelho on public.mensagens(espelhada) where espelhada = false;
+
+-- ---------- ligacoes ----------
+create table if not exists public.ligacoes (
+  id           uuid primary key default gen_random_uuid(),
+  vendedor_id  uuid not null references public.profiles(id) on delete cascade,
+  instancia_id uuid references public.instancias_whatsapp(id) on delete set null,
+  contato      text not null,
+  duracao_seg  integer,
+  audio_url    text,                        -- caminho no bucket 'audios'
+  transcricao  text,
+  origem       text not null default 'manual' check (origem in ('manual','whatsapp')),
+  iniciada_em  timestamptz not null default now(),
+  criado_em    timestamptz not null default now()
+);
+create index if not exists ix_lig_vendedor on public.ligacoes(vendedor_id, iniciada_em desc);
+
+-- ---------- auditorias ----------
+create table if not exists public.auditorias (
+  id             uuid primary key default gen_random_uuid(),
+  conversa_id    uuid unique references public.conversas(id) on delete cascade,
+  ligacao_id     uuid unique references public.ligacoes(id) on delete cascade,
+  vendedor_id    uuid not null references public.profiles(id) on delete cascade,
+  nota_geral     numeric(3,1) not null check (nota_geral between 0 and 10),
+  notas          jsonb not null default '{}',   -- nota de 0 a 10 por criterio
+  gatilhos       jsonb not null default '{}',   -- gatilhos comerciais usados (true/false)
+  pontos_fortes  text,
+  pontos_melhoria text,
+  resumo         text,
+  qualidade      text check (qualidade in ('boa','regular','ruim')),
+  etapa          text,
+  objecoes       text,
+  agendou        boolean not null default false,
+  efetiva        boolean not null default false,
+  msg_count      integer not null default 0,
+  modelo         text,
+  sheet_row      integer,                       -- linha no espelho do Google Sheets
+  sheet_ok       boolean not null default false,
+  criado_em      timestamptz not null default now(),
+  atualizado_em  timestamptz not null default now(),
+  check ((conversa_id is not null)::int + (ligacao_id is not null)::int = 1)
+);
+create index if not exists ix_aud_vendedor on public.auditorias(vendedor_id, criado_em desc);
+
+-- ---------- config_auditoria (roteiro editavel pelo admin) ----------
+create table if not exists public.config_auditoria (
+  id       integer primary key default 1 check (id = 1),
+  roteiro  text not null,
+  criterios jsonb not null default '["abertura","descoberta","beneficio","objecoes","chamada_para_acao","tom"]',
+  atualizado_em timestamptz not null default now()
+);
+insert into public.config_auditoria (roteiro) values (
+'# Roteiro do convite para o workshop (edite no painel, em Roteiro)
+
+## Um bom contato tem
+1. Abertura pessoal: cita quem indicou o lead e a oficina de origem.
+2. Motivo claro: convite para o workshop.
+3. Pergunta aberta para entender o momento do lead.
+4. Beneficio do workshop em 1 ou 2 frases.
+5. Tratamento de objecao (sem tempo, sem interesse, quanto custa).
+6. Proposta objetiva de data e horario.
+7. Confirmacao do agendamento com dia, hora e local ou link.
+
+## Conversa efetiva
+O lead respondeu e houve troca real sobre o convite.
+
+## Agendado
+O lead aceitou data ou horario para o workshop.
+
+## Tom
+Informal, direto, respeitoso. Sem pressao exagerada, sem mensagem gigante.')
+on conflict (id) do nothing;
+
+-- ---------- analises_time (analise comercial gerada pela IA) ----------
+create table if not exists public.analises_time (
+  id           uuid primary key default gen_random_uuid(),
+  periodo      text not null default '7' check (periodo in ('hoje','7','30')),
+  status       text not null default 'pendente' check (status in ('pendente','pronta','erro')),
+  texto        text,
+  erro         text,
+  solicitado_por uuid references public.profiles(id) on delete set null,
+  criado_em    timestamptz not null default now()
+);
+
+-- =====================================================================
+-- ROW LEVEL SECURITY
+-- vendedor ve so os proprios dados. gestor e admin veem tudo.
+-- O worker usa a service_role key, que ignora RLS (fica so no servidor).
+-- =====================================================================
+alter table public.profiles            enable row level security;
+alter table public.instancias_whatsapp enable row level security;
+alter table public.conversas           enable row level security;
+alter table public.mensagens           enable row level security;
+alter table public.ligacoes            enable row level security;
+alter table public.auditorias          enable row level security;
+alter table public.config_auditoria    enable row level security;
+alter table public.analises_time       enable row level security;
+
+-- profiles
+drop policy if exists profiles_select on public.profiles;
+create policy profiles_select on public.profiles for select to authenticated
+  using (id = auth.uid() or public.eh_gestor());
+drop policy if exists profiles_admin_write on public.profiles;
+create policy profiles_admin_write on public.profiles for all to authenticated
+  using (public.eh_admin()) with check (public.eh_admin());
+
+-- instancias_whatsapp
+drop policy if exists inst_select on public.instancias_whatsapp;
+create policy inst_select on public.instancias_whatsapp for select to authenticated
+  using (vendedor_id = auth.uid() or public.eh_gestor());
+drop policy if exists inst_admin_write on public.instancias_whatsapp;
+create policy inst_admin_write on public.instancias_whatsapp for all to authenticated
+  using (public.eh_admin()) with check (public.eh_admin());
+
+-- conversas
+drop policy if exists conv_select on public.conversas;
+create policy conv_select on public.conversas for select to authenticated
+  using (vendedor_id = auth.uid() or public.eh_gestor());
+
+-- mensagens
+drop policy if exists msg_select on public.mensagens;
+create policy msg_select on public.mensagens for select to authenticated
+  using (vendedor_id = auth.uid() or public.eh_gestor());
+
+-- ligacoes (o vendedor pode registrar as proprias ligacoes enviando o audio)
+drop policy if exists lig_select on public.ligacoes;
+create policy lig_select on public.ligacoes for select to authenticated
+  using (vendedor_id = auth.uid() or public.eh_gestor());
+drop policy if exists lig_insert on public.ligacoes;
+create policy lig_insert on public.ligacoes for insert to authenticated
+  with check (public.papel_atual() is not null and (vendedor_id = auth.uid() or public.eh_gestor()));
+
+-- auditorias
+drop policy if exists aud_select on public.auditorias;
+create policy aud_select on public.auditorias for select to authenticated
+  using (vendedor_id = auth.uid() or public.eh_gestor());
+
+-- config_auditoria: gestor le, so admin altera
+drop policy if exists cfg_select on public.config_auditoria;
+create policy cfg_select on public.config_auditoria for select to authenticated using (public.eh_gestor());
+drop policy if exists cfg_admin_write on public.config_auditoria;
+create policy cfg_admin_write on public.config_auditoria for all to authenticated
+  using (public.eh_admin()) with check (public.eh_admin());
+
+-- analises_time: so gestor e admin
+drop policy if exists ana_select on public.analises_time;
+create policy ana_select on public.analises_time for select to authenticated using (public.eh_gestor());
+drop policy if exists ana_insert on public.analises_time;
+create policy ana_insert on public.analises_time for insert to authenticated
+  with check (public.eh_gestor() and status = 'pendente' and texto is null);
+
+-- =====================================================================
+-- STORAGE: bucket privado 'audios' com RLS
+-- Caminho dos arquivos: <vendedor_id>/<qualquer-coisa>
+-- =====================================================================
+insert into storage.buckets (id, name, public) values ('audios', 'audios', false)
+on conflict (id) do update set public = false;
+
+drop policy if exists audios_select on storage.objects;
+create policy audios_select on storage.objects for select to authenticated
+  using (bucket_id = 'audios' and ((storage.foldername(name))[1] = auth.uid()::text or public.eh_gestor()));
+drop policy if exists audios_insert on storage.objects;
+create policy audios_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'audios' and public.papel_atual() is not null and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists audios_delete on storage.objects;
+create policy audios_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'audios' and public.eh_admin());
+
+-- =====================================================================
+-- Resumo do periodo por vendedor (SECURITY INVOKER: a RLS continua valendo,
+-- entao o vendedor so enxerga os proprios numeros)
+-- =====================================================================
+create or replace function public.resumo_por_vendedor(p_from date, p_to date)
+returns table (vendedor_id uuid, tratadas bigint, enviadas bigint, recebidas bigint, responderam bigint)
+language sql stable security invoker set search_path = public as $$
+  with base as (
+    select c.id as conversa_id from public.conversas c where c.data between p_from and p_to
+  ), msgs as (
+    select m.conversa_id, m.vendedor_id,
+      sum((m.remetente = 'vendedor')::int) as env,
+      sum((m.remetente = 'cliente')::int)  as rec,
+      min(m.enviada_em) filter (where m.remetente = 'vendedor') as primeira_v,
+      max(m.enviada_em) filter (where m.remetente = 'cliente')  as ultima_c
+    from public.mensagens m join base b on b.conversa_id = m.conversa_id
+    group by m.conversa_id, m.vendedor_id
+  )
+  select vendedor_id,
+    count(*) filter (where env > 0),
+    coalesce(sum(env), 0)::bigint,
+    coalesce(sum(rec), 0)::bigint,
+    count(*) filter (where rec > 0 and primeira_v is not null and ultima_c > primeira_v)
+  from msgs group by vendedor_id
+$$;
+grant execute on function public.resumo_por_vendedor(date, date) to authenticated;
+
+-- =====================================================================
+-- Realtime: o painel atualiza sozinho quando chegam mensagens e auditorias
+-- =====================================================================
+do $$ begin
+  alter publication supabase_realtime add table public.mensagens;
+exception when others then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.auditorias;
+exception when others then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.instancias_whatsapp;
+exception when others then null; end $$;
+
+-- =====================================================================
+-- DEPOIS DE RODAR: crie o primeiro admin
+-- 1) Supabase > Authentication > Users > Add user (e-mail e senha, marque Auto Confirm)
+-- 2) Rode (troque o e-mail):
+--    update public.profiles set papel = 'admin', nome = 'Seu nome' where email = 'voce@empresa.com';
+-- =====================================================================

@@ -1,0 +1,14 @@
+{
+  "name": "auditoria-comercial-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node test/smoke.js && node test/mirror.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.18"
+  }
+}

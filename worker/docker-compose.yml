@@ -1,0 +1,10 @@
+# Para rodar o worker numa VPS: docker compose up -d --build
+services:
+  worker:
+    build: .
+    restart: always
+    env_file: .env
+    ports: ["8080:8080"]
+    volumes:
+      - ./data:/app/data          # sessoes do WhatsApp (nao apague, senao precisa ler o QR de novo)
+      - ./secrets:/app/secrets:ro # chave da conta de servico do Google (espelho na planilha)
