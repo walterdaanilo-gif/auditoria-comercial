@@ -48,8 +48,8 @@ export default async function Instancias({ searchParams: searchParamsP }: { sear
   return (
     <div className="space-y-5">
       <AutoRefresh segundos={5} />
-      <div><h1 className="text-xl font-bold">WhatsApp conectado</h1>
-        <p className="text-sm text-mute">Cada vendedor lê o QR Code no celular dele: WhatsApp → Aparelhos conectados → Conectar um aparelho. O QR renova sozinho.</p></div>
+      <div><h1 className="page-title">WhatsApp conectado</h1>
+        <p className="page-sub">Cada vendedor lê o QR Code no celular dele: WhatsApp → Aparelhos conectados → Conectar um aparelho. O QR renova sozinho.</p></div>
       {searchParams.erro && <p className="card border-bad text-sm text-bad">{searchParams.erro}</p>}
       {perfil.papel === "admin" && (
         <form action={criar} className="card grid gap-3 md:grid-cols-4">
@@ -61,7 +61,7 @@ export default async function Instancias({ searchParams: searchParamsP }: { sear
       <div className="grid gap-4 md:grid-cols-2">
         {insts.map((i) => (
           <div key={i.id} className="card space-y-2">
-            <div className="flex items-start justify-between"><div><b>{i.nome}</b><div className="text-sm text-mute">{nomes.get(i.vendedor_id) ?? "—"}{i.numero ? ` · +${i.numero}` : ""}</div></div>
+            <div className="flex items-start justify-between"><div><b>{i.nome}</b><div className="page-sub">{nomes.get(i.vendedor_id) ?? "—"}{i.numero ? ` · +${i.numero}` : ""}</div></div>
               <span className={`text-sm font-semibold ${COR[i.status] ?? ""}`}>{TXT[i.status] ?? i.status}</span></div>
             {i.status === "aguardando_qr" && i.qr && <QrCard qr={i.qr} />}
             <div className="text-xs text-mute">Atualizado {fmtDataHora(i.atualizado_em)}</div>
@@ -73,7 +73,7 @@ export default async function Instancias({ searchParams: searchParamsP }: { sear
             )}
           </div>
         ))}
-        {!insts.length && <p className="text-sm text-mute">Nenhuma conexão ainda.</p>}
+        {!insts.length && <p className="page-sub">Nenhuma conexão ainda.</p>}
       </div>
     </div>
   );

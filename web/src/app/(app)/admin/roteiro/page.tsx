@@ -20,8 +20,8 @@ export default async function Roteiro({ searchParams: searchParamsP }: { searchP
   const { data } = await (await createClient()).from("config_auditoria").select("roteiro").eq("id", 1).single();
   return (
     <div className="max-w-3xl space-y-4">
-      <div><h1 className="text-xl font-bold">Roteiro da auditoria</h1>
-        <p className="text-sm text-mute">Este texto é a régua que a IA usa para dar a nota. Quanto mais claro, mais justa a nota. A mudança vale para as próximas auditorias.</p></div>
+      <div><h1 className="page-title">Roteiro da auditoria</h1>
+        <p className="page-sub">Este texto é a régua que a IA usa para dar a nota. Quanto mais claro, mais justa a nota. A mudança vale para as próximas auditorias.</p></div>
       {searchParams.erro && <p className="card border-bad text-sm text-bad">{searchParams.erro}</p>}
       {searchParams.ok && <p className="card border-ok text-sm text-ok">Roteiro salvo.</p>}
       <form action={salvar} className="space-y-3">

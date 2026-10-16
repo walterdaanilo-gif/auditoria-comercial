@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "@fontsource-variable/inter";
 import "./globals.css";
 
 export const metadata: Metadata = { title: "Auditoria Comercial", description: "Auditoria das conversas e ligações do time comercial" };

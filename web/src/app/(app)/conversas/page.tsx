@@ -27,9 +27,9 @@ export default async function Conversas({ searchParams: searchParamsP }: { searc
     <div className="space-y-4">
       <AutoRefresh segundos={30} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold">Conversas</h1>
+        <h1 className="page-title">Conversas</h1>
         <div className="flex flex-wrap gap-2 text-sm">
-          {[["hoje", "Hoje"], ["7", "7 dias"], ["30", "30 dias"]].map(([k, t]) => <Link key={k} href={link(k)} className={`chip ${p === k ? "border-brand bg-brand text-[#06101f]" : "border-line"}`}>{t}</Link>)}
+          {[["hoje", "Hoje"], ["7", "7 dias"], ["30", "30 dias"]].map(([k, t]) => <Link key={k} href={link(k)} className={`chip ${p === k ? "chip-on" : "border-line"}`}>{t}</Link>)}
           {gestor && <form className="flex gap-2"><input type="hidden" name="p" value={p} />
             <select name="v" defaultValue={searchParams.v ?? ""} className="input !w-auto !py-1"><option value="">Todos</option>{Array.from(nomes).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
             <button className="btn-ghost">Filtrar</button></form>}

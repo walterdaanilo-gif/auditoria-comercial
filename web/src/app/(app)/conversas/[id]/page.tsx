@@ -22,13 +22,13 @@ export default async function ConversaDetalhe({ params: paramsP }: { params: Pro
     <div className="space-y-4">
       <AutoRefresh segundos={30} />
       <div><Link href="/conversas" className="text-sm text-brand">← Conversas</Link>
-        <h1 className="text-xl font-bold">{conversa.contato_nome || telefone(conversa.contato)} <span className="text-sm font-normal text-mute">· {vendedor} · {fmtData(conversa.data)}</span></h1></div>
+        <h1 className="page-title">{conversa.contato_nome || telefone(conversa.contato)} <span className="text-sm font-normal text-mute">· {vendedor} · {fmtData(conversa.data)}</span></h1></div>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card">
           <div className="label mb-2">Conversa</div>
           <div className="flex max-h-[70vh] flex-col gap-2 overflow-auto">
             {((msgs ?? []) as Mensagem[]).map((m) => (
-              <div key={m.id} className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm ${m.remetente === "vendedor" ? "self-end bg-[#1f4f86]" : "self-start bg-track"}`}>
+              <div key={m.id} className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm ${m.remetente === "vendedor" ? "self-end bg-side-active border border-side-edge" : "self-start bg-track"}`}>
                 {m.tipo === "audio" ? <><span className="text-mute">🎙 áudio</span>{m.transcricao ? `: ${m.transcricao}` : " (transcrevendo...)"}</> : m.texto || `[${m.tipo}]`}
                 <div className="mt-0.5 text-[11px] text-mute">{m.remetente === "vendedor" ? vendedor : "Cliente"} · {fmtHora(m.enviada_em)}</div>
               </div>
@@ -51,7 +51,7 @@ export default async function ConversaDetalhe({ params: paramsP }: { params: Pro
               <div><div className="label mb-1">Gatilhos</div>
                 {Object.entries(GATILHOS).map(([k, t]) => <div key={k} className="flex justify-between py-0.5"><span>{t}</span><span className={a.gatilhos?.[k] ? "text-ok" : "text-mute"}>{a.gatilhos?.[k] ? "usou" : "não"}</span></div>)}</div>
             </div>
-          ) : <p className="text-sm text-mute">Ainda não auditada. Entra na fila depois de alguns minutos sem novas mensagens.</p>}
+          ) : <p className="page-sub">Ainda não auditada. Entra na fila depois de alguns minutos sem novas mensagens.</p>}
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 "use client";
+import AuthShell from "@/components/AuthShell";
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -21,19 +22,18 @@ export default function RecuperarSenha() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4">
-      <h1 className="mb-1 text-2xl font-bold">Recuperar senha</h1>
-      <p className="mb-6 text-sm text-mute">Enviamos um link para você criar uma nova senha.</p>
+    <AuthShell titulo="Recuperar senha" subtitulo="Enviamos um link para você criar uma nova senha.">
       {enviado ? (
-        <div className="card text-sm">Se esse e-mail estiver cadastrado, o link chega em instantes. Confira também o spam.</div>
+        <p className="rounded-2xl border border-white/15 bg-white/5 p-4 text-[17px]">Se esse e-mail estiver cadastrado, o link chega em instantes. Confira também o spam.</p>
       ) : (
-        <form onSubmit={enviar} className="card space-y-3">
-          <div><label className="label">E-mail</label><input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+        <form onSubmit={enviar} className="space-y-5">
+          <div><label className="auth-label" htmlFor="email">E-mail</label>
+            <input id="email" className="auth-input" type="email" required placeholder="voce@weevoedu.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
           {erro && <p className="text-sm text-bad">{erro}</p>}
-          <button className="btn w-full" disabled={carregando}>{carregando ? "Enviando..." : "Enviar link"}</button>
+          <button className="auth-btn" disabled={carregando}>{carregando ? "Enviando..." : "Enviar link"}</button>
         </form>
       )}
-      <p className="mt-4 text-center text-sm"><Link className="text-brand" href="/login">Voltar ao login</Link></p>
-    </main>
+      <p className="mt-6 text-center"><Link className="text-[17px] font-semibold text-brand" href="/login">Voltar ao login</Link></p>
+    </AuthShell>
   );
 }

@@ -13,7 +13,7 @@ export default async function Usuarios({ searchParams: searchParamsP }: { search
 
   return (
     <div className="space-y-5">
-      <div><h1 className="text-xl font-bold">Usuários</h1><p className="text-sm text-mute">Só o admin cria usuários. Não existe cadastro público.</p></div>
+      <div><h1 className="page-title">Usuários</h1><p className="page-sub">Só o admin cria usuários. Não existe cadastro público.</p></div>
       {searchParams.erro && <p className="card border-bad text-sm text-bad">{searchParams.erro}</p>}
       {searchParams.ok && <p className="card border-ok text-sm text-ok">{searchParams.ok}</p>}
       <NovoUsuarioForm />

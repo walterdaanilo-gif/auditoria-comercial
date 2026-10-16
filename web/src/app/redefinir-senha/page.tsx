@@ -1,4 +1,5 @@
 "use client";
+import AuthShell from "@/components/AuthShell";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -22,14 +23,15 @@ export default function RedefinirSenha() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4">
-      <h1 className="mb-6 text-2xl font-bold">Nova senha</h1>
-      <form onSubmit={salvar} className="card space-y-3">
-        <div><label className="label">Nova senha</label><input className="input" type="password" autoComplete="new-password" required value={senha} onChange={(e) => setSenha(e.target.value)} /></div>
-        <div><label className="label">Repita a senha</label><input className="input" type="password" autoComplete="new-password" required value={confirma} onChange={(e) => setConfirma(e.target.value)} /></div>
+    <AuthShell titulo="Nova senha" subtitulo="Crie uma senha com pelo menos 8 caracteres.">
+      <form onSubmit={salvar} className="space-y-5">
+        <div><label className="auth-label" htmlFor="senha">Nova senha</label>
+          <input id="senha" className="auth-input" type="password" autoComplete="new-password" required value={senha} onChange={(e) => setSenha(e.target.value)} /></div>
+        <div><label className="auth-label" htmlFor="confirma">Repita a senha</label>
+          <input id="confirma" className="auth-input" type="password" autoComplete="new-password" required value={confirma} onChange={(e) => setConfirma(e.target.value)} /></div>
         {erro && <p className="text-sm text-bad">{erro}</p>}
-        <button className="btn w-full" disabled={carregando}>{carregando ? "Salvando..." : "Salvar senha"}</button>
+        <button className="auth-btn" disabled={carregando}>{carregando ? "Salvando..." : "Salvar senha"}</button>
       </form>
-    </main>
+    </AuthShell>
   );
 }

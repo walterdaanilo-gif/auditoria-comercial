@@ -1,24 +1,21 @@
-import Link from "next/link";
 import type { Perfil } from "@/lib/types";
 
+const PAPEL: Record<string, string> = { admin: "Admin", gestor: "Gestor", vendedor: "Vendedor" };
+const iniciais = (nome: string) => nome.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+
+// Barra de cima no estilo Weevo: logo a esquerda, usuario e Sair a direita
 export default function Nav({ perfil }: { perfil: Perfil }) {
-  const links = [
-    { href: "/", texto: "Painel" },
-    { href: "/conversas", texto: "Conversas" },
-    { href: "/ligacoes", texto: "Ligações" },
-    ...(perfil.papel !== "vendedor" ? [{ href: "/instancias", texto: "WhatsApp" }] : []),
-    ...(perfil.papel === "admin" ? [{ href: "/admin/usuarios", texto: "Usuários" }, { href: "/admin/roteiro", texto: "Roteiro" }] : []),
-  ];
   return (
-    <header className="border-b border-line bg-card">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
-        <b className="mr-2">Auditoria Comercial</b>
-        <nav className="flex flex-wrap gap-4 text-sm">
-          {links.map((l) => <Link key={l.href} href={l.href} className="text-mute hover:text-ink">{l.texto}</Link>)}
-        </nav>
-        <div className="ml-auto flex items-center gap-3 text-sm">
-          <span className="text-mute">{perfil.nome} · {perfil.papel}</span>
-          <form action="/logout" method="post"><button className="btn-ghost">Sair</button></form>
+    <header className="flex h-[76px] items-center border-b border-line/70 bg-[#0f1b1b]/80 px-4 backdrop-blur md:px-8">
+      <img src="/weevo-logo.png" alt="Weevo" className="h-6 w-auto md:h-7" />
+      <div className="ml-auto flex items-center gap-4 md:gap-5">
+        <form action="/logout" method="post"><button className="text-[15px] font-semibold text-ink hover:text-brand">Sair</button></form>
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-track text-sm font-bold">{iniciais(perfil.nome)}</span>
+          <div className="hidden leading-tight sm:block">
+            <div className="text-[15px] font-bold">{perfil.nome}</div>
+            <div className="text-xs text-mute">{PAPEL[perfil.papel] ?? perfil.papel}</div>
+          </div>
         </div>
       </div>
     </header>

@@ -24,8 +24,8 @@ export default async function Ligacoes() {
   return (
     <div className="space-y-4">
       <AutoRefresh segundos={30} />
-      <div><h1 className="text-xl font-bold">Ligações</h1>
-        <p className="text-sm text-mute">O WhatsApp não grava ligações. Envie aqui a gravação (mp3, m4a, wav, ogg) e o sistema transcreve e audita.</p></div>
+      <div><h1 className="page-title">Ligações</h1>
+        <p className="page-sub">O WhatsApp não grava ligações. Envie aqui a gravação (mp3, m4a, wav, ogg) e o sistema transcreve e audita.</p></div>
       <UploadLigacao vendedores={(perfis ?? []) as { id: string; nome: string }[]} meuId={perfil.id} />
       <div className="card overflow-x-auto">
         <table className="w-full"><thead><tr><th className="th">Quando</th><th className="th">Vendedor</th><th className="th">Contato</th><th className="th">Nota</th><th className="th">Status</th><th className="th">Detalhes</th></tr></thead>

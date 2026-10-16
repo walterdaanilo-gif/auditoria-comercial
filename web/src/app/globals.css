@@ -2,12 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-bg text-ink antialiased; }
-.card { @apply rounded-2xl border border-line bg-card p-4; }
-.label { @apply text-[11px] uppercase tracking-wider text-mute; }
-.input { @apply w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-brand; }
-.btn { @apply inline-block cursor-pointer rounded-lg bg-brand px-4 py-2 text-sm font-bold text-[#06101f] hover:opacity-90 disabled:opacity-50; }
-.btn-ghost { @apply inline-block cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-track; }
-.chip { @apply inline-block rounded-full border px-2 py-0.5 text-xs font-bold; }
-.th { @apply border-b border-line px-2 py-2 text-left text-[11px] uppercase tracking-wider text-mute; }
-.td { @apply border-b border-line px-2 py-2 align-top text-sm; }
+/* fundo com o brilho verde-agua no canto, como no app da Weevo */
+body { @apply bg-bg font-sans text-ink antialiased; background-image: radial-gradient(1200px 600px at 0% 0%, rgba(28, 71, 70, 0.45), transparent 60%); background-attachment: fixed; }
+.card { @apply rounded-3xl border border-line bg-card p-5; }
+.label { @apply text-[11px] font-semibold uppercase tracking-wider text-mute; }
+.input { @apply w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm outline-none transition focus:border-brand; }
+.btn { @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-bg transition hover:brightness-110 disabled:opacity-50; }
+.btn-ghost { @apply inline-flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-track px-3 py-2 text-sm font-semibold transition hover:border-side-edge; }
+.chip { @apply inline-block rounded-full border px-2.5 py-0.5 text-xs font-bold; }
+.chip-on { @apply border-brand bg-brand text-bg; }
+.th { @apply border-b border-line px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-mute; }
+.td { @apply border-b border-line px-3 py-3 align-top text-sm; }
+.page-title { @apply text-3xl font-extrabold tracking-tight; }
+.page-sub { @apply mt-1 text-[15px] text-mute; }
+.aviso { @apply rounded-3xl border border-warn/20 bg-warn/10 p-5 text-sm; }
+
+/* telas de acesso */
+.auth-label { @apply mb-2 block text-[17px] font-semibold text-ink; }
+.auth-input { @apply w-full rounded-2xl border border-white/15 bg-[#323c52]/80 px-4 py-4 text-[17px] text-ink outline-none transition placeholder:text-mute focus:border-brand; }
+.auth-btn { @apply w-full cursor-pointer rounded-2xl bg-gradient-to-b from-[#86dccd] to-[#5fbcae] py-4 text-lg font-bold text-[#0c1a1a] shadow-[0_6px_20px_rgba(109,207,192,0.25)] transition hover:brightness-110 disabled:opacity-50; }

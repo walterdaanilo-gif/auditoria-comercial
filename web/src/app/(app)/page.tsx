@@ -81,9 +81,9 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
     <div className="space-y-5">
       <AutoRefresh segundos={30} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-xl font-bold">Painel</h1><p className="text-sm text-mute">{rotulo} · {fmtData(from)} a {fmtData(to)} · atualiza sozinho</p></div>
+        <div><h1 className="page-title">Painel</h1><p className="page-sub">{rotulo} · {fmtData(from)} a {fmtData(to)} · atualiza sozinho</p></div>
         <div className="flex flex-wrap gap-2 text-sm">
-          {[["hoje", "Hoje"], ["7", "7 dias"], ["30", "30 dias"]].map(([k, t]) => <Link key={k} href={link({ p: k })} className={`chip ${p === k ? "border-brand bg-brand text-[#06101f]" : "border-line"}`}>{t}</Link>)}
+          {[["hoje", "Hoje"], ["7", "7 dias"], ["30", "30 dias"]].map(([k, t]) => <Link key={k} href={link({ p: k })} className={`chip ${p === k ? "chip-on" : "border-line"}`}>{t}</Link>)}
           {gestor && <form className="flex gap-2"><input type="hidden" name="p" value={p} />
             <select name="v" defaultValue={filtroV} className="input !w-auto !py-1"><option value="">Todos os vendedores</option>{Array.from(nomes).map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
             <button className="btn-ghost">Filtrar</button></form>}
