@@ -420,3 +420,15 @@ create table if not exists public.worker_status (
 alter table public.worker_status enable row level security;
 drop policy if exists worker_status_select on public.worker_status;
 create policy worker_status_select on public.worker_status for select to authenticated using (public.eh_gestor());
+
+-- =====================================================================
+-- Tokens das instancias na Uazapi. So o worker (service role) le: RLS ligada e nenhuma politica.
+-- =====================================================================
+create table if not exists public.instancias_uazapi (
+  instancia_id  uuid primary key references public.instancias_whatsapp(id) on delete cascade,
+  nome          text not null,
+  token         text not null,
+  criado_em     timestamptz not null default now()
+);
+alter table public.instancias_uazapi enable row level security;
+revoke all on public.instancias_uazapi from anon, authenticated;

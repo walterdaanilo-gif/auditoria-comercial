@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
-import { cfg, dayOf } from "./config.js";
+import { cfg } from "./config.js";
+import { gravarMensagem } from "./mensagens.js";
 
 // Logger minimo compativel com o Baileys (sem depender do pino)
 const quiet = { level: "silent", child() { return quiet; }, trace() {}, debug() {}, info() {}, warn() {}, error(...a) { console.error("[baileys]", ...a); }, fatal(...a) { console.error("[baileys]", ...a); } };
@@ -19,37 +20,17 @@ export const textOf = m => {
   return { tipo: "outro", texto: "" };
 };
 const isLead = jid => !!jid && /@(s\.whatsapp\.net|lid)$/.test(jid);
-const allowed = jid => !cfg.allowlist.length || cfg.allowlist.some(a => jid.split("@")[0].replace(/\D/g, "").endsWith(a.replace(/\D/g, "")));
 
-// Grava uma mensagem (e a conversa do dia) no Supabase
+// Converte a mensagem do Baileys para o formato comum e grava
 export async function saveMessage(db, inst, m, { sock, B } = {}) {
   const jid = m.key?.remoteJid;
-  if (!isLead(jid) || !allowed(jid) || !m.key.id) return;
+  if (!isLead(jid)) return;
   const { tipo, texto } = textOf(m);
-  if (tipo === "outro" && !texto) return;
-  const sec = Number(m.messageTimestamp?.low ?? m.messageTimestamp) || Math.floor(Date.now() / 1000);
-  const iso = new Date(sec * 1000).toISOString();
-  const day = dayOf(iso);
-
-  const [conv] = await db.insert("conversas", [{
-    vendedor_id: inst.vendedor_id, instancia_id: inst.id, contato: jid.split("@")[0], contato_nome: m.key.fromMe ? undefined : m.pushName || undefined,
-    canal: "whatsapp", data: day, ultima_msg_em: iso,
-  }], { onConflict: "instancia_id,contato,data" });
-
-  let audio_url = null;
-  if (tipo === "audio" && sock && B && Date.now() - sec * 1000 < 2 * 86400000) {
-    try {
-      const buf = await B.downloadMediaMessage(m, "buffer", {}, { logger: quiet, reuploadRequest: sock.updateMediaMessage });
-      audio_url = `${inst.vendedor_id}/whatsapp/${inst.id}/${m.key.id}.ogg`;
-      await db.upload(audio_url, buf, "audio/ogg");
-    } catch (e) { console.error(`[${inst.nome}] falha ao baixar audio:`, e.message); audio_url = null; }
-  }
-  await db.insert("mensagens", [{
-    conversa_id: conv.id, vendedor_id: inst.vendedor_id, wa_id: m.key.id, remetente: m.key.fromMe ? "vendedor" : "cliente",
-    texto: texto || null, tipo, audio_url, enviada_em: iso,
-  }], { onConflict: "conversa_id,wa_id", ignoreDuplicates: true, returning: false });
-  // mantem a ultima mensagem da conversa sempre a mais recente
-  await db.update("conversas", { id: `eq.${conv.id}`, ultima_msg_em: `lt.${iso}` }, { ultima_msg_em: iso });
+  await gravarMensagem(db, inst, {
+    contato: jid.split("@")[0], nome: m.pushName, fromMe: !!m.key.fromMe, id: m.key.id, tipo, texto,
+    sec: Number(m.messageTimestamp?.low ?? m.messageTimestamp) || undefined,
+    baixarAudio: sock && B ? () => B.downloadMediaMessage(m, "buffer", {}, { logger: quiet, reuploadRequest: sock.updateMediaMessage }) : undefined,
+  });
 }
 
 async function setStatus(db, id, patch) {

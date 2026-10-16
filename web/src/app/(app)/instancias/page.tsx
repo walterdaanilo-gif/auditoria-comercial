@@ -33,7 +33,7 @@ async function remover(fd: FormData) {
 }
 
 const COR: Record<string, string> = { conectado: "text-ok", aguardando_qr: "text-warn", conectando: "text-mute", aguardando: "text-mute", desconectado: "text-bad", erro: "text-bad" };
-const TXT: Record<string, string> = { conectado: "Conectado", aguardando_qr: "Aguardando leitura do QR Code", conectando: "Conectando...", aguardando: "Aguardando o worker", desconectado: "Desconectado", erro: "Erro" };
+const TXT: Record<string, string> = { conectado: "Conectado", aguardando_qr: "Aguardando leitura do QR Code", conectando: "Conectando...", aguardando: "Criando a conexão...", desconectado: "Desconectado", erro: "Erro ao conectar (veja os registros do worker ou o limite do plano da Uazapi)" };
 
 export default async function Instancias({ searchParams: searchParamsP }: { searchParams: Promise<{ erro?: string }> }) {
   const searchParams = await searchParamsP;
@@ -54,7 +54,7 @@ export default async function Instancias({ searchParams: searchParamsP }: { sear
     <div className="space-y-5">
       <AutoRefresh segundos={5} />
       <div><h1 className="page-title">WhatsApp conectado</h1>
-        <p className="page-sub">Cada vendedor lê o QR Code no celular dele: WhatsApp → Aparelhos conectados → Conectar um aparelho. O QR renova sozinho.</p></div>
+        <p className="page-sub">Cada vendedor lê o QR Code no celular dele: WhatsApp → Aparelhos conectados → Conectar um aparelho. O QR renova sozinho a cada 2 minutos.</p></div>
       {searchParams.erro && <p className="card border-bad text-sm text-bad">{searchParams.erro}</p>}
       {workerLigado ? (
         <div className="card flex items-center gap-3 !py-3 text-sm"><CheckCircle2 size={18} className="shrink-0 text-ok" /><span><b className="text-ok">Worker ligado.</b> <span className="text-mute">Último sinal às {fmtDataHora(vistoEm!)}. Conexões novas ganham QR Code em até 15 segundos.</span></span></div>
@@ -63,7 +63,7 @@ export default async function Instancias({ searchParams: searchParamsP }: { sear
           <AlertTriangle size={20} className="mt-0.5 shrink-0 text-warn" />
           <div>
             <b className="text-base text-warn">Worker desligado: o QR Code não vai aparecer</b>
-            <p className="mt-1 text-ink/90">Quem gera o QR e mantém o WhatsApp conectado é o worker, um programa que fica ligado 24h fora da Vercel (no Railway ou numa VPS).
+            <p className="mt-1 text-ink/90">Quem pede o QR à Uazapi e recebe as mensagens é o worker, um programa que fica ligado 24h no Railway.
               {vistoEm ? ` O último sinal dele foi em ${fmtDataHora(vistoEm)}. Veja se ele caiu na hospedagem.` : " Ele ainda não foi publicado. Depois de publicar, esta tela mostra o QR sozinha."}</p>
           </div>
         </div>

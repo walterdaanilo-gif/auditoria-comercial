@@ -6,7 +6,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node test/smoke.js && node test/mirror.js"
+    "test": "node test/smoke.js && node test/mirror.js && node test/uazapi.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.18"

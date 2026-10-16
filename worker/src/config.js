@@ -17,6 +17,11 @@ export const cfg = {
   allowlist: (env.LEAD_ALLOWLIST || "").split(",").map(s => s.trim()).filter(Boolean),
   port: num(env.PORT, 8080),
   dataDir: env.DATA_DIR || "./data",
+  // WhatsApp pela Uazapi (se UAZAPI_URL estiver vazio, usa o Baileys)
+  uazapiUrl: (env.UAZAPI_URL || "").replace(/\/$/, ""),
+  uazapiAdminToken: env.UAZAPI_ADMIN_TOKEN || "",
+  webhookUrl: (env.WEBHOOK_URL || "").replace(/\/$/, ""),
+  webhookSecret: env.WEBHOOK_SECRET || "",
   // espelho no Google Sheets
   sheetId: env.SHEET_ID || "",
   saFile: env.GOOGLE_SERVICE_ACCOUNT_FILE || "./secrets/service-account.json",

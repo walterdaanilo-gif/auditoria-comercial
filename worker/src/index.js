@@ -2,6 +2,7 @@ import http from "node:http";
 import { cfg } from "./config.js";
 import { supa } from "./supa.js";
 import { syncInstances, statusAtual } from "./whatsapp.js";
+import { uazapiAtivo, syncUazapi, statusAtualUazapi, receberWebhook, segredoOk } from "./uazapi.js";
 import { transcribePending } from "./transcribe.js";
 import { runAudits } from "./auditor.js";
 import { processAnalyses } from "./analysis.js";
@@ -16,17 +17,35 @@ const loop = (nome, ms, fn) => {
   setTimeout(tick, 2000); setInterval(tick, ms);
 };
 
+// WhatsApp: Uazapi quando UAZAPI_URL estiver preenchido; senao, Baileys direto (QR gerado pelo proprio worker)
+const conexoes = () => (uazapiAtivo() ? statusAtualUazapi() : statusAtual().length);
+console.log(`[whatsapp] provedor: ${uazapiAtivo() ? "Uazapi" : "Baileys"}`);
 loop("conexoes", 15_000, async () => {
-  await syncInstances(supa);
+  await (uazapiAtivo() ? syncUazapi(supa) : syncInstances(supa));
   // sinal de vida: a tela WhatsApp mostra "worker desligado" quando isso para de atualizar
-  await supa.insert("worker_status", [{ id: 1, visto_em: new Date().toISOString(), conexoes: statusAtual().length }], { onConflict: "id", returning: false });
+  await supa.insert("worker_status", [{ id: 1, visto_em: new Date().toISOString(), conexoes: conexoes() }], { onConflict: "id", returning: false });
 });
 loop("transcricao", 20_000, () => transcribePending(supa));
 loop("auditoria", cfg.auditEveryMin * 60_000, async () => { const n = await runAudits(supa); if (n) console.log(`[auditoria] ${n} auditorias novas`); });
 loop("analise", 30_000, () => processAnalyses(supa));
 if (mirrorEnabled()) loop("planilha", 30_000, () => mirrorAll(supa)); else console.log("[planilha] espelho desligado (sem SHEET_ID ou chave do Google)");
 
-// Saude para a hospedagem (Railway, Render, Fly): so informa que esta vivo, sem dados
-http.createServer((req, res) => { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true, conexoes: statusAtual().length })); }).listen(cfg.port);
+// Servidor HTTP: saude para a hospedagem e webhook da Uazapi (POST /webhook/uazapi?k=<WEBHOOK_SECRET>)
+http.createServer((req, res) => {
+  const url = new URL(req.url, "http://x");
+  const responder = (code, obj) => { res.writeHead(code, { "Content-Type": "application/json" }); res.end(JSON.stringify(obj)); };
+  if (req.method === "POST" && url.pathname === "/webhook/uazapi") {
+    if (!segredoOk(url.searchParams.get("k"))) return responder(401, { erro: "nao autorizado" });
+    let tam = 0; const partes = [];
+    req.on("data", c => { tam += c.length; if (tam > 5_000_000) req.destroy(); else partes.push(c); });
+    req.on("end", () => {
+      responder(200, { ok: true }); // responde logo; grava em seguida
+      let body; try { body = JSON.parse(Buffer.concat(partes).toString("utf8")); } catch { return; }
+      receberWebhook(supa, body).catch(e => console.error("[webhook]", e.message));
+    });
+    return;
+  }
+  responder(200, { ok: true, conexoes: conexoes() });
+}).listen(cfg.port);
 process.on("unhandledRejection", e => console.error("[erro]", e));
 console.log("Worker iniciado.");
