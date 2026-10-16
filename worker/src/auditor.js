@@ -54,7 +54,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}
   let feitos = 0;
 
   // ----- conversas -----
-  const convs = await db.selectAll("conversas", { select: "id,vendedor_id,ultima_msg_em", filters: { data: `gte.${from}` } });
+  const convs = await db.selectAll("conversas", { select: "id,vendedor_id,ultima_msg_em", filters: { data: `gte.${from}`, canal: "neq.importada" } });
   if (convs.length) {
     const resumo = new Map();
     for (const m of await db.selectAll("mensagens", { select: "conversa_id,remetente,tipo,transcricao,audio_url", filters: { enviada_em: `gte.${dayStart(from)}` }, order: "id" })) {
@@ -77,6 +77,23 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}
         await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: r.n, ...a }], { onConflict: "conversa_id", returning: false });
         feitos++;
       } catch (e) { console.error(`[auditoria] conversa ${c.id}:`, e.message); }
+    }
+  }
+
+  // ----- conversas importadas (tela Testar auditor): auditadas uma vez, de qualquer data -----
+  const imps = await db.select("conversas", { select: "id,vendedor_id", filters: { canal: "eq.importada" }, order: "criado_em.desc", limit: 50 });
+  if (imps.length) {
+    const ja = new Set((await db.select("auditorias", { select: "conversa_id", filters: { conversa_id: `in.(${imps.map(c => c.id).join(",")})` } })).map(a => a.conversa_id));
+    for (const c of imps) {
+      if (ja.has(c.id)) continue;
+      try {
+        const msgs = await db.select("mensagens", { select: "remetente,texto,tipo,transcricao", filters: { conversa_id: `eq.${c.id}` }, order: "enviada_em" });
+        if (!msgs.some(m => m.remetente === "vendedor")) continue;
+        const a = normalizar(await callClaude(roteiro, criterios, cortar(msgs.map(linha).join("\n")), fetchImpl), criterios);
+        // sheet_ok: importadas sao teste e nao vao para a planilha
+        await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: msgs.length, ...a, sheet_ok: true }], { onConflict: "conversa_id", returning: false });
+        feitos++;
+      } catch (e) { console.error(`[auditoria] importada ${c.id}:`, e.message); }
     }
   }
 

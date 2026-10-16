@@ -46,14 +46,14 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
 
   const [rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt] = await Promise.all([
     supabase.rpc("resumo_diario", { p_from: de, p_to: ate }),
-    supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,conversas!inner(data)").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
+    supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
     supabase.from("profiles").select("id,nome,papel,ativo").order("nome"),
     supabase.rpc("ultima_atividade"),
     supabase.from("instancias_whatsapp").select("vendedor_id,status,numero"),
-    supabase.from("mensagens").select("id,vendedor_id,remetente,texto,tipo,transcricao,enviada_em,conversa_id,conversas(contato,contato_nome)").order("enviada_em", { ascending: false }).limit(15),
+    supabase.from("mensagens").select("id,vendedor_id,remetente,texto,tipo,transcricao,enviada_em,conversa_id,conversas!inner(contato,contato_nome,canal)").neq("conversas.canal", "importada").order("enviada_em", { ascending: false }).limit(15),
     supabase.rpc("conversas_sem_retorno", { p_from: de, p_to: ate, p_min: 15 }),
-    supabase.from("auditorias").select("id,conversa_id,vendedor_id,nota_geral,qualidade,agendou,efetiva,resumo,conversas!inner(contato,contato_nome,data)")
-      .gte("conversas.data", de).lte("conversas.data", ate).or("qualidade.eq.ruim,and(efetiva.eq.true,agendou.eq.false)").order("nota_geral").limit(50),
+    supabase.from("auditorias").select("id,conversa_id,vendedor_id,nota_geral,qualidade,agendou,efetiva,resumo,conversas!inner(contato,contato_nome,data,canal)")
+      .neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).or("qualidade.eq.ruim,and(efetiva.eq.true,agendou.eq.false)").order("nota_geral").limit(50),
     gestor ? supabase.from("analises_time").select("*").eq("status", "pronta").order("criado_em", { ascending: false }).limit(1) : Promise.resolve({ data: [] as any[] }),
     gestor ? supabase.from("analises_time").select("id").eq("status", "pendente").limit(1) : Promise.resolve({ data: [] as any[] }),
     gestor ? supabase.from("analises_time").select("status,erro").order("criado_em", { ascending: false }).limit(1) : Promise.resolve({ data: [] as any[] }),

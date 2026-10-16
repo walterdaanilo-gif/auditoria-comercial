@@ -16,7 +16,7 @@ export default async function Conversas({ searchParams: searchParamsP }: { searc
   const supabase = await createClient();
 
   let q = supabase.from("conversas")
-    .select("id,vendedor_id,contato,contato_nome,data,ultima_msg_em,mensagens(count),auditorias(nota_geral,qualidade,agendou,resumo)")
+    .select("id,vendedor_id,contato,contato_nome,canal,data,ultima_msg_em,mensagens(count),auditorias(nota_geral,qualidade,agendou,resumo)")
     .gte("data", from).lte("data", to).order("ultima_msg_em", { ascending: false }).limit(200);
   if (gestor && searchParams.v) q = q.eq("vendedor_id", searchParams.v);
   const [{ data }, { data: perfis }] = await Promise.all([q, supabase.from("profiles").select("id,nome").order("nome")]);
@@ -44,7 +44,7 @@ export default async function Conversas({ searchParams: searchParamsP }: { searc
                 <tr key={c.id}>
                   <td className="td text-mute">{fmtData(c.data).slice(0, 5)} {fmtHora(c.ultima_msg_em)}</td>
                   <td className="td">{nomes.get(c.vendedor_id) ?? "—"}</td>
-                  <td className="td"><Link className="text-brand" href={`/conversas/${c.id}`}>{c.contato_nome || telefone(c.contato)}</Link></td>
+                  <td className="td"><Link className="text-brand" href={`/conversas/${c.id}`}>{c.contato_nome || telefone(c.contato)}</Link>{c.canal === "importada" && <span className="chip ml-2 border-line text-mute">importada</span>}</td>
                   <td className="td">{n}</td>
                   <td className={`td font-bold ${corNota(a?.nota_geral)}`}>{nota(a?.nota_geral)}</td>
                   <td className="td">{a ? <><span className={`chip ${a.qualidade === "boa" ? "border-ok text-ok" : a.qualidade === "regular" ? "border-warn text-warn" : "border-bad text-bad"}`}>{a.qualidade}</span>{a.agendou && <span className="chip ml-1 border-ok text-ok">agendou</span>}</> : <span className="text-mute">aguardando auditoria</span>}</td>

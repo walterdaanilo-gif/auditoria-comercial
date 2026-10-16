@@ -26,7 +26,8 @@ export async function mirrorAll(db) {
   if (!mirrorEnabled()) return;
   const perfis = new Map((await db.select("profiles", { select: "id,nome" })).map(p => [p.id, p.nome]));
   const from = addDays(today(), -cfg.daysBack);
-  const convs = await db.selectAll("conversas", { select: "id,vendedor_id,contato,data", filters: { data: `gte.${addDays(today(), -7)}` } });
+  // conversas importadas (tela Testar auditor) nao vao para a planilha
+  const convs = await db.selectAll("conversas", { select: "id,vendedor_id,contato,data", filters: { data: `gte.${addDays(today(), -7)}`, canal: "neq.importada" } });
   const convMap = new Map(convs.map(c => [c.id, c]));
 
   // 1) mensagens novas
@@ -54,7 +55,7 @@ export async function mirrorAll(db) {
   for (let back = 0; back <= cfg.daysBack; back++) {
     const day = addDays(today(), -back);
     const msgs = await db.selectAll("mensagens", { select: "conversa_id,vendedor_id,remetente,enviada_em", filters: { enviada_em: `gte.${dayStart(day)}` }, order: "id" });
-    const doDia = msgs.filter(m => dayOf(m.enviada_em) === day);
+    const doDia = msgs.filter(m => dayOf(m.enviada_em) === day && convMap.has(m.conversa_id));
     const audsDia = (await db.selectAll("auditorias", { select: "vendedor_id,conversa_id,efetiva,agendou", filters: { conversa_id: "not.is.null" } })).filter(a => convMap.get(a.conversa_id)?.data === day);
     for (const [id, nome] of perfis) {
       const m = calcDay(doDia.filter(x => x.vendedor_id === id), audsDia.filter(a => a.vendedor_id === id));

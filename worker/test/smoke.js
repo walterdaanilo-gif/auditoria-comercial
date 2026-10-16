@@ -51,6 +51,19 @@ await saveMessage(db, INST, m(A, 9, true, "Confirmado entao!"));
 assert.equal(await runAudits(db, { fetchImpl: ia }), 1);
 assert.equal(audA.sheet_row, 12); assert.equal(audA.sheet_ok, false); assert.equal(audA.msg_count, 5);
 
+// ----- conversa importada (tela Testar auditor): de 10 dias atras, auditada uma vez, fora da planilha -----
+const velha = new Date(Date.now() - 10 * 86400000);
+db.tables.conversas.push({ id: "imp1", vendedor_id: VEND, instancia_id: null, contato: "Maria", contato_nome: "Maria", canal: "importada", data: velha.toISOString().slice(0, 10), ultima_msg_em: velha.toISOString() });
+db.tables.mensagens.push(
+  { id: "im1", conversa_id: "imp1", vendedor_id: VEND, wa_id: "imp-1", remetente: "vendedor", texto: "Oi Maria, workshop quinta?", tipo: "texto", enviada_em: velha.toISOString(), espelhada: true },
+  { id: "im2", conversa_id: "imp1", vendedor_id: VEND, wa_id: "imp-2", remetente: "cliente", texto: "topo sim, quinta 19h", tipo: "texto", enviada_em: velha.toISOString(), espelhada: true });
+assert.equal(await runAudits(db, { fetchImpl: ia }), 1);
+const audImp = db.tables.auditorias.find(a => a.conversa_id === "imp1");
+assert.equal(audImp.nota_geral, 8.5); assert.equal(audImp.sheet_ok, true, "importada nao vai para a planilha");
+assert.equal(await runAudits(db, { fetchImpl: ia }), 0, "importada so e auditada uma vez");
+db.tables.conversas = db.tables.conversas.filter(c => c.id !== "imp1"); db.tables.mensagens = db.tables.mensagens.filter(x => x.conversa_id !== "imp1");
+db.tables.auditorias = db.tables.auditorias.filter(a => a.conversa_id !== "imp1");
+
 // ----- metricas do espelho -----
 const msgs = db.tables.mensagens.map(x => ({ conversa_id: x.conversa_id, vendedor_id: x.vendedor_id, remetente: x.remetente, enviada_em: x.enviada_em }));
 const d = calcDay(msgs, db.tables.auditorias);

@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // conversas exportadas do WhatsApp (tela Testar auditor) podem passar de 1 MB
+  experimental: { serverActions: { bodySizeLimit: "4mb" } },
   async headers() {
     return [{
       source: "/(.*)",

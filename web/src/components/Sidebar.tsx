@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, ChevronsLeft, ChevronsRight, FileText, MessagesSquare, Phone, Smartphone, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, ChevronsLeft, ChevronsRight, FileText, FlaskConical, MessagesSquare, Phone, Smartphone, Users, type LucideIcon } from "lucide-react";
 import type { Papel } from "@/lib/types";
 
 type Item = { href: string; texto: string; icone: LucideIcon };
@@ -13,7 +13,7 @@ export function itensMenu(papel: Papel): Item[] {
     { href: "/conversas", texto: "Conversas", icone: MessagesSquare },
     { href: "/ligacoes", texto: "Ligações", icone: Phone },
     ...(papel !== "vendedor" ? [{ href: "/instancias", texto: "WhatsApp", icone: Smartphone }] : []),
-    ...(papel === "admin" ? [{ href: "/admin/usuarios", texto: "Usuários", icone: Users }, { href: "/admin/roteiro", texto: "Roteiro", icone: FileText }] : []),
+    ...(papel === "admin" ? [{ href: "/admin/usuarios", texto: "Usuários", icone: Users }, { href: "/admin/roteiro", texto: "Roteiro", icone: FileText }, { href: "/admin/testar-auditor", texto: "Testar auditor", icone: FlaskConical }] : []),
   ];
 }
 

@@ -22,7 +22,7 @@ export default async function ConversaDetalhe({ params: paramsP }: { params: Pro
     <div className="space-y-4">
       <AutoRefresh segundos={30} />
       <div><Link href="/conversas" className="text-sm text-brand">← Conversas</Link>
-        <h1 className="page-title">{conversa.contato_nome || telefone(conversa.contato)} <span className="text-sm font-normal text-mute">· {vendedor} · {fmtData(conversa.data)}</span></h1></div>
+        <h1 className="page-title">{conversa.contato_nome || telefone(conversa.contato)} <span className="text-sm font-normal text-mute">· {vendedor} · {fmtData(conversa.data)}</span>{conversa.canal === "importada" && <span className="chip ml-2 align-middle border-line text-sm font-normal text-mute">importada</span>}</h1></div>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card">
           <div className="label mb-2">Conversa</div>
@@ -51,7 +51,7 @@ export default async function ConversaDetalhe({ params: paramsP }: { params: Pro
               <div><div className="label mb-1">Gatilhos</div>
                 {Object.entries(GATILHOS).map(([k, t]) => <div key={k} className="flex justify-between py-0.5"><span>{t}</span><span className={a.gatilhos?.[k] ? "text-ok" : "text-mute"}>{a.gatilhos?.[k] ? "usou" : "não"}</span></div>)}</div>
             </div>
-          ) : <p className="page-sub">Ainda não auditada. Entra na fila depois de alguns minutos sem novas mensagens.</p>}
+          ) : <p className="page-sub">{conversa.canal === "importada" ? "Conversa importada. O worker dá a nota em até 5 minutos; esta tela atualiza sozinha." : "Ainda não auditada. Entra na fila depois de alguns minutos sem novas mensagens."}</p>}
         </div>
       </div>
     </div>
