@@ -247,21 +247,26 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
       </header>
 
       {/* faixa de numeros */}
-      <section className="grid gap-[clamp(8px,0.9vh,16px)] sm:grid-cols-2 lg:grid-cols-[1.55fr_repeat(7,minmax(0,1fr))]">
-        <div className="relative flex items-center gap-[1.3em] overflow-hidden rounded-[14px] border border-brand/40 px-[1.05em] py-[0.75em]"
-          style={{ background: "radial-gradient(60% 120% at 22% 45%, rgba(109,207,192,.18), transparent 70%), linear-gradient(120deg,#0f3a3a,#07201f)" }}>
-          <img src="/weevo-icone.png" alt="" aria-hidden className="pointer-events-none absolute -right-[2%] top-1/2 h-[140%] w-auto -translate-y-1/2 opacity-[0.07]" />
-          <div className="relative">
-            <div className="text-[0.68em] font-semibold uppercase tracking-[0.26em] text-brand">Vendas · {periodo.rotulo}</div>
+      <section className="grid gap-[clamp(8px,0.9vh,16px)] sm:grid-cols-2 lg:grid-cols-[2.5fr_repeat(5,minmax(0,1fr))]">
+        {/* vendas em dinheiro: total em destaque, workshop e imersao lado a lado */}
+        <div className="relative flex items-stretch gap-[1.1em] overflow-hidden rounded-[14px] border border-brand/40 px-[1.05em] py-[0.7em] sm:col-span-2 lg:col-span-1"
+          style={{ background: "radial-gradient(60% 120% at 18% 45%, rgba(109,207,192,.2), transparent 70%), linear-gradient(120deg,#0f3a3a,#07201f)" }}>
+          <img src="/weevo-icone.png" alt="" aria-hidden className="pointer-events-none absolute -right-[2%] top-1/2 h-[140%] w-auto -translate-y-1/2 opacity-[0.06]" />
+          <div className="relative flex min-w-0 flex-col justify-center">
+            <div className="whitespace-nowrap text-[0.68em] font-semibold uppercase tracking-[0.26em] text-brand">Vendas <span className="tracking-[0.1em] text-side-text/60">· {periodo.rotulo}</span></div>
             <div className="whitespace-nowrap text-[2.5em] font-extrabold leading-none tracking-[-0.045em] tabular-nums">{brl(vendas.wValor + vendas.imValor)}</div>
+            <div className="mt-[0.2em] whitespace-nowrap text-[0.78em] text-side-text/80">{vendas.wPagos + vendas.imersoes} venda{vendas.wPagos + vendas.imersoes === 1 ? "" : "s"} em dinheiro</div>
           </div>
-          <div className="relative">
-            <div className="text-[0.95em] font-bold">{vendas.wPagos + vendas.imersoes} venda{vendas.wPagos + vendas.imersoes === 1 ? "" : "s"}</div>
-            <div className="text-[0.8em] text-side-text/80">em dinheiro no período</div>
+          <div className="relative ml-auto grid shrink-0 grid-cols-2 gap-[0.5em]">
+            {([["Workshop", vendas.wPagos, vendas.wValor, "#e5a85f"], ["Imersão", vendas.imersoes, vendas.imValor, "#9085e9"]] as [string, number, number, string][]).map(([n, q, v, c]) => (
+              <div key={n} className="flex min-w-[6.5em] flex-col justify-center rounded-[10px] border border-white/10 bg-black/25 px-[0.75em] py-[0.35em]" style={{ borderTop: `3px solid ${c}` }}>
+                <div className="text-[0.62em] font-semibold uppercase tracking-[0.2em]" style={{ color: c }}>{n}</div>
+                <div className="text-[1.5em] font-extrabold leading-tight tabular-nums">{q}</div>
+                <div className="whitespace-nowrap text-[0.75em] text-side-text/80 tabular-nums">{brl(v)}</div>
+              </div>
+            ))}
           </div>
         </div>
-        {kpi("Vendas workshop", vendas.wPagos, <>{brl(vendas.wValor)} · pagas</>)}
-        {kpi("Vendas imersão", vendas.imersoes, <>{brl(vendas.imValor)}</>)}
         {kpi("Convites", vendas.convites, <>workshop com cupom · R$ 0</>)}
         {kpi("Marcações", <>{time.marcacoes} <span className="text-[0.55em] font-normal text-mute">/ {metaMarc * nSdr}</span></>, <><Pill e={eMarc}>{fmtPct(time.marcacoes, metaMarc * nSdr)}</Pill> {time.workshop} W · {time.imersao} I</>)}
         {kpi("Conversas trocadas", <>{time.respostas} <span className="text-[0.55em] font-normal text-mute">/ {metaConversas * nSdr}</span></>, <>{fmtPct(time.respostas, time.contatadas)} das conversas</>)}
