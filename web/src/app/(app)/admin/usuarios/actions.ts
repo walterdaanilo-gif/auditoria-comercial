@@ -23,6 +23,7 @@ export async function criarUsuario(_: Resultado, fd: FormData): Promise<Resultad
   if (error || !data.user) return { ok: false, erro: error?.message || "Não foi possível criar o usuário." };
   await admin.from("profiles").upsert({ id: data.user.id, nome, email, papel, ativo: true });
   revalidatePath("/admin/usuarios");
+  revalidatePath("/configuracoes");
   return { ok: true };
 }
 
