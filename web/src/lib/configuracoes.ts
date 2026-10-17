@@ -135,6 +135,8 @@ export function validar(e: Estado): string[] {
   if (!(HORAS_RESUMO as readonly string[]).includes(s.resumo_hora)) erros.push("Horário do resumo inválido.");
   if (s.resumo_ativo && !s.resumo_dias.length) erros.push("Resumo diário: escolha pelo menos um dia.");
   if (e.alertas.length > 3) erros.push("No máximo 3 telefones de alerta.");
+  const envio = e.numeros.find((n) => n.id === s.instancia_envio_id)?.numero;
+  if (envio && e.alertas.some((t) => normalizarTelefone(t) === normalizarTelefone(envio))) erros.push("O WhatsApp que envia não pode estar também em quem recebe: a mensagem cairia no \"conversar comigo mesmo\", sem notificação.");
   for (const t of [...e.alertas, ...e.ignorados]) if (!normalizarTelefone(t)) erros.push(`Telefone inválido: ${t}`);
   if (!inteiro(s.meta_sdr_contatos, 0, 1000) || !inteiro(s.meta_sdr_marcacoes, 0, 1000)) erros.push("Metas do SDR: use números de 0 a 1000.");
   for (const m of [s.meta_closer_reunioes, s.meta_closer_vendas]) if (m !== null && !inteiro(m, 0, 1000)) erros.push("Metas do closer: use números de 0 a 1000.");
