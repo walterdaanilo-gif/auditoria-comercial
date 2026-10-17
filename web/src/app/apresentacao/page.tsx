@@ -26,9 +26,12 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
   const equipe = [...new Set((rInst.data ?? []).map((i) => i.vendedor_id as string))];
   const timeIds = new Set(((rPerf.data ?? []) as DadosTela["perfis"]).filter((p) => p.ativo && (p.papel === "vendedor" || equipe.includes(p.id))).map((p) => p.id));
   const ven = ((rVen.data ?? []) as { vendedor_id: string; venda_tipo: string | null; venda_valor: number | null; venda_cupom: boolean }[]).filter((v) => timeIds.has(v.vendedor_id));
+  const ws = ven.filter((v) => v.venda_tipo !== "imersao"), im = ven.filter((v) => v.venda_tipo === "imersao");
+  const pagos = ws.filter((v) => !v.venda_cupom);
   const vendas: Vendas = {
-    inscricoes: ven.filter((v) => v.venda_tipo !== "imersao").length, cupom: ven.filter((v) => v.venda_tipo !== "imersao" && v.venda_cupom).length,
-    imersoes: ven.filter((v) => v.venda_tipo === "imersao").length, valor: ven.reduce((s, v) => s + Number(v.venda_cupom ? 0 : v.venda_valor || 0), 0),
+    wPagos: pagos.length, wValor: pagos.reduce((s, v) => s + Number(v.venda_valor || 0), 0),
+    imersoes: im.length, imValor: im.reduce((s, v) => s + Number(v.venda_valor || 0), 0),
+    convites: ws.length - pagos.length,
   };
   const workshopPor: WorkshopPor = {};
   for (const v of ven.filter((x) => x.venda_tipo !== "imersao")) {

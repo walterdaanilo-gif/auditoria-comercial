@@ -12,7 +12,8 @@ import Controles from "./Controles";
 // Tela de TV (16:9, sem rolagem) no molde do painel comercial de referencia, nas cores Weevo. Grade 2x2.
 // Metas diarias por SDR vem de Configuracoes (padrao: 25 conversas trocadas e 6 marcacoes).
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-export type Vendas = { inscricoes: number; cupom: number; imersoes: number; valor: number };
+// vendas com dinheiro (workshop pago e imersao) e convites (workshop com cupom R$ 0, nao e dinheiro)
+export type Vendas = { wPagos: number; wValor: number; imersoes: number; imValor: number; convites: number };
 // workshop por vendedor: confirmacoes por convite (cupom R$ 0) e vendas com dinheiro (pagas)
 export type WorkshopPor = Record<string, { convites: number; pagos: number; valor: number }>;
 
@@ -246,23 +247,26 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
       </header>
 
       {/* faixa de numeros */}
-      <section className="grid gap-[clamp(8px,0.9vh,16px)] sm:grid-cols-2 lg:grid-cols-[1.7fr_repeat(4,minmax(0,1fr))]">
+      <section className="grid gap-[clamp(8px,0.9vh,16px)] sm:grid-cols-2 lg:grid-cols-[1.55fr_repeat(7,minmax(0,1fr))]">
         <div className="relative flex items-center gap-[1.3em] overflow-hidden rounded-[14px] border border-brand/40 px-[1.05em] py-[0.75em]"
           style={{ background: "radial-gradient(60% 120% at 22% 45%, rgba(109,207,192,.18), transparent 70%), linear-gradient(120deg,#0f3a3a,#07201f)" }}>
           <img src="/weevo-icone.png" alt="" aria-hidden className="pointer-events-none absolute -right-[2%] top-1/2 h-[140%] w-auto -translate-y-1/2 opacity-[0.07]" />
           <div className="relative">
-            <div className="text-[0.68em] font-semibold uppercase tracking-[0.26em] text-brand">Marcações · {periodo.rotulo}</div>
-            <div className="text-[2.7em] font-extrabold leading-none tracking-[-0.045em] tabular-nums">{time.marcacoes}<small className="ml-[0.25em] align-[0.95em] text-[0.4em] font-medium tracking-normal text-mute">de {metaMarc * nSdr}</small></div>
+            <div className="text-[0.68em] font-semibold uppercase tracking-[0.26em] text-brand">Vendas · {periodo.rotulo}</div>
+            <div className="whitespace-nowrap text-[2.5em] font-extrabold leading-none tracking-[-0.045em] tabular-nums">{brl(vendas.wValor + vendas.imValor)}</div>
           </div>
           <div className="relative">
-            <div className="text-[0.8em] text-side-text/80">{time.workshop} workshop · {time.imersao} imersão</div>
-            <div className="mt-[0.35em]"><Pill e={eMarc}>{fmtPct(time.marcacoes, metaMarc * nSdr)} da meta</Pill></div>
+            <div className="text-[0.95em] font-bold">{vendas.wPagos + vendas.imersoes} venda{vendas.wPagos + vendas.imersoes === 1 ? "" : "s"}</div>
+            <div className="text-[0.8em] text-side-text/80">em dinheiro no período</div>
           </div>
         </div>
-        {kpi("Contatos", contatos(time), <>{time.contatadas} por mensagem · {time.ligacoes} ligações ({time.ligacoes_atendidas} atendidas)</>)}
+        {kpi("Vendas workshop", vendas.wPagos, <>{brl(vendas.wValor)} · pagas</>)}
+        {kpi("Vendas imersão", vendas.imersoes, <>{brl(vendas.imValor)}</>)}
+        {kpi("Convites", vendas.convites, <>workshop com cupom · R$ 0</>)}
+        {kpi("Marcações", <>{time.marcacoes} <span className="text-[0.55em] font-normal text-mute">/ {metaMarc * nSdr}</span></>, <><Pill e={eMarc}>{fmtPct(time.marcacoes, metaMarc * nSdr)}</Pill> {time.workshop} W · {time.imersao} I</>)}
         {kpi("Conversas trocadas", <>{time.respostas} <span className="text-[0.55em] font-normal text-mute">/ {metaConversas * nSdr}</span></>, <>{fmtPct(time.respostas, time.contatadas)} das conversas</>)}
-        {kpi("Vendas", vendas.inscricoes + vendas.imersoes, <>{vendas.inscricoes} workshop ({vendas.cupom} cupom) · {vendas.imersoes} imersão · {brl(vendas.valor)}</>)}
-        {kpi("Nota média", <span className={corNota(media(time))}>{nota(media(time))}</span>, <>{time.auditadas} conversas auditadas</>)}
+        {kpi("Contatos", contatos(time), <>{time.contatadas} msg · {time.ligacoes_atendidas}/{time.ligacoes} lig. atendidas</>)}
+        {kpi("Nota média", <span className={corNota(media(time))}>{nota(media(time))}</span>, <>{time.auditadas} auditadas</>)}
       </section>
 
       {/* grade 2x2 ou modo slides */}
