@@ -19,6 +19,15 @@ async function auditarAgora(fd: FormData) {
   await createAdminClient().from("conversas").update({ auditar_agora: true }).eq("id", id);
   revalidatePath(`/conversas/${id}`);
 }
+// Tira a nota desta conversa (sai das medias e do painel); a conversa e as mensagens continuam guardadas
+async function removerAuditoria(fd: FormData) {
+  "use server";
+  await exigirGestor();
+  const id = String(fd.get("id") || "");
+  await createAdminClient().from("auditorias").delete().eq("conversa_id", id);
+  await createAdminClient().from("conversas").update({ auditar_agora: false, auditar_rapido: false }).eq("id", id);
+  revalidatePath(`/conversas/${id}`); revalidatePath("/");
+}
 const OPORT: Record<string, string> = { interesse_workshop: "interesse no workshop", interesse_imersao: "interesse na imersão", reuniao_imersao: "reunião de imersão marcada", reuniao_implementacao: "reunião de implementação marcada" };
 const brl = (n: number) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -59,7 +68,10 @@ export default async function ConversaDetalhe({ params: paramsP }: { params: Pro
             <div className="label">Auditoria{a?.manual && <span className="ml-2 normal-case tracking-normal">· feita pelo Auditar agora</span>}</div>
             {perfil.papel !== "vendedor" && (conversa.auditar_agora
               ? <span className="text-xs text-warn">Na fila: o Auditor roda em até 1 minuto</span>
-              : <form action={auditarAgora}><input type="hidden" name="id" value={conversa.id} /><button className="btn-ghost !py-1 text-xs">{a ? "Auditar de novo" : "Auditar agora"}</button></form>)}
+              : <span className="flex gap-2">
+                  <form action={auditarAgora}><input type="hidden" name="id" value={conversa.id} /><button className="btn-ghost !py-1 text-xs">{a ? "Auditar de novo" : "Auditar agora"}</button></form>
+                  {a && <form action={removerAuditoria}><input type="hidden" name="id" value={conversa.id} /><button className="btn-ghost !py-1 text-xs text-bad" title="Tira a nota desta conversa das médias; a conversa continua guardada">Remover auditoria</button></form>}
+                </span>)}
           </div>
           {a ? (
             <div className="space-y-3 text-sm">
