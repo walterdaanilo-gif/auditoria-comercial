@@ -47,7 +47,7 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
 
   return (
     <div className="space-y-5">
-      <AutoRefresh segundos={30} />
+      <AutoRefresh segundos={60} />
       <div><h1 className="page-title">Conversas</h1>
         <p className="page-sub">Só as conversas em que o lead respondeu são auditadas pela IA. As outras ficam em "Sem resposta" até o lead responder.</p></div>
 

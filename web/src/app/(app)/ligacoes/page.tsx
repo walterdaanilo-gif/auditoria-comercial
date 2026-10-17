@@ -32,7 +32,7 @@ export default async function Ligacoes({ searchParams: spP }: { searchParams: Pr
 
   return (
     <div className="space-y-4">
-      <AutoRefresh segundos={30} />
+      <AutoRefresh segundos={60} />
       <div><h1 className="page-title">Ligações</h1>
         <p className="page-sub">As ligações de WhatsApp dos números conectados entram sozinhas (quem ligou, se atendeu e quanto durou). O WhatsApp não grava o áudio: para a IA auditar uma ligação, envie a gravação abaixo.</p></div>
       <UploadLigacao vendedores={(perfis ?? []) as { id: string; nome: string }[]} meuId={perfil.id} />

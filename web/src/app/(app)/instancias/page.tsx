@@ -75,7 +75,7 @@ export default async function Instancias({ searchParams: searchParamsP }: { sear
 
   return (
     <div className="space-y-5">
-      <AutoRefresh segundos={5} />
+      <AutoRefresh segundos={5} tabelas={["instancias_whatsapp"]} />
       <div><h1 className="page-title">WhatsApp conectado</h1>
         <p className="page-sub">Cada vendedor lê o QR Code no celular dele: WhatsApp → Aparelhos conectados → Conectar um aparelho. O QR renova sozinho a cada 2 minutos.</p></div>
       {searchParams.erro && <p className="card border-bad text-sm text-bad">{searchParams.erro}</p>}
