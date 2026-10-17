@@ -578,3 +578,193 @@ grant execute on function public.resumo_sdr(date, date) to authenticated;
 alter table public.auditorias add column if not exists primeira_resposta_seg integer;
 alter table public.auditorias add column if not exists tempo_medio_resposta_seg integer;
 alter table public.auditorias add column if not exists respostas_sdr integer;
+
+-- =====================================================================
+-- CONFIGURACOES DO AUDITOR (tela Configuracoes, so gestor/admin edita)
+-- =====================================================================
+
+-- Funcao comercial do vendedor: SDR (workshop e reuniao de imersao) ou Closer (implementacao e fechamento da imersao)
+alter table public.profiles add column if not exists funcao text not null default 'sdr';
+do $$ begin
+  alter table public.profiles add constraint profiles_funcao_ck check (funcao in ('sdr','closer'));
+exception when duplicate_object then null; end $$;
+
+-- Horario proprio do numero (usado quando horario_modo = 'numero')
+alter table public.instancias_whatsapp add column if not exists horario jsonb;
+
+-- Configuracao unica da Weevo (1 linha)
+create table if not exists public.audit_settings (
+  id                     integer primary key default 1 check (id = 1),
+  auditoria_automatica   boolean not null default true,
+  escopo_conversas       text not null default 'individual' check (escopo_conversas in ('todas','individual','grupo')),
+  min_mensagens          integer check (min_mensagens between 1 and 200),   -- null = padrao do app (4)
+  amostragem_pct         integer check (amostragem_pct between 1 and 100),  -- null = padrao do app (100)
+  so_com_proposta        boolean not null default false,
+  regras_criticas        text[] not null default '{}',
+  sla_primeira_resposta_min integer not null default 15 check (sla_primeira_resposta_min between 1 and 10080),
+  followup_sem_resposta_h integer not null default 24 check (followup_sem_resposta_h between 1 and 720),
+  followup_abandonada_d   integer not null default 3 check (followup_abandonada_d between 1 and 90),
+  followup_limite_d       integer not null default 14 check (followup_limite_d between 1 and 365),
+  horario_modo           text not null default 'desligado' check (horario_modo in ('desligado','empresa','numero')),
+  horario_empresa        jsonb not null default '{"dias":[1,2,3,4,5],"inicio":"08:00","fim":"18:00"}',
+  alerta_venda           boolean not null default true,
+  alerta_oportunidade    boolean not null default false,
+  alerta_formato         text not null default 'detalhado' check (alerta_formato in ('resumido','detalhado')),
+  instancia_envio_id     uuid references public.instancias_whatsapp(id) on delete set null, -- WhatsApp que envia alertas e resumo
+  resumo_ativo           boolean not null default true,
+  resumo_hora            text not null default '19:00' check (resumo_hora in ('07:00','12:00','19:00','21:00')),
+  resumo_dias            integer[] not null default '{1,2,3,4,5}',
+  resumo_ultimo_envio    timestamptz,
+  rubrica_modo           text not null default 'sistema' check (rubrica_modo in ('sistema','personalizada')),
+  venda_conta            text[] not null default '{}',
+  venda_nao_conta        text[] not null default '{}',
+  oportunidade_conta     text[] not null default '{}',
+  oportunidade_nao_conta text[] not null default '{}',
+  meta_sdr_contatos      integer not null default 30,
+  meta_sdr_marcacoes     integer not null default 6,
+  meta_closer_reunioes   integer,
+  meta_closer_vendas     integer,
+  atualizado_em          timestamptz not null default now()
+);
+insert into public.audit_settings (id, regras_criticas, venda_conta, venda_nao_conta, oportunidade_conta, oportunidade_nao_conta) values (1,
+  array['Lead ameaçou reclamar publicamente ou no Procon','SDR ou closer prometeu algo que a Weevo não oferece','Lead pediu para não ser mais contatado e o contato continuou'],
+  array['Lead confirmou a inscrição no workshop','Lead usou cupom de convite do workshop','Lead enviou comprovante de pagamento','Lead assinou o contrato da imersão'],
+  array['Lead disse "vou pensar"','Pagamento prometido mas não confirmado','Reunião marcada (é oportunidade, não venda)'],
+  array['Lead quer saber datas ou valores do workshop','Lead quer saber sobre a imersão','Reunião de imersão marcada','Reunião de implementação marcada'],
+  array['Curiosidade sem intenção','Conversa pessoal sem contexto comercial','Spam ou bot'])
+on conflict (id) do nothing;
+
+-- Numeros que nunca sao auditados automaticamente (55 + DDD + numero)
+create table if not exists public.numeros_ignorados (
+  telefone  text primary key check (telefone ~ '^55[0-9]{10,11}$'),
+  motivo    text,
+  criado_em timestamptz not null default now()
+);
+
+-- Telefones que recebem alertas e o resumo diario (no maximo 3)
+create table if not exists public.telefones_alerta (
+  telefone  text primary key check (telefone ~ '^55[0-9]{10,11}$'),
+  criado_em timestamptz not null default now()
+);
+create or replace function public.limite_telefones_alerta() returns trigger language plpgsql set search_path = public as $$
+begin
+  if (select count(*) from public.telefones_alerta) > 3 then raise exception 'No máximo 3 telefones de alerta'; end if;
+  return null;
+end $$;
+create or replace trigger trg_limite_telefones_alerta after insert on public.telefones_alerta
+  for each statement execute function public.limite_telefones_alerta();
+
+-- Rubrica: criterios por funcao (sdr, closer) ou a personalizada (vale para todos)
+create table if not exists public.criterios_rubrica (
+  id        uuid primary key default gen_random_uuid(),
+  rubrica   text not null check (rubrica in ('sdr','closer','personalizada')),
+  chave     text not null,
+  nome      text not null,
+  descricao text not null default '',
+  peso      integer not null check (peso between 0 and 100),
+  ativo     boolean not null default true,
+  posicao   integer not null default 0,
+  unique (rubrica, chave)
+);
+
+-- Pesos ativos de cada rubrica precisam somar 100 (checado no fim da transacao)
+create or replace function public.checar_pesos_rubrica() returns trigger language plpgsql set search_path = public as $$
+declare r text; s integer;
+begin
+  for r in select distinct rubrica from public.criterios_rubrica loop
+    select coalesce(sum(peso), 0) into s from public.criterios_rubrica where rubrica = r and ativo;
+    if s <> 100 then raise exception 'Os pesos da rubrica % somam % por cento; precisam somar 100', r, s; end if;
+  end loop;
+  return null;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_trigger where tgname = 'trg_pesos_rubrica') then
+    create constraint trigger trg_pesos_rubrica after insert or update or delete on public.criterios_rubrica
+      deferrable initially deferred for each row execute function public.checar_pesos_rubrica();
+  end if;
+end $$;
+
+
+
+-- Salva uma rubrica inteira de uma vez (a soma 100 e checada no fim); criterio removido fica inativo
+create or replace function public.salvar_rubrica(p_rubrica text, p_criterios jsonb) returns void
+language plpgsql security invoker set search_path = public as $$
+begin
+  if not public.eh_gestor() then raise exception 'Sem permissão'; end if;
+  update public.criterios_rubrica set ativo = false
+   where rubrica = p_rubrica and chave not in (select c->>'chave' from jsonb_array_elements(p_criterios) c);
+  insert into public.criterios_rubrica (rubrica, chave, nome, descricao, peso, ativo, posicao)
+  select p_rubrica, c->>'chave', c->>'nome', coalesce(c->>'descricao',''), (c->>'peso')::int, coalesce((c->>'ativo')::boolean, true), ord::int
+    from jsonb_array_elements(p_criterios) with ordinality as t(c, ord)
+  on conflict (rubrica, chave) do update set nome = excluded.nome, descricao = excluded.descricao, peso = excluded.peso, ativo = excluded.ativo, posicao = excluded.posicao;
+end $$;
+revoke all on function public.salvar_rubrica(text, jsonb) from public, anon;
+grant execute on function public.salvar_rubrica(text, jsonb) to authenticated;
+
+-- Notificacoes no app (alerta critico vai so por aqui)
+create table if not exists public.notificacoes (
+  id          uuid primary key default gen_random_uuid(),
+  para        uuid not null references public.profiles(id) on delete cascade,
+  tipo        text not null check (tipo in ('critico','venda','oportunidade','aviso')),
+  titulo      text not null,
+  texto       text,
+  link        text,
+  lida        boolean not null default false,
+  criado_em   timestamptz not null default now()
+);
+create index if not exists ix_notif_para on public.notificacoes(para, lida, criado_em desc);
+
+-- Resultado novo da auditoria
+alter table public.auditorias add column if not exists rubrica text;
+alter table public.auditorias add column if not exists notas_1a5 jsonb;
+alter table public.auditorias add column if not exists venda boolean not null default false;
+alter table public.auditorias add column if not exists venda_tipo text check (venda_tipo in ('workshop','imersao'));
+alter table public.auditorias add column if not exists venda_valor numeric(12,2);
+alter table public.auditorias add column if not exists venda_cupom boolean not null default false;
+alter table public.auditorias add column if not exists venda_evidencia text;
+alter table public.auditorias add column if not exists oportunidade boolean not null default false;
+alter table public.auditorias add column if not exists oportunidade_tipo text check (oportunidade_tipo in ('interesse_workshop','interesse_imersao','reuniao_imersao','reuniao_implementacao'));
+alter table public.auditorias add column if not exists oportunidade_evidencia text;
+alter table public.auditorias add column if not exists critico boolean not null default false;
+alter table public.auditorias add column if not exists critico_motivo text;
+alter table public.auditorias add column if not exists so_bot boolean not null default false;
+alter table public.auditorias add column if not exists manual boolean not null default false;
+alter table public.auditorias add column if not exists alerta_enviado boolean not null default false;
+
+-- Pedido de "Auditar agora" (o worker atende e limpa)
+alter table public.conversas add column if not exists auditar_agora boolean not null default false;
+
+-- RLS: gestor/admin le e edita; worker usa service role
+alter table public.audit_settings    enable row level security;
+alter table public.numeros_ignorados enable row level security;
+alter table public.telefones_alerta  enable row level security;
+alter table public.criterios_rubrica enable row level security;
+alter table public.notificacoes      enable row level security;
+
+do $$ begin
+  create policy as_gestor on public.audit_settings for all to authenticated using (public.eh_gestor()) with check (public.eh_gestor());
+  create policy ni_gestor on public.numeros_ignorados for all to authenticated using (public.eh_gestor()) with check (public.eh_gestor());
+  create policy ta_gestor on public.telefones_alerta for all to authenticated using (public.eh_gestor()) with check (public.eh_gestor());
+  create policy cr_gestor on public.criterios_rubrica for all to authenticated using (public.eh_gestor()) with check (public.eh_gestor());
+  create policy nt_select on public.notificacoes for select to authenticated using (para = auth.uid());
+  create policy nt_update on public.notificacoes for update to authenticated using (para = auth.uid()) with check (para = auth.uid());
+exception when duplicate_object then null; end $$;
+revoke all on public.audit_settings, public.numeros_ignorados, public.telefones_alerta, public.criterios_rubrica, public.notificacoes from anon;
+
+-- Rubricas padrao (por ultimo: o trigger de pesos e adiado e bloqueia ALTER TABLE depois dele)
+insert into public.criterios_rubrica (rubrica, chave, nome, descricao, peso, posicao) values
+  ('sdr','abordagem','Abordagem e personalização','Saudação cordial, cita quem indicou e o contexto do lead, tom leve e profissional.',15,1),
+  ('sdr','descoberta','Descoberta do momento','Faz perguntas para entender o momento e o interesse do lead antes de convidar.',15,2),
+  ('sdr','valor','Apresentação do valor','Explica com clareza o ganho do workshop ou da imersão, em poucas frases.',15,3),
+  ('sdr','objecoes','Tratamento de objeções','Responde tempo, preço e interesse com argumento, sem evasivas.',15,4),
+  ('sdr','conducao','Condução à inscrição ou reunião','Propõe data e horário, envia o link ou cupom e confirma a inscrição.',25,5),
+  ('sdr','agilidade','Agilidade','Responde rápido e não deixa o lead esperando.',10,6),
+  ('sdr','followup','Follow-up','Retoma o contato quando o lead esfria ou some.',5,7),
+  ('closer','conexao','Conexão e abordagem','Retoma o contexto do lead e cria confiança desde o início.',10,1),
+  ('closer','diagnostico','Diagnóstico da necessidade','Entende a dor, o objetivo e o momento antes de apresentar a imersão.',20,2),
+  ('closer','apresentacao','Apresentação da imersão','Liga a imersão ao que o lead precisa, com condições claras.',15,3),
+  ('closer','objecoes','Tratamento de objeções','Responde preço, prazo e dúvidas com argumento e prova.',20,4),
+  ('closer','fechamento','Condução ao fechamento','Marca a reunião de implementação e pede o fechamento de forma concreta.',20,5),
+  ('closer','agilidade','Agilidade','Responde rápido e mantém o ritmo da negociação.',5,6),
+  ('closer','followup','Follow-up','Retoma quem esfriou com motivo e próximo passo.',10,7)
+on conflict (rubrica, chave) do nothing;
