@@ -73,10 +73,18 @@ async function startInstance(db, inst) {
         setTimeout(connect, 3000);
       }
     });
-    const onMsgs = ({ messages }) => { for (const m of messages) saveMessage(db, inst, m, { sock, B }).catch(e => console.error(`[${inst.nome}] mensagem:`, e.message)); };
-    sock.ev.on("messages.upsert", onMsgs);
-    sock.ev.on("messaging-history.set", onMsgs);
-    sock.ev.on("call", acompanharChamadas(db, inst, () => sock.user?.id));
+    const onMsgs = (origem) => ({ messages = [], type }) => {
+      // diagnostico: mostra no log o que chega do WhatsApp (sem o texto), para achar mensagem ou ligacao que nao entrou
+      if (messages.length) console.log(`[${inst.nome}] ${origem}${type ? `/${type}` : ""}: ${messages.length} msg (${[...new Set(messages.map(m => (m.messageStubType ? `stub${m.messageStubType}` : Object.keys(m.message || {}).filter(k => k !== "messageContextInfo")[0]) || "vazia"))].join(", ")})`);
+      for (const m of messages) saveMessage(db, inst, m, { sock, B }).catch(e => console.error(`[${inst.nome}] mensagem:`, e.message));
+    };
+    sock.ev.on("messages.upsert", onMsgs("upsert"));
+    sock.ev.on("messaging-history.set", onMsgs("historico"));
+    const onCall = acompanharChamadas(db, inst, () => sock.user?.id);
+    sock.ev.on("call", calls => {
+      console.log(`[${inst.nome}] evento de chamada: ${calls.map(c => `${c.status} ${String(c.from || "").split("@")[0].split(":")[0]} -> ${String(c.chatId || "").split("@")[0]}`).join(" | ")}`);
+      return onCall(calls);
+    });
   };
   await setStatus(db, inst.id, { status: "conectando" });
   await connect();
