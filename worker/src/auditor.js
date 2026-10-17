@@ -115,6 +115,7 @@ ${criterios.map(c => `- ${c.chave}: ${c.nome}. ${c.descricao || ""}`.trim()).joi
 ## Regras
 - VENDEDOR = nosso vendedor, CLIENTE = o lead. Em ligações a transcrição pode vir sem separar quem fala.
 - Mensagens automáticas (chatbot, menus, respostas automáticas, inclusive de bots do lead) não entram na nota. Se a conversa inteira for de bot, marque "conversa_so_bot": true.
+- Nos exemplos de frase, use o nome real do vendedor e do lead (vêm no início do texto). Os nomes do roteiro são só exemplos.
 - Se vier um HISTÓRICO DOS DIAS ANTERIORES, use só como contexto (o que já foi falado, prometido, follow-up). A nota, a venda e a oportunidade são sobre a CONVERSA DO DIA.
 - Não invente fatos que não estão no texto. Na dúvida, venda e oportunidade ficam false.
 
@@ -245,7 +246,8 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
   const auditarConversa = async (c, msgs, { manual = false } = {}) => {
     const tempos = temposResposta(msgs);
     const hist = await historico(db, c, R.s.historico_dias);
-    const texto = hist ? `${hist}\n\nCONVERSA DO DIA (avalie esta):\n${cortar(msgs.map(linha).join("\n"))}` : cortar(msgs.map(linha).join("\n"));
+    const quem = `Vendedor: ${R.nomes.get(c.vendedor_id) || "sem nome"} · Lead: ${c.contato_nome || "nome não informado"}\n\n`;
+    const texto = quem + (hist ? `${hist}\n\nCONVERSA DO DIA (avalie esta):\n${cortar(msgs.map(linha).join("\n"))}` : cortar(msgs.map(linha).join("\n")));
     const a = await auditarTexto(R, c.vendedor_id, texto, { primeiraResposta: tempos.primeira_resposta_seg }, fetchImpl);
     const [antes] = await db.select("auditorias", { select: "critico", filters: { conversa_id: `eq.${c.id}` } });
     await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: msgs.length, ...a, ...tempos, manual, ...(c.canal === "importada" ? { sheet_ok: true } : {}) }], { onConflict: "conversa_id", returning: false });
