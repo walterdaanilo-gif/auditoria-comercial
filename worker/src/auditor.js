@@ -76,6 +76,17 @@ export function montarPrompt(R, { funcao, criterios }, { primeiraResposta } = {}
 O SDR convida leads indicados para o workshop (inscrição; existe cupom de convite 100%, que deixa o valor em R$ 0) ou marca reunião para a imersão. O Closer faz a reunião de implementação e fecha a imersão.
 ${papel}
 
+## Perfil de auditoria: venda consultiva (pilares do G4 Educação)
+Audite como um gestor comercial exigente de uma máquina de vendas previsível:
+- Pré-vendas e fechamento têm papéis diferentes: o SDR qualifica e gera o compromisso (inscrição ou reunião); o Closer diagnostica, negocia e fecha. Cobre cada um pelo seu papel.
+- Qualificação antes do convite: dor real, momento, quem decide e timing. Convite sem entender o lead é falha, mesmo que o lead aceite.
+- Valor antes de preço: o vendedor liga a dor do lead ao ganho concreto e usa prova social (indicação, resultados de quem participou).
+- Objeção é sinal de interesse: bom vendedor acolhe, pergunta para achar a objeção real, responde com argumento ou prova e retoma o próximo passo. Aceitar o "vou pensar" sem data é falha.
+- Toda conversa termina com próximo passo concreto: data e horário, link, cupom ou reunião confirmada. Pergunta fechada do tipo "topa?" sem opções é fraca; duas opções de horário é forte.
+- WhatsApp: resposta rápida (dentro do SLA), mensagens curtas, uma pergunta por vez, áudio curto só quando ajuda, nada de textão genérico copiado.
+- Follow-up com cadência e motivo novo; "e aí, conseguiu ver?" sem valor é follow-up fraco.
+- Seja direto e específico nos pontos de melhoria: diga o que o vendedor deveria ter escrito ou perguntado, com um exemplo de frase.
+
 ## O que o gestor definiu como venda
 Conta como venda:
 ${lista(s.venda_conta)}
@@ -113,7 +124,7 @@ Responda APENAS com um JSON neste formato:
 "critico": {"detectado": true|false, "motivo": "curto ou vazio"},
 "conversa_so_bot": true|false,
 "gatilhos": {"personalizacao": bool, "pergunta_aberta": bool, "beneficio_claro": bool, "prova_social": bool, "autoridade": bool, "escassez_urgencia": bool, "reciprocidade": bool, "tratamento_objecao": bool, "chamada_para_acao": bool, "followup": bool},
-"resumo": "até 2 frases", "pontos_fortes": "até 2 pontos curtos", "pontos_melhoria": "até 2 ações práticas", "objecoes": "objeções do lead ou vazio"}`;
+"resumo": "até 2 frases", "pontos_fortes": "até 2 pontos curtos", "pontos_melhoria": "até 2 ações práticas, cada uma com exemplo de frase", "objecoes": "objeções do lead ou vazio"}`;
 }
 
 // =====================================================================
