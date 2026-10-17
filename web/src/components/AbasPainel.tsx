@@ -3,7 +3,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutDashboard, MonitorPlay } from "lucide-react";
 
 // Abas do Painel: "Painel" (operacao) e "Apresentacao" (tela de TV).
-// Um clique em Apresentacao ja entra em tela cheia, mantendo o periodo escolhido; Painel (ou Esc) sai.
+// Um clique em Apresentacao ja entra em tela cheia no modo slides, mantendo o periodo escolhido; Painel (ou Esc) sai.
 export default function AbasPainel({ atual }: { atual: "painel" | "apresentacao" }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -14,7 +14,9 @@ export default function AbasPainel({ atual }: { atual: "painel" | "apresentacao"
   };
   const apresentar = async () => {
     try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen(); } catch {}
-    router.push("/apresentacao" + periodo());
+    // entra direto no modo slides: quadro por quadro em tela cheia
+    const q = periodo();
+    router.push("/apresentacao" + (q ? q + "&slides=1" : "?slides=1"));
   };
   const voltar = async () => {
     try { if (document.fullscreenElement) await document.exitFullscreen(); } catch {}

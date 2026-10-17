@@ -11,7 +11,8 @@ export default function Controles({ p, de, ate, atualizadoEm }: { p: string; de:
   const [d1, setD1] = useState(de), [d2, setD2] = useState(ate);
   useEffect(() => { setPreset(p); setD1(de); setD2(ate); }, [p, de, ate]);
 
-  const ir = (q: Record<string, string>) => router.push("/apresentacao?" + new URLSearchParams(q));
+  // trocar o periodo mantem o modo slides se ele estiver ligado pela URL
+  const ir = (q: Record<string, string>) => router.push("/apresentacao?" + new URLSearchParams({ ...q, ...(new URLSearchParams(window.location.search).get("slides") === "1" ? { slides: "1" } : {}) }));
   const trocarPreset = (v: string) => { setPreset(v); if (v !== "livre") ir({ p: v }); };
   const trocarData = (a: string, b: string) => { setD1(a); setD2(b); if (a && b) { setPreset("livre"); ir({ de: a, ate: b }); } };
   const telaCheia = () => { try { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); } catch {} };
