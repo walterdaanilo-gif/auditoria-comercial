@@ -9,7 +9,7 @@ type Item = { href: string; texto: string; icone: LucideIcon };
 
 export function itensMenu(papel: Papel): Item[] {
   return [
-    { href: "/", texto: "Painel", icone: BarChart3 },
+    { href: "/", texto: "Painel de atendimento", icone: BarChart3 },
     { href: "/conversas", texto: "Conversas", icone: MessagesSquare },
     { href: "/ligacoes", texto: "Ligações", icone: Phone },
     ...(papel !== "vendedor" ? [{ href: "/instancias", texto: "WhatsApp", icone: Smartphone }] : []),

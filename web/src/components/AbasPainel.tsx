@@ -25,7 +25,7 @@ export default function AbasPainel({ atual }: { atual: "painel" | "apresentacao"
   const aba = (on: boolean) => `flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold transition ${on ? "bg-brand text-bg" : "text-mute hover:text-ink"}`;
   return (
     <div role="tablist" aria-label="Visão do painel" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-card p-1">
-      <button role="tab" aria-selected={atual === "painel"} onClick={atual === "painel" ? undefined : voltar} className={aba(atual === "painel")}><LayoutDashboard size={15} />Painel</button>
+      <button role="tab" aria-selected={atual === "painel"} onClick={atual === "painel" ? undefined : voltar} className={aba(atual === "painel")}><LayoutDashboard size={15} />Painel de atendimento</button>
       <button role="tab" aria-selected={atual === "apresentacao"} onClick={atual === "apresentacao" ? undefined : apresentar} className={aba(atual === "apresentacao")} title="Abre em tela cheia"><MonitorPlay size={15} />Apresentação</button>
     </div>
   );
