@@ -168,7 +168,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
         {kpi("Contatadas", total.contatadas, `${total.enviadas} mensagens enviadas`)}
         {kpi("Responderam", total.respostas, `${pct(total.respostas, total.contatadas)} das conversas`)}
         {kpi("Ligações atendidas", total.ligacoes_atendidas, total.ligacoes ? `de ${total.ligacoes} ligações · ${duracao(total.ligacoes_seg)} falando` : "ligações de WhatsApp e gravações enviadas")}
-        {kpi("Marcações", total.agendados, `${total.workshop} workshop · ${total.imersao} imersão`)}
+        {kpi("Marcações", total.agendados, `${total.workshop} workshop · ${total.imersao} reunião de implementação`)}
         {kpi("Nota média", nota(media(total)), `${total.auditadas} auditadas`, corNota(media(total)))}
       </div>
 
@@ -208,7 +208,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
                     return (
                       <div key={chave}>
                         <div className="mb-1 flex items-baseline justify-between text-sm">
-                          <span>{rotulo}{chave === "agendados" && feito > 0 && <span className="ml-2 text-xs text-mute">{t.workshop} workshop · {t.imersao} imersão</span>}</span>
+                          <span>{rotulo}{chave === "agendados" && feito > 0 && <span className="ml-2 text-xs text-mute">{t.workshop} workshop · {t.imersao} reunião de implementação</span>}</span>
                           <span className="tabular-nums"><b className="text-base">{feito}</b><span className="text-mute"> / {alvo}</span>
                             {ok ? <span className="ml-2 inline-flex items-center gap-1 text-ok"><CheckCircle2 size={14} />meta batida</span> : <span className="ml-2 text-mute">{pct(feito, alvo)}</span>}</span>
                         </div>

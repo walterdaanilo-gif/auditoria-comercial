@@ -131,7 +131,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
             )}
           </div>
           <div className="mt-[0.4em] flex flex-wrap gap-x-[1.2em] gap-y-1 border-t border-line pt-[0.45em] text-[0.82em]">
-            {sdrs.map((s) => { const t = porSdr.get(s.id) ?? ZERO; return <span key={s.id} className="flex items-center gap-[0.4em] whitespace-nowrap"><Bola id={s.id} /><b>{s.nome}</b> {t.marcacoes} <span className="text-mute">({t.workshop} W · {t.imersao} I)</span></span>; })}
+            {sdrs.map((s) => { const t = porSdr.get(s.id) ?? ZERO; return <span key={s.id} className="flex items-center gap-[0.4em] whitespace-nowrap"><Bola id={s.id} /><b>{s.nome}</b> {t.marcacoes} <span className="text-mute">({t.workshop} workshop · {t.imersao} reunião de impl.)</span></span>; })}
           </div>
         </Painel>
   );
@@ -268,7 +268,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
           </div>
         </div>
         {kpi("Convites", vendas.convites, <>workshop com cupom · R$ 0</>)}
-        {kpi("Marcações", <>{time.marcacoes} <span className="text-[0.55em] font-normal text-mute">/ {metaMarc * nSdr}</span></>, <><Pill e={eMarc}>{fmtPct(time.marcacoes, metaMarc * nSdr)}</Pill> {time.workshop} W · {time.imersao} I</>)}
+        {kpi("Marcações", <>{time.marcacoes} <span className="text-[0.55em] font-normal text-mute">/ {metaMarc * nSdr}</span></>, <><Pill e={eMarc}>{fmtPct(time.marcacoes, metaMarc * nSdr)}</Pill> {time.workshop} workshop · {time.imersao} reunião de impl.</>)}
         {kpi("Conversas trocadas", <>{time.respostas} <span className="text-[0.55em] font-normal text-mute">/ {metaConversas * nSdr}</span></>, <>{fmtPct(time.respostas, time.contatadas)} das conversas</>)}
         {kpi("Contatos", contatos(time), <>{time.contatadas} msg · {time.ligacoes_atendidas}/{time.ligacoes} lig. atendidas</>)}
         {kpi("Nota média", <span className={corNota(media(time))}>{nota(media(time))}</span>, <>{time.auditadas} auditadas</>)}

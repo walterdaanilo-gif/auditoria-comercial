@@ -6,7 +6,7 @@
 export const METAS = [
   { chave: "contatos", rotulo: "Contatos (ligação ou mensagem)", meta: null, soma: ["contatadas", "ligacoes"] },
   { chave: "respostas", rotulo: "Conversas trocadas", meta: 25, soma: ["respostas"] },
-  { chave: "agendados", rotulo: "Marcações (workshop + imersão)", meta: 6, soma: ["agendados"] },
+  { chave: "agendados", rotulo: "Marcações (workshop + reunião de implementação)", meta: 6, soma: ["agendados"] },
 ] as const;
 export type ChaveMeta = (typeof METAS)[number]["soma"][number];
 
