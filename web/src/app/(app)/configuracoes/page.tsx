@@ -22,7 +22,7 @@ export default async function Configuracoes() {
 
   const crit = (rCrit.data ?? []) as (Criterio & { rubrica: string })[];
   const da = (r: string) => crit.filter((c) => c.rubrica === r).map(({ chave, nome, descricao, peso, ativo }) => ({ chave, nome, descricao, peso, ativo }));
-  const { id: _id, atualizado_em: _a, resumo_ultimo_envio: _r, ...settings } = rCfg.data as Settings & { id: number; atualizado_em: string; resumo_ultimo_envio: string | null };
+  const { id: _id, atualizado_em: _a, resumo_ultimo_envio: _r, rodada_final_ultima: _u, ...settings } = rCfg.data as Settings & { id: number; atualizado_em: string; resumo_ultimo_envio: string | null; rodada_final_ultima: string | null };
   const inicial: Estado = {
     settings: settings as Settings,
     // vendedor = quem tem conexao de WhatsApp (o cadastro e feito na aba WhatsApp)

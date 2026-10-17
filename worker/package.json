@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node test/smoke.js && node test/mirror.js && node test/uazapi.js && node test/tempos.js && node test/ligacoes.js && node test/regras.js"
+    "test": "node test/smoke.js && node test/mirror.js && node test/uazapi.js && node test/tempos.js && node test/ligacoes.js && node test/regras.js && node test/rodada.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.18",

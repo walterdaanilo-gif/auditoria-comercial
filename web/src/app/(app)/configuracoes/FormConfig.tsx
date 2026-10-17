@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, useTransition, type ReactNode } from "rea
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, ChevronDown, Plus, Trash2, X } from "lucide-react";
 import {
-  DIAS_SEMANA, HORAS_RESUMO, PADRAO_AMOSTRA, PADRAO_MIN_MSGS, SUGESTOES,
+  DIAS_SEMANA, PADRAO_AMOSTRA, PADRAO_MIN_MSGS, SUGESTOES,
   chaveDe, fmtTelefone, normalizarTelefone, somaPesos, validar,
   type Criterio, type Estado, type Horario, type Settings,
 } from "@/lib/configuracoes";
@@ -181,7 +181,7 @@ function previewAlerta(s: Settings) {
   return blocos.length ? blocos.join("\n\n") : "Nenhum aviso marcado: os telefones recebem só o resumo diário.";
 }
 function previewResumo() {
-  return `📊 Resumo do Auditor: Weevo (últimas 24h)\n✅ Auditorias: 12\n⭐ Nota média: 7,8\n⏱️ Tempo médio de resposta: 3min\n💰 Workshop: 5 vendas (3 cupom ${brl(0)}, 2 pagas ${brl(394)})\n💎 Imersão: 1 venda · ${brl(4800)}\n🎯 Oportunidades: 7\n🏆 Ranking\n1. Ruan: 8,4 · 3 vendas\n2. Nick: 7,6 · 2 vendas`;
+  return `📊 *Relatório do dia 17/10 · Weevo*\n\n✅ Auditorias: 12 · ⭐ Nota média: 7,8\n⏱️ 1ª resposta: 4min · tempo médio de resposta: 12min\n📞 Ligações atendidas: 9 de 15\n💰 Workshop: 5 inscrições (3 com cupom ${brl(0)} · 2 pagas ${brl(394)})\n💎 Imersão: 1 fechada · ${brl(4800)}\n🎯 Oportunidades: 7\n\n🏆 *Por vendedor*\n1. Ruan (SDR): ⭐ 8,4 · 28/30 contatos · 5/6 marcações · 3 inscrições no workshop · 📞 5 atendidas\n2. Nick (SDR): ⭐ 7,6 · 31/30 contatos · 4/6 marcações · 2 inscrições no workshop · 📞 4 atendidas\n\nDetalhes: <link do sistema>`;
 }
 
 // ---------- card em acordeao ----------
@@ -238,7 +238,7 @@ export default function FormConfig({ inicial }: { inicial: Estado }) {
     { id: "critico", titulo: "Alerta crítico e SLA", ok: linhas(s.regras_criticas) > 0 },
     { id: "followup", titulo: "Cadência de follow-up", ok: true },
     { id: "horario", titulo: "Horário de funcionamento", ok: s.horario_modo !== "desligado" },
-    { id: "resumo", titulo: "Resumo diário no WhatsApp", ok: s.resumo_ativo && e.alertas.length > 0 && !!envio },
+    { id: "resumo", titulo: "Relatório do dia no WhatsApp", ok: s.resumo_ativo && e.alertas.length > 0 && !!envio },
     { id: "rubrica", titulo: "Critérios de avaliação", ok: rubOk },
     { id: "vendas", titulo: "Detecção de vendas", ok: linhas(s.venda_conta) > 0 },
     { id: "oportunidades", titulo: "Detecção de oportunidades", ok: linhas(s.oportunidade_conta) > 0 },
@@ -311,10 +311,27 @@ export default function FormConfig({ inicial }: { inicial: Estado }) {
 
       {/* ---------- Essencial ---------- */}
       <h2 className="pt-2 text-lg font-bold">Configuração essencial</h2>
-      <Card {...cardProps("auto")} titulo="Auditoria automática" recomendado resumo={s.auditoria_automatica ? "Ligada: audita sozinho quando a conversa para" : "Desligada: só audita quando você pede"}>
-        <Linha titulo="Auditar sozinho" sub="Quando a conversa fica parada alguns minutos, o Auditor dá a nota e avisa o que precisa de atenção. Desligado, só audita pelo botão Auditar agora na conversa.">
-          <Toggle on={s.auditoria_automatica} onChange={(v) => set({ auditoria_automatica: v })} rotulo="Auditoria automática" />
-        </Linha>
+      <Card {...cardProps("auto")} titulo="Auditoria automática" recomendado
+        resumo={s.auditoria_automatica ? `Ligada · ${s.auditoria_parada_min === null ? "só na rodada final" : `parada ${s.auditoria_parada_min % 60 === 0 ? `${s.auditoria_parada_min / 60}h` : `${s.auditoria_parada_min} min`}`} · rodada final às ${s.rodada_final_hora}` : "Desligada: só audita quando você pede"}>
+        <div className="divide-y divide-line">
+          <Linha titulo="Auditar sozinho" sub="O Auditor dá a nota sozinho e avisa o que precisa de atenção. Desligado, só audita pelo botão Auditar agora na conversa.">
+            <Toggle on={s.auditoria_automatica} onChange={(v) => set({ auditoria_automatica: v })} rotulo="Auditoria automática" />
+          </Linha>
+          {s.auditoria_automatica && <>
+            <Linha titulo="Auditar durante o dia" sub={s.auditoria_parada_min === null ? "Desligado: só audita na rodada final do dia" : "Só audita a conversa que ficou parada esse tempo, para não dar nota no meio do papo"}>
+              <span className="flex items-center gap-3">
+                {s.auditoria_parada_min !== null && <Numero valor={Math.round(s.auditoria_parada_min / 60 * 10) / 10} onChange={(v) => set({ auditoria_parada_min: Math.min(1440, Math.max(10, Math.round((v ?? 2) * 60))) })} min={1} max={24} sufixo="h parada" largura="w-20" />}
+                <Toggle on={s.auditoria_parada_min !== null} onChange={(v) => set({ auditoria_parada_min: v ? 120 : null })} rotulo="Auditar durante o dia" />
+              </span>
+            </Linha>
+            <Linha titulo="Rodada final do dia" sub="Audita o dia fechado de toda conversa que mudou e, logo depois, manda o relatório do dia ao gestor">
+              <input type="time" value={s.rodada_final_hora} onChange={(ev) => set({ rodada_final_hora: ev.target.value })} className="input !w-auto !py-1.5 [color-scheme:dark]" />
+            </Linha>
+            <Linha titulo="Histórico do lead" sub="A IA lê as conversas dos dias anteriores com o mesmo lead como contexto (follow-up, o que foi prometido). A nota é só do dia.">
+              <Numero valor={s.historico_dias} onChange={(v) => set({ historico_dias: v ?? 0 })} max={30} sufixo="dias" largura="w-20" />
+            </Linha>
+          </>}
+        </div>
       </Card>
 
       <Card {...cardProps("conversas")} titulo="Quais conversas auditar"
@@ -418,19 +435,17 @@ export default function FormConfig({ inicial }: { inicial: Estado }) {
         )}
       </Card>
 
-      <Card {...cardProps("resumo")} titulo="Resumo diário no WhatsApp"
-        resumo={s.resumo_ativo ? `Ligado · ${s.resumo_hora} · ${s.resumo_dias.map((d) => DIAS_SEMANA[d]).join(", ")}${e.alertas.length ? "" : " · falta telefone"}` : "Desligado"}>
+      <Card {...cardProps("resumo")} titulo="Relatório do dia no WhatsApp"
+        resumo={s.resumo_ativo ? `Ligado · após a rodada das ${s.rodada_final_hora} · ${s.resumo_dias.map((d) => DIAS_SEMANA[d]).join(", ")}${e.alertas.length ? "" : " · falta telefone"}` : "Desligado"}>
         <div className="grid gap-5 lg:grid-cols-2">
           <div className="space-y-4">
-            <Linha titulo="Enviar resumo diário" sub="Vai para os mesmos telefones dos alertas"><Toggle on={s.resumo_ativo} onChange={(v) => set({ resumo_ativo: v })} rotulo="Resumo diário" /></Linha>
-            <div><div className="label mb-2">Horário (Brasília)</div>
-              <Opcoes valor={s.resumo_hora} onChange={(v) => set({ resumo_hora: v })} opcoes={HORAS_RESUMO.map((h) => [h, h, { "07:00": "Início do dia", "12:00": "Almoço", "19:00": "Fim do expediente", "21:00": "Noite" }[h]] as [string, string, string])} /></div>
+            <Linha titulo="Enviar relatório do dia" sub={`Sai logo depois da rodada final das ${s.rodada_final_hora} (horário de Brasília), pelo WhatsApp escolhido em Alertas ao gestor, para os mesmos telefones dos alertas`}><Toggle on={s.resumo_ativo} onChange={(v) => set({ resumo_ativo: v })} rotulo="Relatório do dia" /></Linha>
             <div><div className="label mb-2">Dias</div>
               <div className="flex flex-wrap gap-1">{DIAS_SEMANA.map((d, i) => {
                 const on = s.resumo_dias.includes(i);
                 return <button key={d} type="button" aria-pressed={on} onClick={() => set({ resumo_dias: on ? s.resumo_dias.filter((x) => x !== i) : [...s.resumo_dias, i].sort() })} className={`w-12 rounded-lg border py-1.5 text-xs font-semibold ${on ? "border-brand bg-brand text-bg" : "border-line text-mute"}`}>{d}</button>;
               })}</div>
-              <p className="mt-1 text-xs text-mute">Dias sem envio acumulam no próximo resumo.</p></div>
+              <p className="mt-1 text-xs text-mute">Dias sem envio acumulam no próximo relatório.</p></div>
             {!e.alertas.length && <p className="text-xs text-warn">Cadastre pelo menos um telefone em Alertas ao gestor.</p>}
           </div>
           <div><div className="label mb-2">Prévia</div><pre className={pre}>{previewResumo()}</pre></div>

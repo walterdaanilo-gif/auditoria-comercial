@@ -832,3 +832,11 @@ language sql stable security invoker set search_path = public as $$
 $$;
 revoke all on function public.resumo_sdr2(date, date) from public, anon;
 grant execute on function public.resumo_sdr2(date, date) to authenticated;
+
+-- =====================================================================
+-- Quando auditar: parada durante o dia, rodada final (fim do expediente) e historico do lead
+-- =====================================================================
+alter table public.audit_settings add column if not exists auditoria_parada_min integer default 120 check (auditoria_parada_min between 10 and 1440); -- null = so na rodada final
+alter table public.audit_settings add column if not exists rodada_final_hora text not null default '18:00' check (rodada_final_hora ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$');
+alter table public.audit_settings add column if not exists historico_dias integer not null default 7 check (historico_dias between 0 and 30);
+alter table public.audit_settings add column if not exists rodada_final_ultima date; -- o worker marca o dia em que ja rodou

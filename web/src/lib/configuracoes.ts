@@ -28,6 +28,9 @@ export type Settings = {
   instancia_envio_id: string | null;
   resumo_ativo: boolean;
   resumo_hora: string;
+  auditoria_parada_min: number | null; // null = so na rodada final
+  rodada_final_hora: string;
+  historico_dias: number;
   resumo_dias: number[];
   rubrica_modo: "sistema" | "personalizada";
   venda_conta: string[];
@@ -133,6 +136,9 @@ export function validar(e: Estado): string[] {
   for (const [onde, h] of horarios) if (!hora(h.inicio) || !hora(h.fim) || h.inicio >= h.fim || !h.dias.length) erros.push(`Horário ${onde}: escolha os dias e um início antes do fim.`);
   if (!["resumido", "detalhado"].includes(s.alerta_formato)) erros.push("Formato do alerta inválido.");
   if (!(HORAS_RESUMO as readonly string[]).includes(s.resumo_hora)) erros.push("Horário do resumo inválido.");
+  if (s.auditoria_parada_min !== null && !inteiro(s.auditoria_parada_min, 10, 1440)) erros.push("Auditar durante o dia: use de 10 minutos a 24 horas parada.");
+  if (!hora(s.rodada_final_hora)) erros.push("Rodada final: escolha um horário válido.");
+  if (!inteiro(s.historico_dias, 0, 30)) erros.push("Histórico do lead: use de 0 a 30 dias.");
   if (s.resumo_ativo && !s.resumo_dias.length) erros.push("Resumo diário: escolha pelo menos um dia.");
   if (e.alertas.length > 3) erros.push("No máximo 3 telefones de alerta.");
   const envio = e.numeros.find((n) => n.id === s.instancia_envio_id)?.numero;

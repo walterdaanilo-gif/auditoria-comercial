@@ -99,3 +99,13 @@ export async function syncInstances(db) {
   }
 }
 export const statusAtual = () => [...running.keys()];
+
+// Envia texto pelo WhatsApp conectado (alertas e relatorio para o gestor). numero = 55 + DDD + numero.
+// O onWhatsApp acha o JID certo, inclusive quando a conta existe sem o 9 extra.
+export async function enviarTextoBaileys(instanciaId, numero, texto) {
+  const sock = running.get(instanciaId)?.sock;
+  if (!sock?.user) throw new Error("WhatsApp de envio nao esta conectado neste worker");
+  const [r] = (await sock.onWhatsApp(numero)) || [];
+  if (!r?.exists) throw new Error(`o numero ${numero} nao tem WhatsApp`);
+  await sock.sendMessage(r.jid, { text: texto });
+}

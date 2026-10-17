@@ -28,6 +28,8 @@ export async function carregarRegras(db) {
       auditoria_automatica: s.auditoria_automatica ?? true, escopo_conversas: s.escopo_conversas || "individual",
       min_mensagens: s.min_mensagens ?? PADRAO_MIN_MSGS, amostragem_pct: s.amostragem_pct ?? PADRAO_AMOSTRA, so_com_proposta: !!s.so_com_proposta,
       regras_criticas: s.regras_criticas || [], sla_min: s.sla_primeira_resposta_min ?? 15, rubrica_modo: s.rubrica_modo || "sistema",
+      // minutos parada para auditar durante o dia; null = so na rodada final
+      parada_min: "auditoria_parada_min" in s ? s.auditoria_parada_min : cfg.idleMin, historico_dias: s.historico_dias ?? 7,
       venda_conta: s.venda_conta || [], venda_nao_conta: s.venda_nao_conta || [], oportunidade_conta: s.oportunidade_conta || [], oportunidade_nao_conta: s.oportunidade_nao_conta || [],
     },
     rubricas: { sdr: rub("sdr"), closer: rub("closer"), personalizada: rub("personalizada") },
@@ -113,6 +115,7 @@ ${criterios.map(c => `- ${c.chave}: ${c.nome}. ${c.descricao || ""}`.trim()).joi
 ## Regras
 - VENDEDOR = nosso vendedor, CLIENTE = o lead. Em ligações a transcrição pode vir sem separar quem fala.
 - Mensagens automáticas (chatbot, menus, respostas automáticas, inclusive de bots do lead) não entram na nota. Se a conversa inteira for de bot, marque "conversa_so_bot": true.
+- Se vier um HISTÓRICO DOS DIAS ANTERIORES, use só como contexto (o que já foi falado, prometido, follow-up). A nota, a venda e a oportunidade são sobre a CONVERSA DO DIA.
 - Não invente fatos que não estão no texto. Na dúvida, venda e oportunidade ficam false.
 
 Responda APENAS com um JSON neste formato:
@@ -205,6 +208,21 @@ export function temposResposta(msgs) {
 const linha = m => `${m.remetente === "vendedor" ? "VENDEDOR" : "CLIENTE"}: ${m.tipo === "audio" ? `[audio] ${m.transcricao || ""}` : m.texto || `[${m.tipo}]`}`;
 const cortar = t => (t.length > 14000 ? t.slice(t.length - 14000) : t);
 
+// Conversas dos dias anteriores com o mesmo lead (mesmo WhatsApp), so como contexto para a IA
+async function historico(db, c, dias) {
+  if (!dias || !c.instancia_id || !c.data || c.canal === "importada") return "";
+  const ant = await db.select("conversas", { select: "id,data", filters: { instancia_id: `eq.${c.instancia_id}`, contato: `eq.${c.contato}`, data: `lt.${c.data}` }, order: "data", limit: 40 });
+  const desde = addDays(c.data, -dias);
+  const blocos = [];
+  for (const a of ant.filter(x => x.data >= desde)) {
+    const ms = await db.select("mensagens", { select: "remetente,texto,tipo,transcricao,enviada_em", filters: { conversa_id: `eq.${a.id}` }, order: "enviada_em" });
+    if (ms.length) blocos.push(`[${a.data.split("-").reverse().slice(0, 2).join("/")}]\n${ms.map(linha).join("\n")}`);
+  }
+  if (!blocos.length) return "";
+  const t = blocos.join("\n");
+  return `HISTÓRICO DOS DIAS ANTERIORES (só contexto, não avalie):\n${t.length > 6000 ? "..." + t.slice(t.length - 6000) : t}`;
+}
+
 // Alerta critico: notificacao no app para gestores e para o vendedor da conversa (nunca WhatsApp)
 async function avisarCritico(db, R, vendedorId, a, link, contato) {
   const gestores = await db.select("profiles", { select: "id", filters: { papel: "in.(admin,gestor)", ativo: "eq.true" } });
@@ -218,7 +236,7 @@ async function avisarCritico(db, R, vendedorId, a, link, contato) {
 // =====================================================================
 // Conversas: auditadas quando param AUDIT_IDLE_MINUTES (com mensagens novas desde a ultima nota), respeitando
 // as Configuracoes. "Auditar agora" na tela passa por cima dos filtros. Depois, importadas e ligacoes gravadas.
-export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}) {
+export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final = false } = {}) {
   if (!provedor() && fetchImpl === fetch) return 0;
   const R = await carregarRegras(db);
   const from = addDays(today(), -cfg.daysBack);
@@ -226,7 +244,9 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}
 
   const auditarConversa = async (c, msgs, { manual = false } = {}) => {
     const tempos = temposResposta(msgs);
-    const a = await auditarTexto(R, c.vendedor_id, cortar(msgs.map(linha).join("\n")), { primeiraResposta: tempos.primeira_resposta_seg }, fetchImpl);
+    const hist = await historico(db, c, R.s.historico_dias);
+    const texto = hist ? `${hist}\n\nCONVERSA DO DIA (avalie esta):\n${cortar(msgs.map(linha).join("\n"))}` : cortar(msgs.map(linha).join("\n"));
+    const a = await auditarTexto(R, c.vendedor_id, texto, { primeiraResposta: tempos.primeira_resposta_seg }, fetchImpl);
     const [antes] = await db.select("auditorias", { select: "critico", filters: { conversa_id: `eq.${c.id}` } });
     await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: msgs.length, ...a, ...tempos, manual, ...(c.canal === "importada" ? { sheet_ok: true } : {}) }], { onConflict: "conversa_id", returning: false });
     if (a.critico && !antes?.critico && c.canal !== "importada") await avisarCritico(db, R, c.vendedor_id, a, `/conversas/${c.id}`, c.contato_nome || c.contato);
@@ -235,7 +255,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}
   const mensagensDe = id => db.select("mensagens", { select: "remetente,texto,tipo,transcricao,enviada_em", filters: { conversa_id: `eq.${id}` }, order: "enviada_em" });
 
   // ----- "Auditar agora" (qualquer data, sem filtros) -----
-  for (const c of await db.select("conversas", { select: "id,vendedor_id,contato,contato_nome,canal", filters: { auditar_agora: "eq.true" }, limit: 20 })) {
+  for (const c of await db.select("conversas", { select: "id,vendedor_id,instancia_id,contato,contato_nome,canal,data", filters: { auditar_agora: "eq.true" }, limit: 20 })) {
     try {
       const msgs = await mensagensDe(c.id);
       if (msgs.length) await auditarConversa(c, msgs, { manual: true });
@@ -244,8 +264,9 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}
   }
 
   // ----- conversas do dia (automatica) -----
-  const automatica = R.s.auditoria_automatica && R.s.escopo_conversas !== "grupo"; // grupos ainda nao sao gravados
-  const convs = automatica ? await db.selectAll("conversas", { select: "id,vendedor_id,contato,contato_nome,canal,ultima_msg_em", filters: { data: `gte.${from}`, canal: "neq.importada" } }) : [];
+  // Durante o dia: so conversa parada ha parada_min. Na rodada final (fim do expediente): todas que mudaram.
+  const automatica = R.s.auditoria_automatica && R.s.escopo_conversas !== "grupo" && (final || R.s.parada_min != null); // grupos ainda nao sao gravados
+  const convs = automatica ? await db.selectAll("conversas", { select: "id,vendedor_id,instancia_id,contato,contato_nome,canal,data,ultima_msg_em", filters: { data: `gte.${from}`, canal: "neq.importada" } }) : [];
   if (convs.length) {
     const resumo = new Map();
     for (const m of await db.selectAll("mensagens", { select: "conversa_id,remetente,tipo,transcricao,audio_url", filters: { enviada_em: `gte.${dayStart(from)}` }, order: "id" })) {
@@ -262,7 +283,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}
       if (R.ignorados.has(chaveTelefone(c.contato))) continue;
       if (!naAmostra(c.id, R.s.amostragem_pct)) continue;
       const parada = now - new Date(c.ultima_msg_em).getTime();
-      if (parada < cfg.idleMin * 60000) continue;
+      if (!final && parada < R.s.parada_min * 60000) continue;
       if (r.pendAudio && parada < 30 * 60000) continue; // espera a transcricao dos audios
       if ((auds.get(c.id) ?? -1) >= r.n) continue;
       try {
