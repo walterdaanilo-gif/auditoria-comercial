@@ -13,6 +13,8 @@ import Controles from "./Controles";
 // Metas diarias por SDR vem de Configuracoes (padrao: 25 conversas trocadas e 6 marcacoes).
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 export type Vendas = { inscricoes: number; cupom: number; imersoes: number; valor: number };
+// workshop por vendedor: confirmacoes por convite (cupom R$ 0) e vendas com dinheiro (pagas)
+export type WorkshopPor = Record<string, { convites: number; pagos: number; valor: number }>;
 
 export type Linha = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; ligacoes_atendidas: number; ligacoes_seg: number; auditadas: number; nota_soma: number; efetivas: number; marcacoes: number; workshop: number; imersao: number };
 type Tot = Omit<Linha, "dia" | "vendedor_id">;
@@ -44,10 +46,10 @@ function Painel({ titulo, nota: sub, children, className = "" }: { titulo: strin
 }
 
 // equipe = quem tem WhatsApp cadastrado (o cadastro do vendedor e feito na aba WhatsApp) ou papel vendedor
-export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean; funcao?: string | null }[]; linhas: Linha[]; equipe: string[]; metas: { conversas: number; marcacoes: number }; vendas: Vendas };
+export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean; funcao?: string | null }[]; linhas: Linha[]; equipe: string[]; metas: { conversas: number; marcacoes: number }; vendas: Vendas; workshopPor: WorkshopPor };
 
 // Desenho da tela, separado da busca de dados (permite previa com dados de exemplo)
-export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, metas, vendas }: DadosTela) {
+export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, metas, vendas, workshopPor }: DadosTela) {
   const { de, ate } = periodo;
   const META_CONVERSAS = metas.conversas, META_MARCACOES = metas.marcacoes;
   // Tela dos SDRs: so quem e SDR (Closer fica fora, as metas daqui sao de conversas e marcacoes)
@@ -166,12 +168,14 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
           {!sdrsFunil.length && <p className="text-[0.85em] text-mute">Nenhum SDR no time ainda. Quem é Closer não entra no funil.</p>}
           <div className="grid min-h-0 flex-1 gap-[1.1em] overflow-auto" style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(sdrsFunil.length, 3))}, minmax(0,1fr))` }}>
             {sdrsFunil.map((s) => {
-              const t = porSdr.get(s.id) ?? ZERO; const ct = contatos(t);
+              const t = porSdr.get(s.id) ?? ZERO; const ct = contatos(t); const w = workshopPor[s.id] ?? { convites: 0, pagos: 0, valor: 0 };
               const etapas: { n: string; v: number; alvo: number | null; base: number; conv?: string }[] = [
                 { n: "Contatos", v: ct, alvo: null, base: Math.max(ct, 1) },
                 { n: "Conversas trocadas", v: t.respostas, alvo: metaConversas, base: metaConversas, conv: `${fmtPct(t.respostas, t.contatadas)} das conversas` },
                 { n: "Efetivas", v: t.efetivas, alvo: null, base: Math.max(t.respostas, 1), conv: `${fmtPct(t.efetivas, t.respostas)} de quem respondeu` },
                 { n: "Marcações", v: t.marcacoes, alvo: metaMarc, base: metaMarc, conv: `${fmtPct(t.marcacoes, t.efetivas)} das efetivas` },
+                { n: "Confirmações de workshop (convite)", v: w.convites, alvo: null, base: Math.max(t.marcacoes, w.convites, 1), conv: `${fmtPct(w.convites, t.marcacoes)} das marcações · cupom R$ 0` },
+                { n: "Vendas workshop", v: w.pagos, alvo: null, base: Math.max(t.marcacoes, w.pagos, 1), conv: w.pagos ? `${brl(w.valor)} em dinheiro` : "nenhuma paga ainda" },
               ];
               return (
                 <div key={s.id} className="flex min-w-0 flex-col justify-between">

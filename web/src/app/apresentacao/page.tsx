@@ -2,7 +2,7 @@ import { exigirPerfil } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { hojeBR } from "@/lib/format";
 import { lerPeriodo } from "@/lib/periodo";
-import { Tela, type DadosTela, type Linha, type Vendas } from "./Tela";
+import { Tela, type DadosTela, type Linha, type Vendas, type WorkshopPor } from "./Tela";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Apresentação · Auditoria Comercial" };
@@ -30,9 +30,14 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
     inscricoes: ven.filter((v) => v.venda_tipo !== "imersao").length, cupom: ven.filter((v) => v.venda_tipo !== "imersao" && v.venda_cupom).length,
     imersoes: ven.filter((v) => v.venda_tipo === "imersao").length, valor: ven.reduce((s, v) => s + Number(v.venda_cupom ? 0 : v.venda_valor || 0), 0),
   };
+  const workshopPor: WorkshopPor = {};
+  for (const v of ven.filter((x) => x.venda_tipo !== "imersao")) {
+    const o = (workshopPor[v.vendedor_id] ??= { convites: 0, pagos: 0, valor: 0 });
+    if (v.venda_cupom) o.convites++; else { o.pagos++; o.valor += Number(v.venda_valor || 0); }
+  }
   const cfg = rCfg.data as { meta_sdr_conversas: number | null; meta_sdr_marcacoes: number | null } | null;
   return <Tela periodo={periodo} hoje={hoje} perfis={(rPerf.data ?? []) as DadosTela["perfis"]} linhas={(rRes.data ?? []) as Linha[]}
-    equipe={equipe} vendas={vendas}
+    equipe={equipe} vendas={vendas} workshopPor={workshopPor}
     metas={{ conversas: cfg?.meta_sdr_conversas ?? 25, marcacoes: cfg?.meta_sdr_marcacoes ?? 6 }}
     atualizadoEm={new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })} />;
 }
