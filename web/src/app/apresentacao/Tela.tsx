@@ -9,8 +9,9 @@ import Controles from "./Controles";
 
 
 // Tela de TV (16:9, sem rolagem) no molde do painel comercial de referencia, nas cores Weevo. Grade 2x2.
-// Metas diarias por SDR: 25 conversas trocadas (o lead respondeu) e 6 marcacoes (workshop + imersao).
-const META_CONVERSAS = 25, META_MARCACOES = 6;
+// Metas diarias por SDR vem de Configuracoes (padrao: 25 conversas trocadas e 6 marcacoes).
+const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+export type Vendas = { inscricoes: number; cupom: number; imersoes: number; valor: number };
 
 export type Linha = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; ligacoes_atendidas: number; ligacoes_seg: number; auditadas: number; nota_soma: number; efetivas: number; marcacoes: number; workshop: number; imersao: number };
 type Tot = Omit<Linha, "dia" | "vendedor_id">;
@@ -41,12 +42,14 @@ function Painel({ titulo, nota: sub, children, className = "" }: { titulo: strin
   );
 }
 
-export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean }[]; linhas: Linha[];  };
+// equipe = quem tem WhatsApp cadastrado (o cadastro do vendedor e feito na aba WhatsApp) ou papel vendedor
+export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean; funcao?: string | null }[]; linhas: Linha[]; equipe: string[]; metas: { conversas: number; marcacoes: number }; vendas: Vendas };
 
 // Desenho da tela, separado da busca de dados (permite previa com dados de exemplo)
-export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela) {
+export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, metas, vendas }: DadosTela) {
   const { de, ate } = periodo;
-  const sdrs = perfis.filter((p) => p.papel === "vendedor" && p.ativo);
+  const META_CONVERSAS = metas.conversas, META_MARCACOES = metas.marcacoes;
+  const sdrs = perfis.filter((p) => p.ativo && (p.papel === "vendedor" || equipe.includes(p.id)));
   const cor = new Map(sdrs.map((s, i) => [s.id, corSdr(i)]));
   const porSdr = new Map(sdrs.map((s) => [s.id, somar(linhas.filter((l) => l.vendedor_id === s.id))]));
   const time = somar(linhas.filter((l) => cor.has(l.vendedor_id)));
@@ -126,7 +129,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
         </div>
         {kpi("Contatos", contatos(time), <>{time.contatadas} por mensagem · {time.ligacoes} ligações ({time.ligacoes_atendidas} atendidas)</>)}
         {kpi("Conversas trocadas", <>{time.respostas} <span className="text-[0.55em] font-normal text-mute">/ {metaConversas * nSdr}</span></>, <>{fmtPct(time.respostas, time.contatadas)} das conversas</>)}
-        {kpi("Conversas efetivas", time.efetivas, <>{fmtPct(time.marcacoes, time.efetivas)} viraram marcação</>)}
+        {kpi("Vendas", vendas.inscricoes + vendas.imersoes, <>{vendas.inscricoes} workshop ({vendas.cupom} cupom) · {vendas.imersoes} imersão · {brl(vendas.valor)}</>)}
         {kpi("Nota média", <span className={corNota(media(time))}>{nota(media(time))}</span>, <>{time.auditadas} conversas auditadas</>)}
       </section>
 
@@ -179,7 +182,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
                 })}
               </tbody>
             </table>
-            {!sdrs.length && <p className="text-[0.85em] text-mute">Cadastre os SDRs com papel "vendedor" em Usuários.</p>}
+            {!sdrs.length && <p className="text-[0.85em] text-mute">Cadastre os vendedores na aba WhatsApp (nome, função e conexão).</p>}
           </div>
           <div className="mt-[0.55em] flex flex-wrap gap-x-[1em] gap-y-1 text-[0.75em] text-mute">
             <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm bg-brand" />bateu a meta</span>
@@ -232,7 +235,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
               return (
                 <div key={s.id} className="flex min-w-0 flex-col gap-[0.3em] rounded-[10px] border border-line bg-bg/60 px-[0.7em] py-[0.5em]">
                   <h3 className="flex items-center justify-between gap-1.5 text-[1em] font-extrabold tracking-[-0.02em]">
-                    <span className="flex items-center gap-[0.4em]"><Bola id={s.id} />{s.nome}</span><small className="text-[0.68em] font-medium uppercase tracking-[0.16em] text-brand">SDR</small>
+                    <span className="flex items-center gap-[0.4em]"><Bola id={s.id} />{s.nome}</span><small className="text-[0.68em] font-medium uppercase tracking-[0.16em] text-brand">{s.funcao === "closer" ? "Closer" : "SDR"}</small>
                   </h3>
                   <div className="flex flex-1 flex-col justify-around gap-[0.3em]">
                   {linhasP.map((l) => { const est = l.n === "Nota média" ? (nm === null ? "none" : nm >= 7 ? "good" : nm >= 4 ? "warn" : "crit") : estado(l.v, l.alvo); return (

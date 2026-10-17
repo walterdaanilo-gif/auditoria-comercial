@@ -854,3 +854,4 @@ alter table public.auditorias add column if not exists alertas_enviados text[] n
 alter table public.conversas add column if not exists auditar_rapido boolean not null default false;
 create index if not exists ix_conv_rapido on public.conversas(auditar_rapido) where auditar_rapido;
 create index if not exists ix_conv_agora on public.conversas(auditar_agora) where auditar_agora;
+-- (aplicado em 2026-10-17: a coluna meta_sdr_conversas faltava no banco e travava Configuracoes)

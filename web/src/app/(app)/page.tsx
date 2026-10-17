@@ -58,7 +58,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   const { de, ate } = periodo;
   const supabase = await createClient();
 
-  const [rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt] = await Promise.all([
+  const [rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt, rMetas] = await Promise.all([
     supabase.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
     supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,venda,venda_tipo,venda_valor,venda_cupom,oportunidade,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
     supabase.from("profiles").select("id,nome,papel,ativo").order("nome"),
@@ -71,12 +71,17 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
     gestor ? supabase.from("analises_time").select("*").eq("status", "pronta").order("criado_em", { ascending: false }).limit(1) : Promise.resolve({ data: [] as any[] }),
     gestor ? supabase.from("analises_time").select("id").eq("status", "pendente").limit(1) : Promise.resolve({ data: [] as any[] }),
     gestor ? supabase.from("analises_time").select("status,erro").order("criado_em", { ascending: false }).limit(1) : Promise.resolve({ data: [] as any[] }),
+    supabase.from("audit_settings").select("meta_sdr_conversas,meta_sdr_marcacoes").eq("id", 1).maybeSingle(),
   ]);
 
   // SDRs = perfis com papel vendedor. A cor segue a pessoa (ordem por nome na lista completa), nunca o filtro.
   const perfis = (rPerf.data ?? []) as { id: string; nome: string; papel: string; ativo: boolean }[];
   const nomes = new Map(perfis.map((x) => [x.id, x.nome]));
-  const sdrsTodos = perfis.filter((x) => x.papel === "vendedor" && x.ativo);
+  // equipe = quem tem WhatsApp cadastrado (o cadastro do vendedor e feito na aba WhatsApp) ou papel vendedor
+  const donos = new Set(((rInst.data ?? []) as { vendedor_id: string }[]).map((i) => i.vendedor_id));
+  const sdrsTodos = perfis.filter((x) => x.ativo && (x.papel === "vendedor" || donos.has(x.id)));
+  const cfgMetas = rMetas.data as { meta_sdr_conversas: number | null; meta_sdr_marcacoes: number | null } | null;
+  const metaDe = (chave: string, padrao: number | null) => (chave === "respostas" ? cfgMetas?.meta_sdr_conversas ?? padrao : chave === "agendados" ? cfgMetas?.meta_sdr_marcacoes ?? padrao : padrao);
   const cor = new Map(sdrsTodos.map((s, i) => [s.id, corSdr(i)]));
   const filtroV = gestor && sp.v && nomes.has(sp.v) ? sp.v : "";
   const doFiltro = <T extends { vendedor_id: string }>(l: T[]) => l.filter((x) => !filtroV || x.vendedor_id === filtroV);
@@ -189,7 +194,8 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
                   <span className={`ml-auto chip ${w?.status === "conectado" ? "border-ok text-ok" : "border-line text-mute"}`}>WhatsApp {w?.status === "conectado" ? "conectado" : w ? w.status.replace("_", " ") : "não criado"}</span>
                 </div>
                 <div className="space-y-3">
-                  {METAS.map(({ chave, rotulo, meta, soma }) => {
+                  {METAS.map(({ chave, rotulo, meta: metaPadrao, soma }) => {
+                    const meta = metaDe(chave, metaPadrao);
                     const feito = soma.reduce((n, k: ChaveMeta) => n + Number(t[k]), 0);
                     if (meta === null) return ( // sem meta propria: numero e taxa sobre os contatos
                       <div key={chave}>
@@ -220,7 +226,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
               </div>
             );
           })}
-          {!sdrs.length && <p className="card text-sm text-mute">Nenhum SDR cadastrado ainda. Crie os usuários com papel "vendedor" em Usuários.</p>}
+          {!sdrs.length && <p className="card text-sm text-mute">Nenhum vendedor ainda. Cadastre na aba WhatsApp (nome, função e conexão).</p>}
         </div>
       </section>
 
