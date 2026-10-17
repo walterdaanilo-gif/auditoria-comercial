@@ -279,7 +279,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
   };
   const mensagensDe = id => db.select("mensagens", { select: "remetente,texto,tipo,transcricao,enviada_em", filters: { conversa_id: `eq.${id}` }, order: "enviada_em" });
 
-  const CAMPOS_CONV = "id,vendedor_id,instancia_id,contato,contato_nome,canal,data,ultima_msg_em";
+  const CAMPOS_CONV = "id,vendedor_id,instancia_id,contato,telefone,contato_nome,canal,data,ultima_msg_em";
   if (soSinais) {
     // ----- "Auditar agora" (qualquer data, sem filtros) -----
     for (const c of await db.select("conversas", { select: CAMPOS_CONV, filters: { auditar_agora: "eq.true" }, limit: 20 })) {
@@ -293,7 +293,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     for (const c of await db.select("conversas", { select: CAMPOS_CONV, filters: { auditar_rapido: "eq.true" }, limit: 20 })) {
       try {
         const msgs = await mensagensDe(c.id);
-        const pode = R.s.auditoria_automatica && !R.ignorados.has(chaveTelefone(c.contato)) && msgs.some(m => m.remetente === "vendedor") && msgs.some(m => m.remetente === "cliente");
+        const pode = R.s.auditoria_automatica && !R.ignorados.has(chaveTelefone(c.telefone || c.contato)) && msgs.some(m => m.remetente === "vendedor") && msgs.some(m => m.remetente === "cliente");
         if (pode) await auditarConversa(c, msgs);
       } catch (e) { console.error(`[auditoria] sinal ${c.id}:`, e.message); }
       await db.update("conversas", { id: `eq.${c.id}` }, { auditar_rapido: false });
@@ -319,7 +319,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
       if (!r || !r.vend || !r.cli) continue; // so audita quando o lead respondeu (mensagem dos dois lados)
       if (c.auditar_rapido || c.auditar_agora) continue; // esta na fila rapida
       if (r.n < R.s.min_mensagens) continue;
-      if (R.ignorados.has(chaveTelefone(c.contato))) continue;
+      if (R.ignorados.has(chaveTelefone(c.telefone || c.contato))) continue;
       if (!naAmostra(c.id, R.s.amostragem_pct)) continue;
       const parada = now - new Date(c.ultima_msg_em).getTime();
       if (!final && parada < R.s.parada_min * 60000) continue;

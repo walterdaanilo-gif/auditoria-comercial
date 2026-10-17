@@ -41,7 +41,7 @@ export default async function ConversaDetalhe({ params: paramsP }: { params: Pro
     <div className="space-y-4">
       <AutoRefresh segundos={60} />
       <div><Link href="/conversas" className="text-sm text-brand">← Conversas</Link>
-        <h1 className="page-title">{conversa.contato_nome || telefone(conversa.contato)} <span className="text-sm font-normal text-mute">· {vendedor} · {fmtData(conversa.data)}</span>{conversa.canal === "importada" && <span className="chip ml-2 align-middle border-line text-sm font-normal text-mute">importada</span>}</h1></div>
+        <h1 className="page-title">{conversa.contato_nome || telefone(conversa.telefone || conversa.contato)} {conversa.contato_nome && conversa.telefone && <span className="text-base font-normal text-mute">{telefone(conversa.telefone)}</span>} <span className="text-sm font-normal text-mute">· {vendedor} · {fmtData(conversa.data)}</span>{conversa.canal === "importada" && <span className="chip ml-2 align-middle border-line text-sm font-normal text-mute">importada</span>}</h1></div>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card">
           <div className="label mb-2">Conversa</div>

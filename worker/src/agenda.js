@@ -62,7 +62,7 @@ export async function sincronizarReuniao(db, R, c, r, { fetchImpl = fetch } = {}
   const [daConversa] = await db.select("reunioes_agenda", { filters: { conversa_id: `eq.${c.id}` } });
   const [doLead] = daConversa ? [] : (await db.select("reunioes_agenda", { filters: { vendedor_id: `eq.${c.vendedor_id}` }, order: "atualizado_em.desc", limit: 20 })).filter(x => x.dados?.contato === c.contato && Date.parse(x.inicio) > Date.now());
   const atual = daConversa || doLead;
-  const ev = montarEvento(r, { vendedor: R.nomes.get(c.vendedor_id) || "vendedor", contato: c.contato, conversaId: c.id, duracao: s?.agenda_duracao_min ?? 60, convidar: s?.agenda_convidar ?? true, meet: s?.agenda_meet ?? true });
+  const ev = montarEvento(r, { vendedor: R.nomes.get(c.vendedor_id) || "vendedor", contato: c.telefone || c.contato, conversaId: c.id, duracao: s?.agenda_duracao_min ?? 60, convidar: s?.agenda_convidar ?? true, meet: s?.agenda_meet ?? true });
   const dados = { ...r, contato: c.contato };
   if (atual?.google_event_id && atual.inicio && Date.parse(atual.inicio) === Date.parse(inicio) && JSON.stringify(atual.dados) === JSON.stringify(dados)) return "sem mudanca";
 

@@ -76,7 +76,7 @@ export async function avisarEventos(db, R, c, a, jaEnviados = [], { envio = envi
   const permitidos = novos.filter(e => (e.tipo === "venda" && s.venda) || (e.tipo === "marcacao" && s.marcacao) || (e.tipo === "oportunidade" && s.oportunidade));
   let enviou = false;
   if (permitidos.length && s.instancia && s.telefones.length) {
-    const texto = textoAlerta(permitidos[0], { vendedor: R.nomes.get(c.vendedor_id) || "Vendedor", funcao, lead: c.contato_nome || `+${c.contato}`, conversaId: c.id, formato: s.formato, outros: permitidos.slice(1) });
+    const texto = textoAlerta(permitidos[0], { vendedor: R.nomes.get(c.vendedor_id) || "Vendedor", funcao, lead: c.contato_nome || `+${c.telefone || c.contato}`, conversaId: c.id, formato: s.formato, outros: permitidos.slice(1) });
     for (const t of s.telefones) {
       try { await envio(db, s.instancia, t, texto); enviou = true; }
       catch (e) { console.error(`[alerta] envio para ${t}:`, e.message); }

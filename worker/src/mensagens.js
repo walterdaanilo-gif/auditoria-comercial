@@ -2,7 +2,8 @@ import { cfg, dayOf } from "./config.js";
 import { temSinal } from "./alertas.js";
 
 // Gravacao de uma mensagem no Supabase, igual para qualquer provedor de WhatsApp (Uazapi ou Baileys).
-// m = { contato, nome, fromMe, id, tipo, texto, sec, baixarAudio }
+// m = { contato, lid, telefone, nome, fromMe, id, tipo, texto, sec, baixarAudio }
+//   lid: contato e um codigo de privacidade do WhatsApp (nao e telefone); telefone: o numero real, quando veio
 //   contato: numero do lead (so digitos) ou id @lid sem o dominio
 //   tipo: texto | audio | imagem | video | documento | outro
 //   sec: horario da mensagem em segundos (epoch)
@@ -20,6 +21,14 @@ export async function gravarMensagem(db, inst, m) {
     vendedor_id: inst.vendedor_id, instancia_id: inst.id, contato: m.contato, contato_nome: m.fromMe ? undefined : m.nome || undefined,
     canal: "whatsapp", data: day, ultima_msg_em: iso,
   }], { onConflict: "instancia_id,contato,data" });
+
+  // numero real do contato: aprende a relacao codigo -> telefone e preenche nas conversas desse contato
+  let tel = m.telefone || null;
+  if (m.lid) {
+    if (tel) await db.insert("contatos_lid", [{ lid: m.contato, telefone: tel, atualizado_em: new Date().toISOString() }], { onConflict: "lid", returning: false });
+    else tel = (await db.select("contatos_lid", { select: "telefone", filters: { lid: `eq.${m.contato}` } }))[0]?.telefone || null;
+  }
+  if (tel && conv.telefone !== tel) await db.update("conversas", { instancia_id: `eq.${inst.id}`, contato: `eq.${m.contato}`, telefone: "is.null" }, { telefone: tel });
 
   // audios dos ultimos 2 dias vao para o Storage; o worker transcreve depois
   let audio_url = null;

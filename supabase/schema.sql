@@ -895,3 +895,16 @@ do $$ begin
   create policy ra_select on public.reunioes_agenda for select to authenticated using (vendedor_id = auth.uid() or public.eh_gestor());
 exception when duplicate_object then null; end $$;
 revoke all on public.reunioes_agenda from anon;
+
+-- =====================================================================
+-- Contato com codigo de privacidade do WhatsApp (@lid): telefone real aprendido das mensagens (senderPn)
+-- usado no filtro de numeros ignorados, nos avisos e na agenda
+-- =====================================================================
+alter table public.conversas add column if not exists telefone text;
+create table if not exists public.contatos_lid (
+  lid           text primary key,
+  telefone      text not null,
+  atualizado_em timestamptz not null default now()
+);
+alter table public.contatos_lid enable row level security;
+revoke all on public.contatos_lid from anon, authenticated;

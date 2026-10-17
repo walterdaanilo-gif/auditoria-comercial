@@ -29,8 +29,11 @@ export async function saveMessage(db, inst, m, { sock, B } = {}) {
   const lig = ligacaoDaMensagem(m); // registro de chamada sincronizado pelo celular
   if (lig) { await gravarLigacao(db, inst, lig); console.log(`[${inst.nome}] ligacao ${lig.direcao} ${lig.contato}: ${lig.resultado}${lig.duracao ? ` ${lig.duracao}s` : ""}`); return; }
   const { tipo, texto } = textOf(m);
+  // contato com codigo de privacidade (@lid): o numero real vem em senderPn nas mensagens que o lead manda
+  const lid = jid.endsWith("@lid");
+  const pn = String(m.key.senderPn || "");
   await gravarMensagem(db, inst, {
-    contato: jid.split("@")[0], nome: m.pushName, fromMe: !!m.key.fromMe, id: m.key.id, tipo, texto,
+    contato: jid.split("@")[0], lid, telefone: !lid ? jid.split("@")[0] : pn.endsWith("@s.whatsapp.net") ? pn.split("@")[0].split(":")[0] : null, nome: m.pushName, fromMe: !!m.key.fromMe, id: m.key.id, tipo, texto,
     sec: Number(m.messageTimestamp?.low ?? m.messageTimestamp) || undefined,
     baixarAudio: sock && B ? () => B.downloadMediaMessage(m, "buffer", {}, { logger: quiet, reuploadRequest: sock.updateMediaMessage }) : undefined,
   });

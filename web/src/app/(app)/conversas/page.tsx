@@ -26,7 +26,7 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
   const supabase = await createClient();
 
   let q = supabase.from("conversas")
-    .select("id,vendedor_id,contato,contato_nome,canal,data,ultima_msg_em,mensagens(remetente,texto,tipo,enviada_em),auditorias(nota_geral,qualidade,agendou,resumo)")
+    .select("id,vendedor_id,contato,telefone,contato_nome,canal,data,ultima_msg_em,mensagens(remetente,texto,tipo,enviada_em),auditorias(nota_geral,qualidade,agendou,resumo)")
     .gte("data", periodo.de).lte("data", periodo.ate).order("ultima_msg_em", { ascending: false }).limit(500);
   if (gestor && sp.v) q = q.eq("vendedor_id", sp.v);
   const [{ data }, { data: perfis }] = await Promise.all([q, supabase.from("profiles").select("id,nome,papel").eq("ativo", true).order("nome")]);
@@ -42,7 +42,7 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
   const lista = aba === "todas" ? linhas : linhas.filter((l) => (aba === "respondeu" ? l.respondeu : !l.respondeu));
   const extra: Record<string, string> = { ...(periodo.p === "livre" ? { de: periodo.de, ate: periodo.ate } : { p: periodo.p }), ...(sp.v ? { v: sp.v } : {}) };
   const linkAba = (k: Aba) => "/conversas?" + new URLSearchParams({ ...extra, aba: k });
-  const nomeContato = (c: any) => c.contato_nome || telefone(c.contato);
+  const nomeContato = (c: any) => c.contato_nome || telefone(c.telefone || c.contato);
   const qualidade = (a: any) => <span className={`chip ${a.qualidade === "boa" ? "border-ok text-ok" : a.qualidade === "regular" ? "border-warn text-warn" : "border-bad text-bad"}`}>{a.qualidade}</span>;
 
   return (
