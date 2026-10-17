@@ -30,6 +30,9 @@ export const cfg = {
   saFile: env.GOOGLE_SERVICE_ACCOUNT_FILE || "./secrets/service-account.json",
   // alternativa ao arquivo (Railway so tem variaveis): o JSON inteiro da conta de servico
   saJson: env.GOOGLE_SERVICE_ACCOUNT_JSON || "",
+  // Agenda Google (login do gestor): o mesmo cliente OAuth configurado na Vercel
+  googleClientId: env.GOOGLE_CLIENT_ID || "",
+  googleClientSecret: env.GOOGLE_CLIENT_SECRET || "",
   sheetTab: env.SHEET_TAB || "SDR",
   auditTab: env.AUDIT_TAB || "Auditoria",
   messagesTab: env.MESSAGES_TAB || "Mensagens",

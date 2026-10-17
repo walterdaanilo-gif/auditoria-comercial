@@ -28,7 +28,11 @@ export default async function ConversaDetalhe({ params: paramsP }: { params: Pro
   const supabase = await createClient();
   const { data: conversa } = await supabase.from("conversas").select("*, profiles(nome), auditorias(*)").eq("id", params.id).maybeSingle();
   if (!conversa) notFound(); // a RLS tambem esconde conversas de outros vendedores
-  const { data: msgs } = await supabase.from("mensagens").select("id,remetente,texto,tipo,transcricao,enviada_em").eq("conversa_id", params.id).order("enviada_em");
+  const [{ data: msgs }, { data: agendaRows }] = await Promise.all([
+    supabase.from("mensagens").select("id,remetente,texto,tipo,transcricao,enviada_em").eq("conversa_id", params.id).order("enviada_em"),
+    supabase.from("reunioes_agenda").select("inicio,link,erro").eq("conversa_id", params.id).limit(1),
+  ]);
+  const naAgenda = (agendaRows ?? [])[0] as { inicio: string; link: string | null; erro: string | null } | undefined;
   const a = um<Auditoria>(conversa.auditorias as any);
   const respondeu = (msgs ?? []).some((m: any) => m.remetente === "vendedor") && (msgs ?? []).some((m: any) => m.remetente === "cliente");
   const vendedor = um<{ nome: string }>(conversa.profiles as any)?.nome ?? "Vendedor";
@@ -68,6 +72,10 @@ export default async function ConversaDetalhe({ params: paramsP }: { params: Pro
                 {a.venda_evidencia && <p className="mt-1 text-xs text-mute">{a.venda_evidencia}</p>}</div>}
               {a.oportunidade && <div className="rounded-xl border border-brand/40 bg-brand/10 p-3"><b className="text-brand">🎯 Oportunidade</b><span className="ml-2">{OPORT[a.oportunidade_tipo ?? ""] ?? ""}</span>
                 {a.oportunidade_evidencia && <p className="mt-1 text-xs text-mute">{a.oportunidade_evidencia}</p>}</div>}
+              {naAgenda && (naAgenda.erro
+                ? <div className="rounded-xl border border-bad/40 bg-bad/10 p-3 text-xs"><b className="text-bad">Agenda Google: não consegui criar o evento.</b> {naAgenda.erro}</div>
+                : <div className="rounded-xl border border-warn/40 bg-warn/10 p-3"><b className="text-warn">📅 Na sua Agenda Google</b><span className="ml-2">{new Date(naAgenda.inicio).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" })}</span>
+                  {naAgenda.link && <a href={naAgenda.link} target="_blank" rel="noreferrer" className="ml-2 text-brand hover:underline">abrir evento</a>}</div>)}
               {a.critico && <div className="rounded-xl border border-bad/40 bg-bad/10 p-3"><b className="text-bad">⚠ Crítico</b><span className="ml-2">{a.critico_motivo}</span></div>}
               <p>{a.resumo}</p>
               <div className="grid grid-cols-2 gap-3 rounded-xl border border-line p-3">

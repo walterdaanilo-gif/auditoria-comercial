@@ -32,6 +32,10 @@ export type Settings = {
   auditoria_parada_min: number | null; // null = so na rodada final
   rodada_final_hora: string;
   historico_dias: number;
+  agenda_ativa: boolean;
+  agenda_duracao_min: number;
+  agenda_convidar: boolean;
+  agenda_meet: boolean;
   resumo_dias: number[];
   rubrica_modo: "sistema" | "personalizada";
   venda_conta: string[];
@@ -140,6 +144,7 @@ export function validar(e: Estado): string[] {
   if (s.auditoria_parada_min !== null && !inteiro(s.auditoria_parada_min, 10, 1440)) erros.push("Auditar durante o dia: use de 10 minutos a 24 horas parada.");
   if (!hora(s.rodada_final_hora)) erros.push("Rodada final: escolha um horário válido.");
   if (!inteiro(s.historico_dias, 0, 30)) erros.push("Histórico do lead: use de 0 a 30 dias.");
+  if (!inteiro(s.agenda_duracao_min, 15, 480)) erros.push("Agenda Google: a reunião precisa durar de 15 minutos a 8 horas.");
   if (s.resumo_ativo && !s.resumo_dias.length) erros.push("Resumo diário: escolha pelo menos um dia.");
   if (e.alertas.length > 3) erros.push("No máximo 3 telefones de alerta.");
   const envio = e.numeros.find((n) => n.id === s.instancia_envio_id)?.numero;

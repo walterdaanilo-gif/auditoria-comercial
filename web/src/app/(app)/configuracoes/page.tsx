@@ -1,22 +1,24 @@
 import { exigirGestor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Criterio, Estado, Numero, Settings, Vendedor } from "@/lib/configuracoes";
-import FormConfig from "./FormConfig";
+import FormConfig, { type StatusAgenda } from "./FormConfig";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Configurações · Auditoria Comercial" };
 
 // Configuracoes do Auditor: so gestor e admin entram (a RLS das tabelas tambem exige gestor)
-export default async function Configuracoes() {
+export default async function Configuracoes({ searchParams: spP }: { searchParams: Promise<{ agenda?: string }> }) {
+  const sp = await spP;
   await exigirGestor();
   const db = await createClient();
-  const [rCfg, rCrit, rIgn, rAl, rPerf, rInst] = await Promise.all([
+  const [rCfg, rCrit, rIgn, rAl, rPerf, rInst, rAg] = await Promise.all([
     db.from("audit_settings").select("*").eq("id", 1).single(),
     db.from("criterios_rubrica").select("rubrica,chave,nome,descricao,peso,ativo,posicao").order("posicao"),
     db.from("numeros_ignorados").select("telefone").order("criado_em"),
     db.from("telefones_alerta").select("telefone").order("criado_em"),
     db.from("profiles").select("id,nome,funcao,ativo").order("nome"),
     db.from("instancias_whatsapp").select("id,vendedor_id,nome,numero,status,horario").order("nome"),
+    db.rpc("status_agenda"),
   ]);
   if (rCfg.error || !rCfg.data) return <p className="aviso">Não foi possível carregar as configurações: {rCfg.error?.message ?? "linha de configuração não encontrada"}.</p>;
 
@@ -32,5 +34,5 @@ export default async function Configuracoes() {
     alertas: (rAl.data ?? []).map((x) => x.telefone as string),
     rubricas: { sdr: da("sdr"), closer: da("closer"), personalizada: da("personalizada") },
   };
-  return <FormConfig inicial={inicial} />;
+  return <FormConfig inicial={inicial} agenda={((rAg.data ?? []) as StatusAgenda[])[0] ?? null} retornoAgenda={sp.agenda} />;
 }

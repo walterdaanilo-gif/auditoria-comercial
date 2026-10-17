@@ -2,6 +2,7 @@ import { z } from "zod";
 import { cfg, today, addDays, dayStart } from "./config.js";
 import { chamarIA, extrairJson, modeloAtual, provedor } from "./ia.js";
 import { avisarEventos } from "./alertas.js";
+import { sincronizarReuniao } from "./agenda.js";
 
 // =====================================================================
 // Configuracoes da tela Configuracoes (audit_settings + rubricas + numeros ignorados)
@@ -122,6 +123,7 @@ ${criterios.map(c => `- ${c.chave}: ${c.nome}. ${c.descricao || ""}`.trim()).joi
 - Nos exemplos de frase, use o nome real do vendedor e do lead (vêm no início do texto). Os nomes do roteiro são só exemplos.
 - Se vier um HISTÓRICO DOS DIAS ANTERIORES, use só como contexto (o que já foi falado, prometido, follow-up). A nota, a venda e a oportunidade são sobre a CONVERSA DO DIA.
 - Não invente fatos que não estão no texto. Na dúvida, venda e oportunidade ficam false.
+- Reunião: preencha "reuniao" quando uma reunião (de implementação ou de imersão) teve data e hora combinadas. "cliente_confirmou" = o lead aceitou explicitamente aquele horário. Hoje é ${hojeExtenso()}; cada mensagem traz [dia/mês hora], use isso para transformar "amanhã", "quinta às 19h" em data AAAA-MM-DD e hora HH:MM. "modalidade": "online" (videochamada, Meet, Zoom) ou "presencial"; "local" só o endereço ou lugar quando presencial. "cliente_nome", "empresa" e "email" só se aparecerem na conversa ou no nome do contato. Se não houver reunião com horário, "reuniao": null.
 
 Responda APENAS com um JSON neste formato:
 {"notas": [${criterios.map(c => `{"criterio": "${c.chave}", "nota": 1 a 5, "justificativa": "curta"}`).join(", ")}],
@@ -131,6 +133,7 @@ Responda APENAS com um JSON neste formato:
 "oportunidade": {"detectada": true|false, "tipo": "interesse_workshop"|"interesse_imersao"|"reuniao_imersao"|"reuniao_implementacao"|null, "evidencia": "curta"},
 "critico": {"detectado": true|false, "motivo": "curto ou vazio"},
 "conversa_so_bot": true|false,
+"reuniao": null ou {"tipo": "implementacao"|"imersao", "cliente_confirmou": true|false, "data": "AAAA-MM-DD", "hora": "HH:MM", "duracao_min": número ou null, "modalidade": "online"|"presencial"|null, "local": "endereço ou vazio", "cliente_nome": "nome ou vazio", "empresa": "empresa ou vazio", "email": "email ou vazio"},
 "gatilhos": {"personalizacao": bool, "pergunta_aberta": bool, "beneficio_claro": bool, "prova_social": bool, "autoridade": bool, "escassez_urgencia": bool, "reciprocidade": bool, "tratamento_objecao": bool, "chamada_para_acao": bool, "followup": bool},
 "resumo": "até 2 frases", "pontos_fortes": "até 2 pontos curtos", "pontos_melhoria": "até 2 ações práticas, cada uma com exemplo de frase", "objecoes": "objeções do lead ou vazio"}`;
 }
@@ -152,6 +155,14 @@ const Resposta = z.object({
   oportunidade: z.object({ detectada: bool.default(false), tipo: opc(["interesse_workshop", "interesse_imersao", "reuniao_imersao", "reuniao_implementacao"]).default(null), evidencia: txt.default("") }).default({}),
   critico: z.object({ detectado: bool.default(false), motivo: txt.default("") }).default({}),
   conversa_so_bot: bool.default(false),
+  reuniao: z.preprocess(v => (v && typeof v === "object" ? v : null), z.object({
+    tipo: opc(["implementacao", "imersao"]).default(null), cliente_confirmou: bool.default(false),
+    data: z.preprocess(v => (/^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? v : null), z.string().nullable()).default(null),
+    hora: z.preprocess(v => (/^([01]?\d|2[0-3]):[0-5]\d$/.test(String(v)) ? String(v).padStart(5, "0") : null), z.string().nullable()).default(null),
+    duracao_min: z.preprocess(v => (Number(v) > 0 && Number(v) <= 480 ? Number(v) : null), z.number().nullable()).default(null),
+    modalidade: opc(["online", "presencial"]).default(null), local: txt.default(""), cliente_nome: txt.default(""), empresa: txt.default(""),
+    email: z.preprocess(v => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim()) ? String(v).trim().toLowerCase() : ""), z.string()).default(""),
+  }).nullable()).default(null),
   gatilhos: z.record(z.any()).default({}),
   resumo: txt.default(""), pontos_fortes: txt.default(""), pontos_melhoria: txt.default(""), objecoes: txt.default(""),
 });
@@ -184,6 +195,7 @@ export function interpretar(bruto, { funcao, rubrica, criterios }) {
     oportunidade: a.oportunidade.detectada, oportunidade_tipo: a.oportunidade.detectada ? a.oportunidade.tipo : null, oportunidade_evidencia: a.oportunidade.detectada ? a.oportunidade.evidencia : null,
     critico: a.critico.detectado, critico_motivo: a.critico.detectado ? a.critico.motivo : null,
     so_bot: a.conversa_so_bot,
+    reuniao: a.reuniao && a.reuniao.data && a.reuniao.hora ? a.reuniao : null,
     gatilhos: a.gatilhos, resumo: a.resumo, pontos_fortes: a.pontos_fortes, pontos_melhoria: a.pontos_melhoria, objecoes: a.objecoes,
     modelo: modeloAtual(), atualizado_em: new Date().toISOString(), sheet_ok: false,
   };
@@ -210,7 +222,10 @@ export function temposResposta(msgs) {
   return { primeira_resposta_seg: esperas[0], tempo_medio_resposta_seg: Math.round(esperas.reduce((a, b) => a + b, 0) / esperas.length), respostas_sdr: esperas.length };
 }
 
-const linha = m => `${m.remetente === "vendedor" ? "VENDEDOR" : "CLIENTE"}: ${m.tipo === "audio" ? `[audio] ${m.transcricao || ""}` : m.texto || `[${m.tipo}]`}`;
+// cada mensagem com [dia/mes hora] (Brasilia), para a IA resolver "amanha", "quinta as 19h"
+const quando = iso => (iso ? `[${new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: cfg.tz }).format(new Date(iso)).replace(",", "")}] ` : "");
+const hojeExtenso = () => new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric", timeZone: cfg.tz }).format(new Date());
+const linha = m => `${quando(m.enviada_em)}${m.remetente === "vendedor" ? "VENDEDOR" : "CLIENTE"}: ${m.tipo === "audio" ? `[audio] ${m.transcricao || ""}` : m.texto || `[${m.tipo}]`}`;
 const cortar = t => (t.length > 14000 ? t.slice(t.length - 14000) : t);
 
 // Conversas dos dias anteriores com o mesmo lead (mesmo WhatsApp), so como contexto para a IA
@@ -243,7 +258,7 @@ async function avisarCritico(db, R, vendedorId, a, link, contato) {
 // as Configuracoes. "Auditar agora" na tela passa por cima dos filtros. Depois, importadas e ligacoes gravadas.
 // soSinais = fila rapida (rodada a cada minuto): "Auditar agora" e conversas com sinal de venda ou marcacao.
 // O resto (conversa parada, rodada final, importadas, ligacoes) fica na rodada normal.
-export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final = false, soSinais = false, envio } = {}) {
+export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final = false, soSinais = false, envio, agendaFetch = fetch } = {}) {
   if (!provedor() && fetchImpl === fetch) return 0;
   const R = await carregarRegras(db);
   const from = addDays(today(), -cfg.daysBack);
@@ -259,6 +274,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: msgs.length, ...a, ...tempos, manual, ...(c.canal === "importada" ? { sheet_ok: true } : {}) }], { onConflict: "conversa_id", returning: false });
     if (a.critico && !antes?.critico && c.canal !== "importada") await avisarCritico(db, R, c.vendedor_id, a, `/conversas/${c.id}`, c.contato_nome || c.contato);
     try { await avisarEventos(db, R, c, a, antes?.alertas_enviados || [], envio ? { envio } : {}); } catch (e) { console.error(`[alerta] conversa ${c.id}:`, e.message); }
+    if (a.reuniao && c.canal !== "importada") try { await sincronizarReuniao(db, R, c, a.reuniao, { fetchImpl: agendaFetch }); } catch (e) { console.error(`[agenda] conversa ${c.id}:`, e.message); }
     feitos++;
   };
   const mensagensDe = id => db.select("mensagens", { select: "remetente,texto,tipo,transcricao,enviada_em", filters: { conversa_id: `eq.${id}` }, order: "enviada_em" });

@@ -7,7 +7,13 @@ import {
   chaveDe, fmtTelefone, normalizarTelefone, somaPesos, validar,
   type Criterio, type Estado, type Horario, type Settings,
 } from "@/lib/configuracoes";
-import { salvarConfiguracoes } from "./actions";
+import { desconectarAgenda, salvarConfiguracoes } from "./actions";
+
+export type StatusAgenda = { conectada: boolean; email: string | null; conectado_em: string | null; erro: string | null };
+const RETORNO_AGENDA: Record<string, [boolean, string]> = {
+  ok: [true, "Agenda Google conectada."], cancelado: [false, "Você cancelou o login do Google."], "sem-token": [false, "O Google não devolveu a autorização completa. Clique em Conectar de novo."],
+  "sem-chaves": [false, "Faltam GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET na Vercel."], erro: [false, "Não foi possível conectar. Tente de novo."],
+};
 
 // ---------- pecas pequenas ----------
 function Toggle({ on, onChange, rotulo }: { on: boolean; onChange: (v: boolean) => void; rotulo: string }) {
@@ -206,7 +212,7 @@ function Card({ id, titulo, resumo, ok, recomendado, aberto, alternar, children 
 }
 
 // ---------- tela ----------
-export default function FormConfig({ inicial }: { inicial: Estado }) {
+export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial: Estado; agenda: StatusAgenda | null; retornoAgenda?: string }) {
   const [base, setBase] = useState(inicial);
   const [e, setE] = useState(inicial);
   const [abertos, setAbertos] = useState<string[]>([]);
@@ -241,6 +247,7 @@ export default function FormConfig({ inicial }: { inicial: Estado }) {
     { id: "critico", titulo: "Alerta crítico e SLA", ok: linhas(s.regras_criticas) > 0 },
     { id: "followup", titulo: "Cadência de follow-up", ok: true },
     { id: "horario", titulo: "Horário de funcionamento", ok: s.horario_modo !== "desligado" },
+    { id: "agenda", titulo: "Agenda Google", ok: !!agenda?.conectada && s.agenda_ativa },
     { id: "resumo", titulo: "Relatório do dia no WhatsApp", ok: s.resumo_ativo && e.alertas.length > 0 && !!envio },
     { id: "rubrica", titulo: "Critérios de avaliação", ok: rubOk },
     { id: "vendas", titulo: "Detecção de vendas", ok: linhas(s.venda_conta) > 0 },
@@ -390,6 +397,26 @@ export default function FormConfig({ inicial }: { inicial: Estado }) {
               <li>Só avisa conversas do dia, uma vez por evento. Se a mesma conversa tiver venda e marcação juntas, a mensagem cita as duas.</li>
               <li>Alerta crítico nunca vai pelo WhatsApp: chega como notificação aqui no sistema, para o gestor e para o vendedor da conversa.</li>
             </ul></div>
+        </div>
+      </Card>
+
+      <Card {...cardProps("agenda")} titulo="Agenda Google" recomendado
+        resumo={agenda?.conectada ? `Conectada${agenda.email ? ` (${agenda.email})` : ""} · ${s.agenda_ativa ? "reuniões de implementação entram sozinhas, em amarelo" : "envio desligado"}` : "Não conectada"}>
+        {retornoAgenda && RETORNO_AGENDA[retornoAgenda] && <p className={`mb-3 text-sm ${RETORNO_AGENDA[retornoAgenda][0] ? "text-ok" : "text-bad"}`}>{RETORNO_AGENDA[retornoAgenda][1]}</p>}
+        <p className="mb-3 text-sm text-mute">Quando o cliente confirma o horário da <b className="text-ink">reunião de implementação</b> na conversa, o Auditor cria o evento na sua Agenda Google, em <b className="text-warn">amarelo</b>, com nome do cliente e da empresa, e-mail, local (se for presencial) e o link da conversa. Se o horário mudar, o evento é atualizado.</p>
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line p-4">
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">{agenda?.conectada ? <span className="text-ok">Conectada</span> : "Não conectada"}{agenda?.email && <span className="ml-2 font-normal text-mute">{agenda.email}</span>}</div>
+            {agenda?.erro && <div className="text-xs text-bad">{agenda.erro}</div>}
+          </div>
+          <a href="/api/google/conectar" className="btn">{agenda?.conectada ? "Conectar outra conta" : "Conectar Google Agenda"}</a>
+          {agenda?.conectada && <form action={desconectarAgenda}><button className="btn-ghost">Desconectar</button></form>}
+        </div>
+        <div className="mt-4 divide-y divide-line">
+          <Linha titulo="Enviar reuniões para a agenda" sub="Só reunião de implementação com horário confirmado pelo cliente"><Toggle on={s.agenda_ativa} onChange={(v) => set({ agenda_ativa: v })} rotulo="Enviar para a agenda" /></Linha>
+          <Linha titulo="Duração da reunião" sub="Se a conversa disser outro tempo, vale o da conversa"><Numero valor={s.agenda_duracao_min} onChange={(v) => set({ agenda_duracao_min: v ?? 60 })} min={15} max={480} sufixo="min" largura="w-20" /></Linha>
+          <Linha titulo="Convidar o cliente" sub="Quando o cliente passar o e-mail, ele recebe o convite do Google Agenda"><Toggle on={s.agenda_convidar} onChange={(v) => set({ agenda_convidar: v })} rotulo="Convidar o cliente" /></Linha>
+          <Linha titulo="Link do Google Meet" sub="Reunião online já sai com link do Meet no evento"><Toggle on={s.agenda_meet} onChange={(v) => set({ agenda_meet: v })} rotulo="Criar link do Meet" /></Linha>
         </div>
       </Card>
 

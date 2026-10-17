@@ -855,3 +855,43 @@ alter table public.conversas add column if not exists auditar_rapido boolean not
 create index if not exists ix_conv_rapido on public.conversas(auditar_rapido) where auditar_rapido;
 create index if not exists ix_conv_agora on public.conversas(auditar_agora) where auditar_agora;
 -- (aplicado em 2026-10-17: a coluna meta_sdr_conversas faltava no banco e travava Configuracoes)
+
+-- =====================================================================
+-- Agenda Google: reuniao de implementacao confirmada vira evento amarelo na agenda do gestor
+-- google_agenda guarda o refresh_token do login Google (so o servidor le; RLS sem politicas)
+-- =====================================================================
+create table if not exists public.google_agenda (
+  id            integer primary key default 1 check (id = 1),
+  email         text,
+  refresh_token text,
+  conectado_em  timestamptz,
+  erro          text
+);
+alter table public.google_agenda enable row level security;
+revoke all on public.google_agenda from anon, authenticated;
+create or replace function public.status_agenda() returns table (conectada boolean, email text, conectado_em timestamptz, erro text)
+language sql stable security definer set search_path = public as $$
+  select refresh_token is not null, email, conectado_em, erro from public.google_agenda where id = 1 and public.eh_gestor()
+$$;
+revoke all on function public.status_agenda() from public, anon;
+grant execute on function public.status_agenda() to authenticated;
+alter table public.audit_settings add column if not exists agenda_ativa boolean not null default true;
+alter table public.audit_settings add column if not exists agenda_duracao_min integer not null default 60 check (agenda_duracao_min between 15 and 480);
+alter table public.audit_settings add column if not exists agenda_convidar boolean not null default true;
+alter table public.audit_settings add column if not exists agenda_meet boolean not null default true;
+alter table public.auditorias add column if not exists reuniao jsonb;
+create table if not exists public.reunioes_agenda (
+  conversa_id     uuid primary key references public.conversas(id) on delete cascade,
+  vendedor_id     uuid references public.profiles(id) on delete set null,
+  google_event_id text,
+  inicio          timestamptz,
+  dados           jsonb,
+  link            text,
+  erro            text,
+  atualizado_em   timestamptz not null default now()
+);
+alter table public.reunioes_agenda enable row level security;
+do $$ begin
+  create policy ra_select on public.reunioes_agenda for select to authenticated using (vendedor_id = auth.uid() or public.eh_gestor());
+exception when duplicate_object then null; end $$;
+revoke all on public.reunioes_agenda from anon;
