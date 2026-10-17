@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
+import Link from "next/link";
 import { AlertTriangle, CheckCircle2, ChevronDown, Plus, Trash2, X } from "lucide-react";
 import {
   DIAS_SEMANA, HORAS_RESUMO, PADRAO_AMOSTRA, PADRAO_MIN_MSGS, SUGESTOES,
@@ -202,7 +203,7 @@ function Card({ id, titulo, resumo, ok, recomendado, aberto, alternar, children 
 }
 
 // ---------- tela ----------
-export default function FormConfig({ inicial, podeCriarUsuario, novoUsuario }: { inicial: Estado; podeCriarUsuario: boolean; novoUsuario: ReactNode }) {
+export default function FormConfig({ inicial }: { inicial: Estado }) {
   const [base, setBase] = useState(inicial);
   const [e, setE] = useState(inicial);
   const [abertos, setAbertos] = useState<string[]>([]);
@@ -287,20 +288,13 @@ export default function FormConfig({ inicial, podeCriarUsuario, novoUsuario }: {
                   <div className="font-semibold">{v.nome}{!v.ativo && <span className="ml-2 text-xs text-mute">(inativo)</span>}</div>
                   <div className="text-xs text-mute">{nums.length ? nums.map((n) => `${n.numero ? fmtTelefone(n.numero) : n.nome} · ${n.status === "conectado" ? "conectado" : n.status.replace("_", " ")}`).join(" | ") : "WhatsApp não criado"}</div>
                 </div>
-                <div className="inline-flex rounded-full border border-line p-0.5" role="radiogroup" aria-label={`Função de ${v.nome}`}>
-                  {(["sdr", "closer"] as const).map((f) => (
-                    <button key={f} type="button" role="radio" aria-checked={v.funcao === f}
-                      onClick={() => setEst({ vendedores: e.vendedores.map((x) => (x.id === v.id ? { ...x, funcao: f } : x)) })}
-                      className={`rounded-full px-4 py-1 text-sm font-semibold ${v.funcao === f ? "bg-brand text-bg" : "text-mute hover:text-ink"}`}>{f === "sdr" ? "SDR" : "Closer"}</button>
-                  ))}
-                </div>
+                <span className={`chip ${v.funcao === "closer" ? "border-warn text-warn" : "border-brand text-brand"}`}>{v.funcao === "closer" ? "Closer" : "SDR"}</span>
               </div>
             );
           })}
-          {!e.vendedores.length && <p className="px-4 py-3 text-sm text-mute">Nenhum vendedor cadastrado ainda.</p>}
+          {!e.vendedores.length && <p className="px-4 py-3 text-sm text-mute">Nenhum vendedor ainda. Cadastre ao criar a conexão em WhatsApp.</p>}
         </div>
-        {podeCriarUsuario ? <div className="mt-4"><div className="label mb-2">Cadastrar vendedor</div>{novoUsuario}<p className="mt-1 text-xs text-mute">Depois de criar, escolha SDR ou Closer acima e conecte o WhatsApp dele em WhatsApp.</p></div>
-          : <p className="mt-3 text-xs text-mute">Novos vendedores são cadastrados pelo admin.</p>}
+        <p className="mt-2 text-xs text-mute">Vendedores e função (SDR ou Closer) são cadastrados e alterados na aba <Link href="/instancias" className="font-semibold text-brand hover:underline">WhatsApp</Link>, junto com a conexão.</p>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border border-line p-4">
             <div className="label mb-1">Metas diárias do SDR</div>

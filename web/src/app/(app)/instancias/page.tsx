@@ -4,20 +4,42 @@ import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import AutoRefresh from "@/components/AutoRefresh";
 import { exigirAdmin, exigirGestor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { fmtDataHora } from "@/lib/format";
 import type { Instancia } from "@/lib/types";
 import QrCard from "./QrCard";
 
 export const dynamic = "force-dynamic";
 
+// O cadastro do vendedor acontece aqui: nome + funcao. Se ja existe alguem com esse nome, reaproveita;
+// senao cria o perfil (com um usuario sem login, so para ligar conversas e notas a ele).
 async function criar(fd: FormData) {
   "use server";
   await exigirAdmin();
-  const vendedor_id = String(fd.get("vendedor") || ""); const nome = String(fd.get("nome") || "").trim();
-  if (!vendedor_id || !nome) redirect("/instancias?erro=Escolha o vendedor e dê um nome");
-  const { error } = await (await createClient()).from("instancias_whatsapp").insert({ vendedor_id, nome, status: "aguardando" }); // RLS: so admin
+  const vendedor = String(fd.get("vendedor") || "").trim().replace(/\s+/g, " ");
+  const funcao = fd.get("funcao") === "closer" ? "closer" : "sdr";
+  if (!vendedor) redirect("/instancias?erro=Digite o nome do vendedor");
+  const admin = createAdminClient();
+  const { data: existentes } = await admin.from("profiles").select("id,nome").ilike("nome", vendedor.replace(/[\\%_]/g, "\\$&"));
+  let vendedor_id = existentes?.[0]?.id as string | undefined;
+  if (!vendedor_id) {
+    const email = `vendedor-${crypto.randomUUID().slice(0, 12)}@sem-login.invalid`;
+    const { data, error } = await admin.auth.admin.createUser({ email, password: crypto.randomUUID() + crypto.randomUUID(), email_confirm: true, user_metadata: { nome: vendedor } });
+    if (error || !data.user) redirect("/instancias?erro=" + encodeURIComponent("Não consegui cadastrar o vendedor: " + (error?.message ?? "erro desconhecido")));
+    vendedor_id = data.user!.id;
+    await admin.from("profiles").upsert({ id: vendedor_id, nome: vendedor, email, papel: "vendedor", ativo: true });
+  }
+  await admin.from("profiles").update({ funcao }).eq("id", vendedor_id);
+  const { error } = await admin.from("instancias_whatsapp").insert({ vendedor_id, nome: `WhatsApp de ${vendedor}`, status: "aguardando" });
   if (error) redirect("/instancias?erro=" + encodeURIComponent(error.message));
-  revalidatePath("/instancias");
+  revalidatePath("/instancias"); revalidatePath("/configuracoes"); revalidatePath("/");
+}
+async function mudarFuncao(fd: FormData) {
+  "use server";
+  await exigirGestor();
+  const funcao = fd.get("funcao") === "closer" ? "closer" : "sdr";
+  await createAdminClient().from("profiles").update({ funcao }).eq("id", String(fd.get("vendedor_id")));
+  revalidatePath("/instancias"); revalidatePath("/configuracoes"); revalidatePath("/");
 }
 async function resetar(fd: FormData) {
   "use server";
@@ -41,13 +63,14 @@ export default async function Instancias({ searchParams: searchParamsP }: { sear
   const supabase = await createClient();
   const [{ data }, { data: perfis }, { data: ws }] = await Promise.all([
     supabase.from("instancias_whatsapp").select("*").order("criado_em"),
-    supabase.from("profiles").select("id,nome,papel").eq("ativo", true).order("nome"),
+    supabase.from("profiles").select("id,nome,papel,funcao").order("nome"),
     supabase.from("worker_status").select("visto_em").eq("id", 1).maybeSingle(),
   ]);
   // O worker atualiza visto_em a cada 15 s. Mais de 1 minuto sem sinal = desligado ou travado.
   const vistoEm = (ws as { visto_em: string } | null)?.visto_em;
   const workerLigado = !!vistoEm && Date.now() - new Date(vistoEm).getTime() < 60_000;
   const nomes = new Map<string, string>((perfis ?? []).map((x: any) => [x.id, x.nome]));
+  const funcoes = new Map<string, string>((perfis ?? []).map((x: any) => [x.id, x.funcao]));
   const insts = (data ?? []) as Instancia[];
 
   return (
@@ -69,17 +92,29 @@ export default async function Instancias({ searchParams: searchParamsP }: { sear
         </div>
       )}
       {perfil.papel === "admin" && (
-        <form action={criar} className="card grid gap-3 md:grid-cols-4">
-          <div><label className="label">Vendedor</label><select name="vendedor" className="input" required>{(perfis ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></div>
-          <div><label className="label">Nome da conexão</label><input name="nome" className="input" placeholder="Ex.: WhatsApp do Ruan" required /></div>
-          <div className="flex items-end"><button className="btn">Adicionar conexão</button></div>
+        <form action={criar} className="card grid gap-3 md:grid-cols-[1.5fr_1fr_auto]">
+          <div><label className="label" htmlFor="vendedor">Nome do vendedor</label>
+            <input id="vendedor" name="vendedor" list="vendedores" className="input" placeholder="Ex.: Ruan" required autoComplete="off" />
+            <datalist id="vendedores">{(perfis ?? []).filter((p: any) => p.papel === "vendedor").map((p: any) => <option key={p.id} value={p.nome} />)}</datalist></div>
+          <div><label className="label" htmlFor="funcao">Função</label>
+            <select id="funcao" name="funcao" className="input" defaultValue="sdr"><option value="sdr">SDR</option><option value="closer">Closer</option></select></div>
+          <div className="flex items-end"><button className="btn">Adicionar vendedor e conexão</button></div>
+          <p className="text-xs text-mute md:col-span-3">SDR: vende inscrição no workshop e marca reunião de imersão. Closer: marca reunião de implementação e fecha a imersão. Dá para trocar depois no card da conexão.</p>
         </form>
       )}
       <div className="grid gap-4 md:grid-cols-2">
         {insts.map((i) => (
           <div key={i.id} className="card space-y-2">
-            <div className="flex items-start justify-between"><div><b>{i.nome}</b><div className="page-sub">{nomes.get(i.vendedor_id) ?? "—"}{i.numero ? ` · +${i.numero}` : ""}</div></div>
-              <span className={`text-sm font-semibold ${COR[i.status] ?? ""}`}>{TXT[i.status] ?? i.status}</span></div>
+            <div className="flex items-start justify-between gap-3"><div><b>{nomes.get(i.vendedor_id) ?? i.nome}</b><div className="page-sub">{i.nome}{i.numero ? ` · +${i.numero}` : ""}</div></div>
+              <span className={`text-right text-sm font-semibold ${COR[i.status] ?? ""}`}>{TXT[i.status] ?? i.status}</span></div>
+            <form action={mudarFuncao} className="flex items-center gap-2 text-sm">
+              <input type="hidden" name="vendedor_id" value={i.vendedor_id} />
+              <span className="text-mute">Função:</span>
+              {(["sdr", "closer"] as const).map((f) => (
+                <button key={f} name="funcao" value={f} aria-pressed={funcoes.get(i.vendedor_id) === f}
+                  className={`rounded-full border px-3 py-0.5 font-semibold ${funcoes.get(i.vendedor_id) === f ? "border-brand bg-brand text-bg" : "border-line text-mute hover:text-ink"}`}>{f === "sdr" ? "SDR" : "Closer"}</button>
+              ))}
+            </form>
             {i.status === "aguardando_qr" && i.qr && <QrCard qr={i.qr} />}
             {!workerLigado && i.status !== "conectado" && <p className="text-sm text-mute">Esperando o worker ligar para gerar o QR Code.</p>}
             <div className="text-xs text-mute">Atualizado {fmtDataHora(i.atualizado_em)}</div>

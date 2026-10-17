@@ -9,8 +9,8 @@ export type ResultadoSalvar = { ok: boolean; erros?: string[] };
 
 const CAMPOS = ["auditoria_automatica", "escopo_conversas", "min_mensagens", "amostragem_pct", "so_com_proposta", "regras_criticas", "sla_primeira_resposta_min", "followup_sem_resposta_h", "followup_abandonada_d", "followup_limite_d", "horario_modo", "horario_empresa", "alerta_venda", "alerta_oportunidade", "alerta_formato", "instancia_envio_id", "resumo_ativo", "resumo_hora", "resumo_dias", "rubrica_modo", "venda_conta", "venda_nao_conta", "oportunidade_conta", "oportunidade_nao_conta", "meta_sdr_contatos", "meta_sdr_marcacoes", "meta_closer_reunioes", "meta_closer_vendas"] as const;
 
-// Salvamento em lote: valida tudo, depois grava configuracao, listas, rubricas e funcao dos vendedores.
-// Tabelas de configuracao passam pela RLS do gestor; perfis e numeros (escrita so de admin) usam a service role depois do exigirGestor.
+// Salvamento em lote: valida tudo, depois grava configuracao, listas, rubricas e horario dos numeros.
+// Tabelas de configuracao passam pela RLS do gestor; numeros (escrita so de admin) usam a service role depois do exigirGestor.
 export async function salvarConfiguracoes(bruto: Estado): Promise<ResultadoSalvar> {
   await exigirGestor();
   const e = limpar(bruto);
@@ -40,10 +40,6 @@ export async function salvarConfiguracoes(bruto: Estado): Promise<ResultadoSalva
     if (f) return f;
   }
 
-  for (const v of e.vendedores) {
-    f = falha(`Função de ${v.nome}`, (await admin.from("profiles").update({ funcao: v.funcao }).eq("id", v.id)).error);
-    if (f) return f;
-  }
   for (const n of e.numeros) {
     f = falha(`Horário de ${n.nome}`, (await admin.from("instancias_whatsapp").update({ horario: n.horario }).eq("id", n.id)).error);
     if (f) return f;
