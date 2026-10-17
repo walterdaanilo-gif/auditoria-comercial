@@ -908,3 +908,5 @@ create table if not exists public.contatos_lid (
 );
 alter table public.contatos_lid enable row level security;
 revoke all on public.contatos_lid from anon, authenticated;
+-- conversa em que o gestor removeu a auditoria: a automatica nao refaz (Auditar de novo libera)
+alter table public.conversas add column if not exists nao_auditar boolean not null default false;

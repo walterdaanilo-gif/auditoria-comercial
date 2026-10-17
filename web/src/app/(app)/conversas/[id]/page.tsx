@@ -16,7 +16,7 @@ async function auditarAgora(fd: FormData) {
   "use server";
   await exigirGestor();
   const id = String(fd.get("id") || "");
-  await createAdminClient().from("conversas").update({ auditar_agora: true }).eq("id", id);
+  await createAdminClient().from("conversas").update({ auditar_agora: true, nao_auditar: false }).eq("id", id);
   revalidatePath(`/conversas/${id}`);
 }
 // Tira a nota desta conversa (sai das medias e do painel); a conversa e as mensagens continuam guardadas
@@ -25,7 +25,7 @@ async function removerAuditoria(fd: FormData) {
   await exigirGestor();
   const id = String(fd.get("id") || "");
   await createAdminClient().from("auditorias").delete().eq("conversa_id", id);
-  await createAdminClient().from("conversas").update({ auditar_agora: false, auditar_rapido: false }).eq("id", id);
+  await createAdminClient().from("conversas").update({ auditar_agora: false, auditar_rapido: false, nao_auditar: true }).eq("id", id); // a automatica nao refaz
   revalidatePath(`/conversas/${id}`); revalidatePath("/");
 }
 const OPORT: Record<string, string> = { interesse_workshop: "interesse no workshop", interesse_imersao: "interesse na imersão", reuniao_imersao: "reunião de imersão marcada", reuniao_implementacao: "reunião de implementação marcada" };
