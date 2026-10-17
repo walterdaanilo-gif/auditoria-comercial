@@ -62,7 +62,7 @@ db.tables.audit_settings[0].auditoria_automatica = false;
 db.tables.mensagens.push({ id: "c1-9", conversa_id: "c1", vendedor_id: SDR, remetente: "cliente", texto: "e o link?", tipo: "texto", enviada_em: new Date(velho.getTime() + 600_000).toISOString() });
 assert.equal(await runAudits(db, { fetchImpl: openai }), 0, "desligada: nao audita sozinho");
 db.tables.conversas.find(c => c.id === "c2").auditar_agora = true;
-assert.equal(await runAudits(db, { fetchImpl: openai }), 1, "auditar agora passa por cima do numero ignorado");
+assert.equal(await runAudits(db, { fetchImpl: openai, soSinais: true }), 1, "auditar agora passa por cima do numero ignorado");
 assert.equal(aud("c2").manual, true); assert.equal(db.tables.conversas.find(c => c.id === "c2").auditar_agora, false);
 
 // Peso de cada criterio pesa na nota; telefone com e sem 9 casa

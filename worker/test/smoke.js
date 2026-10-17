@@ -40,23 +40,26 @@ const ia = async (_u, o) => {
   const conv = JSON.parse(o.body).messages[0].content; const ok = conv.includes("topo sim");
   return { ok: true, json: async () => ({ content: [{ text: "```json\n" + JSON.stringify({ notas: [{ criterio: "abordagem", nota: 5, justificativa: "citou a indicacao" }, { criterio: "descoberta", nota: ok ? 4 : 1 }, { criterio: "conducao", nota: ok ? 5 : 1 }], qualidade: ok ? "boa" : "ruim", etapa: ok ? "agendamento" : "sem_resposta", efetiva: ok, agendou: ok, venda: { detectada: ok, tipo: "workshop", valor: 0, cupom: true, evidencia: "topo sim" }, gatilhos: { personalizacao: true, chamada_para_acao: ok, prova_social: ok }, resumo: "r", pontos_fortes: "f", pontos_melhoria: "m", objecoes: ok ? "" : "sem tempo" }) + "\n```" }] }) };
 };
-assert.equal(await runAudits(db, { fetchImpl: ia }), 1); // so a Ana respondeu; o Carlos nao, entao nao e auditado
+// as duas filas: a rapida (sinal de venda ou marcacao, auditar agora) e a normal (conversa parada)
+const rodar = async () => (await runAudits(db, { fetchImpl: ia, soSinais: true })) + (await runAudits(db, { fetchImpl: ia }));
+assert.ok(db.tables.conversas.find(c => c.contato === A).auditar_rapido, "\"quinta 19h\" e sinal de marcacao: vai para a fila rapida");
+assert.equal(await rodar(), 1); // so a Ana respondeu; o Carlos nao, entao nao e auditado
 assert.ok(!db.tables.auditorias.some(a => a.conversa_id === db.tables.conversas.find(c => c.contato === B).id), "conversa sem resposta nao e auditada");
 // quando o Carlos responder, a conversa dele entra na fila
 await saveMessage(db, INST, m(B, 2, false, "Oi, quem fala?"));
-assert.equal(await runAudits(db, { fetchImpl: ia }), 0, "2 mensagens: abaixo do minimo padrao (4)");
+assert.equal(await rodar(), 0, "2 mensagens: abaixo do minimo padrao (4)");
 db.tables.audit_settings = [{ id: 1, min_mensagens: 2 }]; // valor proprio na tela Configuracoes
-assert.equal(await runAudits(db, { fetchImpl: ia }), 1);
+assert.equal(await rodar(), 1);
 const audA = db.tables.auditorias.find(a => a.conversa_id === db.tables.conversas.find(c => c.contato === A).id);
 assert.equal(audA.nota_geral, 9.4); assert.equal(audA.agendou, true); assert.equal(audA.notas.abordagem, 10);
 assert.equal(audA.venda, true); assert.equal(audA.venda_tipo, "workshop"); assert.equal(audA.venda_cupom, true); assert.equal(audA.venda_valor, 0);
 assert.equal(audA.notas_1a5[0].justificativa, "citou a indicacao");
-assert.equal(await runAudits(db, { fetchImpl: ia }), 0); // sem mensagem nova: nao reaudita
+assert.equal(await rodar(), 0); // sem mensagem nova: nao reaudita
 
 // reauditoria preserva a linha da planilha
 audA.sheet_row = 12; audA.sheet_ok = true;
 await saveMessage(db, INST, m(A, 9, true, "Confirmado entao!"));
-assert.equal(await runAudits(db, { fetchImpl: ia }), 1);
+assert.equal(await rodar(), 1);
 assert.equal(audA.sheet_row, 12); assert.equal(audA.sheet_ok, false); assert.equal(audA.msg_count, 5);
 
 // ----- conversa importada (tela Testar auditor): de 10 dias atras, auditada uma vez, fora da planilha -----
@@ -65,10 +68,10 @@ db.tables.conversas.push({ id: "imp1", vendedor_id: VEND, instancia_id: null, co
 db.tables.mensagens.push(
   { id: "im1", conversa_id: "imp1", vendedor_id: VEND, wa_id: "imp-1", remetente: "vendedor", texto: "Oi Maria, workshop quinta?", tipo: "texto", enviada_em: velha.toISOString(), espelhada: true },
   { id: "im2", conversa_id: "imp1", vendedor_id: VEND, wa_id: "imp-2", remetente: "cliente", texto: "topo sim, quinta 19h", tipo: "texto", enviada_em: velha.toISOString(), espelhada: true });
-assert.equal(await runAudits(db, { fetchImpl: ia }), 1);
+assert.equal(await rodar(), 1);
 const audImp = db.tables.auditorias.find(a => a.conversa_id === "imp1");
 assert.equal(audImp.nota_geral, 9.4); assert.equal(audImp.sheet_ok, true, "importada nao vai para a planilha");
-assert.equal(await runAudits(db, { fetchImpl: ia }), 0, "importada so e auditada uma vez");
+assert.equal(await rodar(), 0, "importada so e auditada uma vez");
 db.tables.conversas = db.tables.conversas.filter(c => c.id !== "imp1"); db.tables.mensagens = db.tables.mensagens.filter(x => x.conversa_id !== "imp1");
 db.tables.auditorias = db.tables.auditorias.filter(a => a.conversa_id !== "imp1");
 

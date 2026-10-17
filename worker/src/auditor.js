@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { cfg, today, addDays, dayStart } from "./config.js";
 import { chamarIA, extrairJson, modeloAtual, provedor } from "./ia.js";
+import { avisarEventos } from "./alertas.js";
 
 // =====================================================================
 // Configuracoes da tela Configuracoes (audit_settings + rubricas + numeros ignorados)
@@ -15,12 +16,13 @@ const RUBRICA_RESERVA = [ // so se o banco estiver sem rubrica
 ];
 
 export async function carregarRegras(db) {
-  const [[s = {}], crit, ign, perfis, [roteiroRow]] = await Promise.all([
+  const [[s = {}], crit, ign, perfis, [roteiroRow], tels] = await Promise.all([
     db.select("audit_settings", { filters: { id: "eq.1" } }),
     db.select("criterios_rubrica", { select: "rubrica,chave,nome,descricao,peso,ativo,posicao", filters: { ativo: "eq.true" }, order: "posicao" }),
     db.select("numeros_ignorados", { select: "telefone" }),
     db.select("profiles", { select: "id,nome,funcao" }),
     db.select("config_auditoria", { filters: { id: "eq.1" } }),
+    db.select("telefones_alerta", { select: "telefone" }),
   ]);
   const rub = r => crit.filter(c => c.rubrica === r && Number(c.peso) > 0);
   return {
@@ -37,6 +39,8 @@ export async function carregarRegras(db) {
     funcao: new Map(perfis.map(p => [p.id, p.funcao === "closer" ? "closer" : "sdr"])),
     nomes: new Map(perfis.map(p => [p.id, p.nome])),
     roteiro: roteiroRow?.roteiro || "",
+    // avisos de venda, marcacao e oportunidade no WhatsApp do gestor
+    alertas: { venda: s.alerta_venda ?? true, marcacao: s.alerta_marcacao ?? true, oportunidade: s.alerta_oportunidade ?? false, formato: s.alerta_formato || "detalhado", instancia: s.instancia_envio_id || null, telefones: tels.map(t => t.telefone) },
   };
 }
 export const rubricaDe = (R, vendedorId) => {
@@ -237,7 +241,9 @@ async function avisarCritico(db, R, vendedorId, a, link, contato) {
 // =====================================================================
 // Conversas: auditadas quando param AUDIT_IDLE_MINUTES (com mensagens novas desde a ultima nota), respeitando
 // as Configuracoes. "Auditar agora" na tela passa por cima dos filtros. Depois, importadas e ligacoes gravadas.
-export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final = false } = {}) {
+// soSinais = fila rapida (rodada a cada minuto): "Auditar agora" e conversas com sinal de venda ou marcacao.
+// O resto (conversa parada, rodada final, importadas, ligacoes) fica na rodada normal.
+export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final = false, soSinais = false, envio } = {}) {
   if (!provedor() && fetchImpl === fetch) return 0;
   const R = await carregarRegras(db);
   const from = addDays(today(), -cfg.daysBack);
@@ -249,26 +255,40 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     const quem = `Vendedor: ${R.nomes.get(c.vendedor_id) || "sem nome"} · Lead: ${c.contato_nome || "nome não informado"}\n\n`;
     const texto = quem + (hist ? `${hist}\n\nCONVERSA DO DIA (avalie esta):\n${cortar(msgs.map(linha).join("\n"))}` : cortar(msgs.map(linha).join("\n")));
     const a = await auditarTexto(R, c.vendedor_id, texto, { primeiraResposta: tempos.primeira_resposta_seg }, fetchImpl);
-    const [antes] = await db.select("auditorias", { select: "critico", filters: { conversa_id: `eq.${c.id}` } });
+    const [antes] = await db.select("auditorias", { select: "critico,alertas_enviados", filters: { conversa_id: `eq.${c.id}` } });
     await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: msgs.length, ...a, ...tempos, manual, ...(c.canal === "importada" ? { sheet_ok: true } : {}) }], { onConflict: "conversa_id", returning: false });
     if (a.critico && !antes?.critico && c.canal !== "importada") await avisarCritico(db, R, c.vendedor_id, a, `/conversas/${c.id}`, c.contato_nome || c.contato);
+    try { await avisarEventos(db, R, c, a, antes?.alertas_enviados || [], envio ? { envio } : {}); } catch (e) { console.error(`[alerta] conversa ${c.id}:`, e.message); }
     feitos++;
   };
   const mensagensDe = id => db.select("mensagens", { select: "remetente,texto,tipo,transcricao,enviada_em", filters: { conversa_id: `eq.${id}` }, order: "enviada_em" });
 
-  // ----- "Auditar agora" (qualquer data, sem filtros) -----
-  for (const c of await db.select("conversas", { select: "id,vendedor_id,instancia_id,contato,contato_nome,canal,data", filters: { auditar_agora: "eq.true" }, limit: 20 })) {
-    try {
-      const msgs = await mensagensDe(c.id);
-      if (msgs.length) await auditarConversa(c, msgs, { manual: true });
-    } catch (e) { console.error(`[auditoria] auditar agora ${c.id}:`, e.message); }
-    await db.update("conversas", { id: `eq.${c.id}` }, { auditar_agora: false });
+  const CAMPOS_CONV = "id,vendedor_id,instancia_id,contato,contato_nome,canal,data,ultima_msg_em";
+  if (soSinais) {
+    // ----- "Auditar agora" (qualquer data, sem filtros) -----
+    for (const c of await db.select("conversas", { select: CAMPOS_CONV, filters: { auditar_agora: "eq.true" }, limit: 20 })) {
+      try {
+        const msgs = await mensagensDe(c.id);
+        if (msgs.length) await auditarConversa(c, msgs, { manual: true });
+      } catch (e) { console.error(`[auditoria] auditar agora ${c.id}:`, e.message); }
+      await db.update("conversas", { id: `eq.${c.id}` }, { auditar_agora: false, auditar_rapido: false });
+    }
+    // ----- sinal de venda ou marcacao numa mensagem: audita na hora, sem esperar a conversa parar -----
+    for (const c of await db.select("conversas", { select: CAMPOS_CONV, filters: { auditar_rapido: "eq.true" }, limit: 20 })) {
+      try {
+        const msgs = await mensagensDe(c.id);
+        const pode = R.s.auditoria_automatica && !R.ignorados.has(chaveTelefone(c.contato)) && msgs.some(m => m.remetente === "vendedor") && msgs.some(m => m.remetente === "cliente");
+        if (pode) await auditarConversa(c, msgs);
+      } catch (e) { console.error(`[auditoria] sinal ${c.id}:`, e.message); }
+      await db.update("conversas", { id: `eq.${c.id}` }, { auditar_rapido: false });
+    }
+    return feitos;
   }
 
   // ----- conversas do dia (automatica) -----
   // Durante o dia: so conversa parada ha parada_min. Na rodada final (fim do expediente): todas que mudaram.
   const automatica = R.s.auditoria_automatica && R.s.escopo_conversas !== "grupo" && (final || R.s.parada_min != null); // grupos ainda nao sao gravados
-  const convs = automatica ? await db.selectAll("conversas", { select: "id,vendedor_id,instancia_id,contato,contato_nome,canal,data,ultima_msg_em", filters: { data: `gte.${from}`, canal: "neq.importada" } }) : [];
+  const convs = automatica ? await db.selectAll("conversas", { select: CAMPOS_CONV + ",auditar_rapido,auditar_agora", filters: { data: `gte.${from}`, canal: "neq.importada" } }) : [];
   if (convs.length) {
     const resumo = new Map();
     for (const m of await db.selectAll("mensagens", { select: "conversa_id,remetente,tipo,transcricao,audio_url", filters: { enviada_em: `gte.${dayStart(from)}` }, order: "id" })) {
@@ -281,6 +301,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     for (const c of convs) {
       const r = resumo.get(c.id);
       if (!r || !r.vend || !r.cli) continue; // so audita quando o lead respondeu (mensagem dos dois lados)
+      if (c.auditar_rapido || c.auditar_agora) continue; // esta na fila rapida
       if (r.n < R.s.min_mensagens) continue;
       if (R.ignorados.has(chaveTelefone(c.contato))) continue;
       if (!naAmostra(c.id, R.s.amostragem_pct)) continue;

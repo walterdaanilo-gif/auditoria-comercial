@@ -173,12 +173,15 @@ function previewAlerta(s: Settings) {
   const det = s.alerta_formato === "detalhado";
   const blocos: string[] = [];
   if (s.alerta_venda) blocos.push(det
-    ? `💰 Auditoria Weevo: venda de workshop\nConversa: Maria Silva com Ruan (SDR)\nMaria confirmou a inscrição usando o cupom de convite.\n🎟️ Cupom 100% · ${brl(0)}\nVer auditoria: <link>`
-    : `💰 Venda de workshop (cupom, ${brl(0)}): Maria Silva com Ruan`);
+    ? `💰 *Inscrição no workshop* · cupom de convite · ${brl(0)}\nRuan (SDR) com Maria Silva\n"Show, pode me inscrever então!"\nVer conversa: <link>`
+    : `💰 *Inscrição no workshop* (cupom de convite · ${brl(0)}): Ruan (SDR) com Maria Silva`);
+  if (s.alerta_marcacao) blocos.push(det
+    ? `📅 *Reunião de imersão marcada*\nNick (SDR) com João Souza\n"Combinado, quinta às 19h com o closer"\nVer conversa: <link>`
+    : `📅 *Reunião de imersão marcada*: Nick (SDR) com João Souza`);
   if (s.alerta_oportunidade) blocos.push(det
-    ? `🎯 Auditoria Weevo: oportunidade\nConversa: João Souza com Nick (SDR)\nJoão quer saber sobre a imersão e marcou reunião para quinta.\nVer auditoria: <link>`
-    : `🎯 Oportunidade (reunião de imersão): João Souza com Nick`);
-  return blocos.length ? blocos.join("\n\n") : "Nenhum aviso marcado: os telefones recebem só o resumo diário.";
+    ? `🎯 *Oportunidade*: interesse na imersão\nNick (SDR) com Paula Lima\n"Quero entender melhor a imersão"\nVer conversa: <link>`
+    : `🎯 *Oportunidade*: interesse na imersão: Nick (SDR) com Paula Lima`);
+  return blocos.length ? blocos.join("\n\n") : "Nenhum aviso marcado: os telefones recebem só o relatório do dia.";
 }
 function previewResumo() {
   return `📊 *Relatório do dia 17/10 · Weevo*\n\n✅ Auditorias: 12 · ⭐ Nota média: 7,8\n⏱️ 1ª resposta: 4min · tempo médio de resposta: 12min\n📞 Ligações atendidas: 9 de 15\n💰 Workshop: 5 inscrições (3 com cupom ${brl(0)} · 2 pagas ${brl(394)})\n💎 Imersão: 1 fechada · ${brl(4800)}\n🎯 Oportunidades: 7\n\n🏆 *Por vendedor*\n1. Ruan (SDR): ⭐ 8,4 · 28/30 contatos · 5/6 marcações · 3 inscrições no workshop · 📞 5 atendidas\n2. Nick (SDR): ⭐ 7,6 · 31/30 contatos · 4/6 marcações · 2 inscrições no workshop · 📞 4 atendidas\n\nDetalhes: <link do sistema>`;
@@ -361,7 +364,7 @@ export default function FormConfig({ inicial }: { inicial: Estado }) {
       </Card>
 
       <Card {...cardProps("alertas")} titulo="Alertas ao gestor" recomendado
-        resumo={`${e.alertas.length} de 3 telefones · ${[s.alerta_venda && "venda", s.alerta_oportunidade && "oportunidade"].filter(Boolean).join(" e ") || "só resumo diário"} · ${s.alerta_formato}${envio ? "" : " · falta o número que envia"}`}>
+        resumo={`${e.alertas.length} de 3 telefones · ${[s.alerta_venda && "vendas", s.alerta_marcacao && "marcações", s.alerta_oportunidade && "oportunidades"].filter(Boolean).join(", ") || "só relatório do dia"} · ${s.alerta_formato}${envio ? "" : " · falta o número que envia"}`}>
         <div className="grid gap-5 lg:grid-cols-2">
           <div className="space-y-5">
             <div><div className="label mb-2">Quem recebe (até 3 WhatsApp)</div>
@@ -374,15 +377,17 @@ export default function FormConfig({ inicial }: { inicial: Estado }) {
               {!conectados.length && <p className="mt-1 text-xs text-warn">Nenhum WhatsApp conectado agora.</p>}
               <p className="mt-1 text-xs text-mute">De preferência um número só do sistema, para não misturar com conversa de vendedor.</p></div>
             <div><div className="label mb-2">Quando avisar no WhatsApp</div>
-              <Linha titulo="Venda detectada" sub="Workshop (inclusive cupom R$ 0) ou imersão fechada"><Toggle on={s.alerta_venda} onChange={(v) => set({ alerta_venda: v })} rotulo="Avisar venda" /></Linha>
-              <Linha titulo="Oportunidade" sub="Interesse claro ou reunião marcada"><Toggle on={s.alerta_oportunidade} onChange={(v) => set({ alerta_oportunidade: v })} rotulo="Avisar oportunidade" /></Linha></div>
+              <Linha titulo="Vendas" sub="Inscrição no workshop (inclusive cupom R$ 0) e imersão fechada"><Toggle on={s.alerta_venda} onChange={(v) => set({ alerta_venda: v })} rotulo="Avisar vendas" /></Linha>
+              <Linha titulo="Marcações de reunião" sub="Reunião de imersão (SDR) e reunião de implementação (Closer)"><Toggle on={s.alerta_marcacao} onChange={(v) => set({ alerta_marcacao: v })} rotulo="Avisar marcações" /></Linha>
+              <Linha titulo="Outras oportunidades" sub="Interesse claro no workshop ou na imersão, sem marcar nada ainda"><Toggle on={s.alerta_oportunidade} onChange={(v) => set({ alerta_oportunidade: v })} rotulo="Avisar oportunidades" /></Linha>
+              <p className="mt-1 text-xs text-mute">O aviso sai na hora: quando a conversa tem sinal de venda ou marcação ("pode me inscrever", "cupom", "comprovante", "quinta às 19h"...), o Auditor audita na hora e, se confirmar, avisa em cerca de 2 minutos.</p></div>
             <div><div className="label mb-2">Formato</div>
               <Opcoes valor={s.alerta_formato} onChange={(v) => set({ alerta_formato: v })} opcoes={[["resumido", "Resumido", "Direto ao ponto"], ["detalhado", "Detalhado", "Com contexto e link"]]} /></div>
           </div>
           <div><div className="label mb-2">Prévia</div><pre className={pre}>{previewAlerta(s)}</pre>
             <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-mute">
               <li>Cada conversa gera no máximo uma mensagem, a do evento mais importante.</li>
-              <li>Venda e oportunidade só avisam em conversas que acabaram de terminar.</li>
+              <li>Só avisa conversas do dia, uma vez por evento. Se a mesma conversa tiver venda e marcação juntas, a mensagem cita as duas.</li>
               <li>Alerta crítico nunca vai pelo WhatsApp: chega como notificação aqui no sistema, para o gestor e para o vendedor da conversa.</li>
             </ul></div>
         </div>

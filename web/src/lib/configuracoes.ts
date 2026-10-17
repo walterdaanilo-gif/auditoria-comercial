@@ -24,6 +24,7 @@ export type Settings = {
   horario_empresa: Horario;
   alerta_venda: boolean;
   alerta_oportunidade: boolean;
+  alerta_marcacao: boolean;
   alerta_formato: "resumido" | "detalhado";
   instancia_envio_id: string | null;
   resumo_ativo: boolean;

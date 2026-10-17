@@ -5,6 +5,7 @@ import { syncInstances, statusAtual } from "./whatsapp.js";
 import { uazapiAtivo, syncUazapi, statusAtualUazapi, receberWebhook, segredoOk } from "./uazapi.js";
 import { transcribePending } from "./transcribe.js";
 import { cicloDeAuditoria } from "./ciclo.js";
+import { runAudits } from "./auditor.js";
 import { provedor } from "./ia.js";
 import { processAnalyses } from "./analysis.js";
 import { mirrorAll, mirrorEnabled } from "./mirror.js";
@@ -33,6 +34,7 @@ loop("conexoes", 15_000, async () => {
   await supa.insert("worker_status", [{ id: 1, visto_em: new Date().toISOString(), conexoes: conexoes() }], { onConflict: "id", returning: false });
 });
 loop("transcricao", 20_000, () => transcribePending(supa));
+loop("auditoria-rapida", 60_000, async () => { const n = await runAudits(supa, { soSinais: true }); if (n) console.log(`[auditoria] ${n} na fila rapida (venda, marcacao ou auditar agora)`); });
 loop("auditoria", cfg.auditEveryMin * 60_000, async () => { const n = await cicloDeAuditoria(supa); if (n) console.log(`[auditoria] ${n} auditorias novas`); });
 loop("analise", 30_000, () => processAnalyses(supa));
 if (mirrorEnabled()) loop("planilha", 30_000, () => mirrorAll(supa)); else console.log("[planilha] espelho desligado (sem SHEET_ID ou chave do Google)");

@@ -843,3 +843,14 @@ alter table public.audit_settings add column if not exists auditoria_parada_min 
 alter table public.audit_settings add column if not exists rodada_final_hora text not null default '18:00' check (rodada_final_hora ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$');
 alter table public.audit_settings add column if not exists historico_dias integer not null default 7 check (historico_dias between 0 and 30);
 alter table public.audit_settings add column if not exists rodada_final_ultima date; -- o worker marca o dia em que ja rodou
+
+-- =====================================================================
+-- Avisos na hora (venda, marcacao, oportunidade) no WhatsApp do gestor
+-- conversas.auditar_rapido: o worker marca quando chega mensagem com sinal de venda ou marcacao
+-- auditorias.alertas_enviados: eventos ja avisados desta conversa (nao repete)
+-- =====================================================================
+alter table public.audit_settings add column if not exists alerta_marcacao boolean not null default true;
+alter table public.auditorias add column if not exists alertas_enviados text[] not null default '{}';
+alter table public.conversas add column if not exists auditar_rapido boolean not null default false;
+create index if not exists ix_conv_rapido on public.conversas(auditar_rapido) where auditar_rapido;
+create index if not exists ix_conv_agora on public.conversas(auditar_agora) where auditar_agora;

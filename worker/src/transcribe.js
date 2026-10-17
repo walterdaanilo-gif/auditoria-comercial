@@ -1,3 +1,4 @@
+import { temSinal } from "./alertas.js";
 import { cfg } from "./config.js";
 
 const fails = new Map();
@@ -19,13 +20,14 @@ export async function transcribePending(db) {
   if (!cfg.transcribeKey) { if (!avisou) { console.log("[transcricao] TRANSCRIBE_API_KEY vazia: audios ficam sem texto."); avisou = true; } return 0; }
   let feitos = 0;
   for (const [tabela, filtro] of [["mensagens", { tipo: "eq.audio" }], ["ligacoes", {}]]) {
-    const rows = await db.select(tabela, { select: "id,audio_url", filters: { ...filtro, transcricao: "is.null", audio_url: "not.is.null" }, order: "id", limit: 10 });
+    const rows = await db.select(tabela, { select: tabela === "mensagens" ? "id,audio_url,conversa_id" : "id,audio_url", filters: { ...filtro, transcricao: "is.null", audio_url: "not.is.null" }, order: "id", limit: 10 });
     for (const r of rows) {
       const key = `${tabela}:${r.id}`;
       try {
         const buf = await db.download(r.audio_url);
         const texto = buf.length > 25 * 1024 * 1024 ? "[audio grande demais para transcrever]" : (await whisper(buf, r.audio_url.split("/").pop())) || "[sem fala detectada]";
         await db.update(tabela, { id: `eq.${r.id}` }, { transcricao: texto });
+        if (r.conversa_id && temSinal(texto)) await db.update("conversas", { id: `eq.${r.conversa_id}` }, { auditar_rapido: true }); // audio com sinal de venda
         feitos++;
       } catch (e) {
         const n = (fails.get(key) || 0) + 1; fails.set(key, n);
