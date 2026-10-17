@@ -119,6 +119,13 @@ export async function syncUazapi(db) {
 }
 
 // ---------- webhook ----------
+// Envia texto pela instancia da Uazapi (alertas e relatorio para o gestor)
+export async function enviarTextoUazapi(db, instanciaId, numero, texto) {
+  const [t] = await db.select("instancias_uazapi", { select: "token", filters: { instancia_id: `eq.${instanciaId}` } });
+  if (!t?.token) throw new Error("instancia de envio sem token na Uazapi");
+  await api("POST", "/send/text", { token: t.token, body: { number: numero, text: texto } });
+}
+
 export function segredoOk(k) {
   const a = Buffer.from(String(k || "")), b = Buffer.from(String(cfg.webhookSecret || ""));
   return b.length > 0 && a.length === b.length && crypto.timingSafeEqual(a, b);

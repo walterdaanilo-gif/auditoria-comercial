@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import AbasPainel from "@/components/AbasPainel";
 import { revalidatePath } from "next/cache";
 import { AlertTriangle, ArrowDownLeft, ArrowUpRight, CheckCircle2, CircleDot, Clock, MessageCircleWarning, Phone, ThumbsDown } from "lucide-react";
 import AutoRefresh from "@/components/AutoRefresh";
@@ -7,7 +9,7 @@ import FiltroPeriodo from "@/components/FiltroPeriodo";
 import Markdown from "@/components/Markdown";
 import { exigirPerfil } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { corNota, fmtHora, nota, pct, telefone, um } from "@/lib/format";
+import { corDuracao, corNota, duracao, fmtHora, nota, pct, telefone, um } from "@/lib/format";
 import { METAS, corSdr, diasUteis, type ChaveMeta } from "@/lib/metas";
 import { diasEntre, lerPeriodo } from "@/lib/periodo";
 import { GATILHOS } from "@/lib/types";
@@ -23,12 +25,24 @@ async function pedirAnalise(fd: FormData) {
   revalidatePath("/");
 }
 
-type Dia = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; auditadas: number; nota_soma: number; agendados: number; efetivas: number };
+type Dia = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; ligacoes_atendidas: number; ligacoes_seg: number; auditadas: number; nota_soma: number; agendados: number; efetivas: number; workshop: number; imersao: number };
 type Totais = Omit<Dia, "dia" | "vendedor_id">;
-type Aud = { vendedor_id: string; gatilhos: Record<string, boolean>; etapa: string | null; objecoes: string | null };
+type Aud = { vendedor_id: string; gatilhos: Record<string, boolean>; etapa: string | null; objecoes: string | null; primeira_resposta_seg: number | null; tempo_medio_resposta_seg: number | null; respostas_sdr: number | null; venda: boolean; venda_tipo: string | null; venda_valor: number | null; venda_cupom: boolean; oportunidade: boolean };
+
+// Tempos de resposta do SDR: primeira resposta = media simples por conversa; tempo medio = ponderado pelo numero de respostas
+function tempos(l: Aud[]) {
+  const p = l.filter((a) => a.primeira_resposta_seg != null);
+  const m = l.filter((a) => a.tempo_medio_resposta_seg != null && a.respostas_sdr);
+  const n = m.reduce((x, a) => x + Number(a.respostas_sdr), 0);
+  return {
+    primeira: p.length ? p.reduce((x, a) => x + Number(a.primeira_resposta_seg), 0) / p.length : null,
+    medio: n ? m.reduce((x, a) => x + Number(a.tempo_medio_resposta_seg) * Number(a.respostas_sdr), 0) / n : null,
+    conversas: p.length,
+  };
+}
 type Atividade = { vendedor_id: string; ultima_msg_em: string | null; ultima_ligacao_em: string | null; conversas_hoje: number };
 
-const ZERO: Totais = { contatadas: 0, enviadas: 0, respostas: 0, ligacoes: 0, auditadas: 0, nota_soma: 0, agendados: 0, efetivas: 0 };
+const ZERO: Totais = { contatadas: 0, enviadas: 0, respostas: 0, ligacoes: 0, ligacoes_atendidas: 0, ligacoes_seg: 0, auditadas: 0, nota_soma: 0, agendados: 0, efetivas: 0, workshop: 0, imersao: 0 };
 const somar = (linhas: Dia[]): Totais => linhas.reduce((t, l) => {
   const o = { ...t }; for (const k of Object.keys(ZERO) as (keyof Totais)[]) o[k] = Number(o[k]) + Number(l[k] || 0); return o;
 }, { ...ZERO });
@@ -45,8 +59,8 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   const supabase = await createClient();
 
   const [rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt] = await Promise.all([
-    supabase.rpc("resumo_diario", { p_from: de, p_to: ate }),
-    supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
+    supabase.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
+    supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,venda,venda_tipo,venda_valor,venda_cupom,oportunidade,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
     supabase.from("profiles").select("id,nome,papel,ativo").order("nome"),
     supabase.rpc("ultima_atividade"),
     supabase.from("instancias_whatsapp").select("vendedor_id,status,numero"),
@@ -68,7 +82,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   const doFiltro = <T extends { vendedor_id: string }>(l: T[]) => l.filter((x) => !filtroV || x.vendedor_id === filtroV);
   const sdrs = sdrsTodos.filter((s) => !filtroV || s.id === filtroV);
 
-  const linhas = doFiltro((rDia.data ?? []) as Dia[]);
+  const linhas = doFiltro(((rDia.data ?? []) as any[]).map((l) => ({ ...l, agendados: l.marcacoes })) as Dia[]);
   const auds = doFiltro((rAud.data ?? []) as unknown as Aud[]);
   const ativ = new Map(((rAtiv.data ?? []) as Atividade[]).map((a) => [a.vendedor_id, a]));
   const inst = new Map(((rInst.data ?? []) as { vendedor_id: string; status: string; numero: string | null }[]).map((i) => [i.vendedor_id, i]));
@@ -89,7 +103,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
     id: s.id, nome: s.nome, cor: cor.get(s.id)!,
     pontos: dias.map((d): Ponto => {
       const l = linhas.find((x) => x.vendedor_id === s.id && x.dia === d);
-      return { contatadas: Number(l?.contatadas ?? 0), respostas: Number(l?.respostas ?? 0), ligacoes: Number(l?.ligacoes ?? 0), agendados: Number(l?.agendados ?? 0), nota: l && Number(l.auditadas) ? Number(l.nota_soma) / Number(l.auditadas) : null };
+      return { contatadas: Number(l?.contatadas ?? 0), respostas: Number(l?.respostas ?? 0), ligacoes: Number(l?.ligacoes_atendidas ?? 0), agendados: Number(l?.agendados ?? 0), nota: l && Number(l.auditadas) ? Number(l.nota_soma) / Number(l.auditadas) : null };
     }),
   }));
 
@@ -101,6 +115,16 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
     const k = (a.objecoes || "").trim().toLowerCase().slice(0, 60);
     if (k) obj[k] = (obj[k] || 0) + 1;
   }
+  const tTime = tempos(auds);
+  // Vendas detectadas pela auditoria: workshop pago, workshop por cupom (R$ 0) e imersao; mais oportunidades
+  const vendas = (l: Aud[]) => {
+    const w = l.filter((a) => a.venda && a.venda_tipo !== "imersao"), im = l.filter((a) => a.venda && a.venda_tipo === "imersao");
+    const pagos = w.filter((a) => !a.venda_cupom);
+    return { wPagos: pagos.length, wPagosValor: pagos.reduce((x, a) => x + Number(a.venda_valor || 0), 0), wCupom: w.length - pagos.length, imersao: im.length, imersaoValor: im.reduce((x, a) => x + Number(a.venda_valor || 0), 0), oport: l.filter((a) => a.oportunidade).length };
+  };
+  const vTime = vendas(auds);
+  const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+  const tSdr = new Map(sdrs.map((s) => [s.id, tempos(auds.filter((a) => a.vendedor_id === s.id))]));
   const topObj = Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
   const kpi = (t: string, v: React.ReactNode, sub?: string, cls = "") => (
@@ -128,16 +152,24 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   return (
     <div className="space-y-6">
       <AutoRefresh segundos={30} />
-      <div><h1 className="page-title">Painel</h1><p className="page-sub">O que o time está fazendo, comparado com as metas. Atualiza sozinho a cada 30 segundos.</p></div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h1 className="page-title">Painel</h1><p className="page-sub">O que o time está fazendo, comparado com as metas. Atualiza sozinho a cada 30 segundos.</p></div>
+        {gestor && <Suspense><AbasPainel atual="painel" /></Suspense>}
+      </div>
 
       <FiltroPeriodo base="/" periodo={periodo} vendedores={gestor ? sdrsTodos.map((s) => [s.id, s.nome]) : undefined} vendedor={filtroV} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {kpi("Contatadas", total.contatadas, `${total.enviadas} mensagens enviadas`)}
-        {kpi("Respostas no privado", total.respostas, `${pct(total.respostas, total.contatadas)} das contatadas`)}
-        {kpi("Ligações", total.ligacoes, "gravações enviadas")}
-        {kpi("Agendados", total.agendados, `${pct(total.agendados, total.contatadas)} das contatadas`)}
+        {kpi("Responderam", total.respostas, `${pct(total.respostas, total.contatadas)} das conversas`)}
+        {kpi("Ligações atendidas", total.ligacoes_atendidas, total.ligacoes ? `de ${total.ligacoes} ligações · ${duracao(total.ligacoes_seg)} falando` : "ligações de WhatsApp e gravações enviadas")}
+        {kpi("Marcações", total.agendados, `${total.workshop} workshop · ${total.imersao} imersão`)}
         {kpi("Nota média", nota(media(total)), `${total.auditadas} auditadas`, corNota(media(total)))}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {kpi("Tempo de primeira resposta", duracao(tTime.primeira), tTime.conversas ? `média de ${tTime.conversas} conversa${tTime.conversas > 1 ? "s" : ""} auditada${tTime.conversas > 1 ? "s" : ""}: do 1º contato do lead até o SDR responder` : "aparece quando houver conversas auditadas", corDuracao(tTime.primeira))}
+        {kpi("Tempo médio de resposta", duracao(tTime.medio), "toda vez que o lead escreve, quanto o SDR leva para responder", corDuracao(tTime.medio))}
       </div>
 
       {/* Metas por SDR */}
@@ -158,11 +190,19 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
                 </div>
                 <div className="space-y-3">
                   {METAS.map(({ chave, rotulo, meta, soma }) => {
-                    const feito = soma.reduce((n, k: ChaveMeta) => n + Number(t[k]), 0); const alvo = meta * uteis; const ok = feito >= alvo;
+                    const feito = soma.reduce((n, k: ChaveMeta) => n + Number(t[k]), 0);
+                    if (meta === null) return ( // sem meta propria: numero e taxa sobre os contatos
+                      <div key={chave}>
+                        <div className="mb-1 flex items-baseline justify-between text-sm"><span>{rotulo}</span>
+                          <span className="tabular-nums"><b className="text-base">{feito}</b><span className="ml-2 text-mute">{pct(feito, Number(t.contatadas))} das conversas</span></span></div>
+                        <div className="h-2.5 overflow-hidden rounded-full bg-track"><div className="h-full rounded-full bg-side-edge" style={{ width: `${Math.min(100, t.contatadas ? (feito / Number(t.contatadas)) * 100 : 0)}%` }} /></div>
+                      </div>
+                    );
+                    const alvo = meta * uteis; const ok = feito >= alvo;
                     return (
                       <div key={chave}>
                         <div className="mb-1 flex items-baseline justify-between text-sm">
-                          <span>{rotulo}</span>
+                          <span>{rotulo}{chave === "agendados" && feito > 0 && <span className="ml-2 text-xs text-mute">{t.workshop} workshop · {t.imersao} imersão</span>}</span>
                           <span className="tabular-nums"><b className="text-base">{feito}</b><span className="text-mute"> / {alvo}</span>
                             {ok ? <span className="ml-2 inline-flex items-center gap-1 text-ok"><CheckCircle2 size={14} />meta batida</span> : <span className="ml-2 text-mute">{pct(feito, alvo)}</span>}</span>
                         </div>
@@ -173,7 +213,9 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
                 </div>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-3 text-sm text-mute">
                   <span>Nota média <b className={corNota(media(t))}>{nota(media(t))}</b></span>
-                  <span>{t.auditadas} auditadas</span><span>{t.efetivas} conversas efetivas</span>
+                  <span>Ligações atendidas <b className="text-ink">{t.ligacoes_atendidas}</b> de {t.ligacoes}</span><span>{t.auditadas} auditadas</span><span>{t.efetivas} conversas efetivas</span>
+                  <span>1ª resposta <b className={corDuracao(tSdr.get(s.id)?.primeira)}>{duracao(tSdr.get(s.id)?.primeira)}</b></span>
+                  <span>Tempo médio <b className={corDuracao(tSdr.get(s.id)?.medio)}>{duracao(tSdr.get(s.id)?.medio)}</b></span>
                 </div>
               </div>
             );
@@ -270,14 +312,33 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
           : series.length ? <EvolucaoChart dias={dias} series={series} /> : <p className="text-sm text-mute">Sem SDRs para mostrar.</p>}
       </section>
 
+      {/* Vendas e oportunidades (detectadas pela auditoria) */}
+      <section className="card overflow-x-auto">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-xl font-bold">Vendas e oportunidades</h2>
+          <span className="text-sm text-mute">Detectadas pela auditoria nas conversas do período</span>
+        </div>
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-line p-4"><div className="label">Workshop pago</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.wPagos}</div><div className="text-sm text-mute">{brl(vTime.wPagosValor)}</div></div>
+          <div className="rounded-2xl border border-line p-4"><div className="label">Workshop com cupom</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.wCupom}</div><div className="text-sm text-mute">convite 100% · {brl(0)}</div></div>
+          <div className="rounded-2xl border border-line p-4"><div className="label">Imersão fechada</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.imersao}</div><div className="text-sm text-mute">{brl(vTime.imersaoValor)}</div></div>
+          <div className="rounded-2xl border border-line p-4"><div className="label">Oportunidades</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.oport}</div><div className="text-sm text-mute">interesse ou reunião marcada</div></div>
+        </div>
+        <table className="w-full"><thead><tr><th className="th">Vendedor</th><th className="th">Workshop pago</th><th className="th">Workshop cupom</th><th className="th">Imersão</th><th className="th">Valor total</th><th className="th">Oportunidades</th></tr></thead>
+          <tbody>{sdrs.map((s) => {
+            const v = vendas(auds.filter((a) => a.vendedor_id === s.id));
+            return <tr key={s.id}><td className="td"><span className="flex items-center gap-2 font-semibold"><Bolinha id={s.id} />{s.nome}</span></td><td className="td">{v.wPagos}</td><td className="td">{v.wCupom}</td><td className="td">{v.imersao}</td><td className="td font-semibold">{brl(v.wPagosValor + v.imersaoValor)}</td><td className="td">{v.oport}</td></tr>;
+          })}{!sdrs.length && <tr><td className="td text-mute" colSpan={6}>Sem vendedores.</td></tr>}</tbody></table>
+      </section>
+
       {/* Tabela por SDR */}
       <section className="card overflow-x-auto">
         <h2 className="mb-3 text-xl font-bold">Resumo por SDR</h2>
-        <table className="w-full"><thead><tr><th className="th">SDR</th><th className="th">Contatadas</th><th className="th">Enviadas</th><th className="th">Respostas</th><th className="th">Taxa de resposta</th><th className="th">Ligações</th><th className="th">Auditadas</th><th className="th">Nota</th><th className="th">Agendados</th></tr></thead>
+        <table className="w-full"><thead><tr><th className="th">SDR</th><th className="th">Contatadas</th><th className="th">Enviadas</th><th className="th">Respostas</th><th className="th">Taxa de resposta</th><th className="th">Ligações atendidas</th><th className="th">Auditadas</th><th className="th">Nota</th><th className="th">1ª resposta</th><th className="th">Tempo médio</th><th className="th">Agendados</th></tr></thead>
           <tbody>{sdrs.map((s) => {
             const t = porSdr.get(s.id) ?? ZERO;
-            return <tr key={s.id}><td className="td"><span className="flex items-center gap-2 font-semibold"><Bolinha id={s.id} />{s.nome}</span></td><td className="td">{t.contatadas}</td><td className="td">{t.enviadas}</td><td className="td">{t.respostas}</td><td className="td">{pct(t.respostas, t.contatadas)}</td><td className="td">{t.ligacoes}</td><td className="td">{t.auditadas}</td><td className={`td font-bold ${corNota(media(t))}`}>{nota(media(t))}</td><td className="td">{t.agendados}</td></tr>;
-          })}{!sdrs.length && <tr><td className="td text-mute" colSpan={9}>Sem dados no período.</td></tr>}</tbody></table>
+            return <tr key={s.id}><td className="td"><span className="flex items-center gap-2 font-semibold"><Bolinha id={s.id} />{s.nome}</span></td><td className="td">{t.contatadas}</td><td className="td">{t.enviadas}</td><td className="td">{t.respostas}</td><td className="td">{pct(t.respostas, t.contatadas)}</td><td className="td"><b>{t.ligacoes_atendidas}</b><span className="text-mute"> / {t.ligacoes}</span></td><td className="td">{t.auditadas}</td><td className={`td font-bold ${corNota(media(t))}`}>{nota(media(t))}</td><td className={`td ${corDuracao(tSdr.get(s.id)?.primeira)}`}>{duracao(tSdr.get(s.id)?.primeira)}</td><td className={`td ${corDuracao(tSdr.get(s.id)?.medio)}`}>{duracao(tSdr.get(s.id)?.medio)}</td><td className="td">{t.agendados}</td></tr>;
+          })}{!sdrs.length && <tr><td className="td text-mute" colSpan={11}>Sem dados no período.</td></tr>}</tbody></table>
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">

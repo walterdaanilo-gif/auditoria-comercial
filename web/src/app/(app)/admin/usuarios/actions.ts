@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { exigirAdmin } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, erroAdmin } from "@/lib/supabase/admin";
 
 const PAPEIS = ["admin", "gestor", "vendedor"];
 export type Resultado = { ok: boolean; erro?: string } | null;
@@ -20,9 +20,10 @@ export async function criarUsuario(_: Resultado, fd: FormData): Promise<Resultad
 
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.createUser({ email, password: senha, email_confirm: true, user_metadata: { nome, papel } });
-  if (error || !data.user) return { ok: false, erro: error?.message || "Não foi possível criar o usuário." };
+  if (error || !data.user) return { ok: false, erro: erroAdmin(error, "Não foi possível criar o usuário.") };
   await admin.from("profiles").upsert({ id: data.user.id, nome, email, papel, ativo: true });
   revalidatePath("/admin/usuarios");
+  revalidatePath("/configuracoes");
   return { ok: true };
 }
 

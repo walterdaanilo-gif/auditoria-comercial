@@ -49,7 +49,10 @@ export function fakeSupa() {
     },
     async update(n, filters, patch) { const hit = tab(n).filter(r => match(r, filters)); hit.forEach(r => Object.assign(r, patch)); return hit.map(r => ({ ...r })); },
     async delete(n, filters) { t[n] = tab(n).filter(r => !match(r, filters)); },
-    async rpc(fn, { p_from, p_to }) {
+    rpcs: {}, // respostas prontas por funcao (ex.: resumo_sdr2) quando o teste precisa
+    async rpc(fn, args) {
+      if (api.rpcs[fn]) return api.rpcs[fn](args);
+      const { p_from, p_to } = args;
       const convs = tab("conversas").filter(c => c.data >= p_from && c.data <= p_to); const out = {};
       for (const c of convs) for (const m of tab("mensagens").filter(m => m.conversa_id === c.id)) {
         const o = (out[m.vendedor_id] ||= { vendedor_id: m.vendedor_id, tratadas: 0, enviadas: 0, recebidas: 0, responderam: 0 });

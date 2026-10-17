@@ -2,6 +2,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { cfg } from "./config.js";
 import { gravarMensagem } from "./mensagens.js";
+import { acompanharChamadas, gravarLigacao, ligacaoDaMensagem } from "./ligacoes.js";
 
 // Logger minimo compativel com o Baileys (sem depender do pino)
 const quiet = { level: "silent", child() { return quiet; }, trace() {}, debug() {}, info() {}, warn() {}, error(...a) { console.error("[baileys]", ...a); }, fatal(...a) { console.error("[baileys]", ...a); } };
@@ -25,6 +26,8 @@ const isLead = jid => !!jid && /@(s\.whatsapp\.net|lid)$/.test(jid);
 export async function saveMessage(db, inst, m, { sock, B } = {}) {
   const jid = m.key?.remoteJid;
   if (!isLead(jid)) return;
+  const lig = ligacaoDaMensagem(m); // registro de chamada sincronizado pelo celular
+  if (lig) { await gravarLigacao(db, inst, lig); console.log(`[${inst.nome}] ligacao ${lig.direcao} ${lig.contato}: ${lig.resultado}${lig.duracao ? ` ${lig.duracao}s` : ""}`); return; }
   const { tipo, texto } = textOf(m);
   await gravarMensagem(db, inst, {
     contato: jid.split("@")[0], nome: m.pushName, fromMe: !!m.key.fromMe, id: m.key.id, tipo, texto,
@@ -73,6 +76,7 @@ async function startInstance(db, inst) {
     const onMsgs = ({ messages }) => { for (const m of messages) saveMessage(db, inst, m, { sock, B }).catch(e => console.error(`[${inst.nome}] mensagem:`, e.message)); };
     sock.ev.on("messages.upsert", onMsgs);
     sock.ev.on("messaging-history.set", onMsgs);
+    sock.ev.on("call", acompanharChamadas(db, inst, () => sock.user?.id));
   };
   await setStatus(db, inst.id, { status: "conectando" });
   await connect();
@@ -95,3 +99,13 @@ export async function syncInstances(db) {
   }
 }
 export const statusAtual = () => [...running.keys()];
+
+// Envia texto pelo WhatsApp conectado (alertas e relatorio para o gestor). numero = 55 + DDD + numero.
+// O onWhatsApp acha o JID certo, inclusive quando a conta existe sem o 9 extra.
+export async function enviarTextoBaileys(instanciaId, numero, texto) {
+  const sock = running.get(instanciaId)?.sock;
+  if (!sock?.user) throw new Error("WhatsApp de envio nao esta conectado neste worker");
+  const [r] = (await sock.onWhatsApp(numero)) || [];
+  if (!r?.exists) throw new Error(`o numero ${numero} nao tem WhatsApp`);
+  await sock.sendMessage(r.jid, { text: texto });
+}

@@ -9,6 +9,9 @@ export const cfg = {
   transcribeKey: env.TRANSCRIBE_API_KEY || "",
   transcribeUrl: env.TRANSCRIBE_URL || "https://api.openai.com/v1/audio/transcriptions",
   transcribeModel: env.TRANSCRIBE_MODEL || "whisper-1",
+  // OpenAI para auditar quando nao ha chave da Anthropic: OPENAI_API_KEY, ou a mesma chave da transcricao se ela for da OpenAI
+  openaiKey: env.OPENAI_API_KEY || ((env.TRANSCRIBE_URL || "https://api.openai.com").includes("api.openai.com") ? env.TRANSCRIBE_API_KEY || "" : ""),
+  openaiModel: env.OPENAI_MODEL || "gpt-4.1-mini",
   tz: env.TZ || "America/Sao_Paulo",
   tzOffset: env.TZ_OFFSET || "-03:00",
   idleMin: num(env.AUDIT_IDLE_MINUTES, 20),

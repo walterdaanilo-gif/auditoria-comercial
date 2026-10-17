@@ -38,15 +38,19 @@ globalThis.fetch = realFetch;
 // ----- auditoria (IA simulada) -----
 const ia = async (_u, o) => {
   const conv = JSON.parse(o.body).messages[0].content; const ok = conv.includes("topo sim");
-  return { ok: true, json: async () => ({ content: [{ text: "```json\n" + JSON.stringify({ nota_geral: ok ? 8.5 : 4, notas: { abertura: 9, descoberta: 7 }, qualidade: ok ? "boa" : "ruim", etapa: ok ? "agendamento" : "sem_resposta", efetiva: ok, agendou: ok, gatilhos: { personalizacao: true, chamada_para_acao: ok, prova_social: ok }, resumo: "r", pontos_fortes: "f", pontos_melhoria: "m", objecoes: ok ? "" : "sem tempo" }) + "\n```" }] }) };
+  return { ok: true, json: async () => ({ content: [{ text: "```json\n" + JSON.stringify({ notas: [{ criterio: "abordagem", nota: 5, justificativa: "citou a indicacao" }, { criterio: "descoberta", nota: ok ? 4 : 1 }, { criterio: "conducao", nota: ok ? 5 : 1 }], qualidade: ok ? "boa" : "ruim", etapa: ok ? "agendamento" : "sem_resposta", efetiva: ok, agendou: ok, venda: { detectada: ok, tipo: "workshop", valor: 0, cupom: true, evidencia: "topo sim" }, gatilhos: { personalizacao: true, chamada_para_acao: ok, prova_social: ok }, resumo: "r", pontos_fortes: "f", pontos_melhoria: "m", objecoes: ok ? "" : "sem tempo" }) + "\n```" }] }) };
 };
 assert.equal(await runAudits(db, { fetchImpl: ia }), 1); // so a Ana respondeu; o Carlos nao, entao nao e auditado
 assert.ok(!db.tables.auditorias.some(a => a.conversa_id === db.tables.conversas.find(c => c.contato === B).id), "conversa sem resposta nao e auditada");
 // quando o Carlos responder, a conversa dele entra na fila
 await saveMessage(db, INST, m(B, 2, false, "Oi, quem fala?"));
+assert.equal(await runAudits(db, { fetchImpl: ia }), 0, "2 mensagens: abaixo do minimo padrao (4)");
+db.tables.audit_settings = [{ id: 1, min_mensagens: 2 }]; // valor proprio na tela Configuracoes
 assert.equal(await runAudits(db, { fetchImpl: ia }), 1);
 const audA = db.tables.auditorias.find(a => a.conversa_id === db.tables.conversas.find(c => c.contato === A).id);
-assert.equal(audA.nota_geral, 8.5); assert.equal(audA.agendou, true); assert.equal(audA.notas.abertura, 9); assert.equal(audA.notas.tom, 0);
+assert.equal(audA.nota_geral, 9.4); assert.equal(audA.agendou, true); assert.equal(audA.notas.abordagem, 10);
+assert.equal(audA.venda, true); assert.equal(audA.venda_tipo, "workshop"); assert.equal(audA.venda_cupom, true); assert.equal(audA.venda_valor, 0);
+assert.equal(audA.notas_1a5[0].justificativa, "citou a indicacao");
 assert.equal(await runAudits(db, { fetchImpl: ia }), 0); // sem mensagem nova: nao reaudita
 
 // reauditoria preserva a linha da planilha
@@ -63,7 +67,7 @@ db.tables.mensagens.push(
   { id: "im2", conversa_id: "imp1", vendedor_id: VEND, wa_id: "imp-2", remetente: "cliente", texto: "topo sim, quinta 19h", tipo: "texto", enviada_em: velha.toISOString(), espelhada: true });
 assert.equal(await runAudits(db, { fetchImpl: ia }), 1);
 const audImp = db.tables.auditorias.find(a => a.conversa_id === "imp1");
-assert.equal(audImp.nota_geral, 8.5); assert.equal(audImp.sheet_ok, true, "importada nao vai para a planilha");
+assert.equal(audImp.nota_geral, 9.4); assert.equal(audImp.sheet_ok, true, "importada nao vai para a planilha");
 assert.equal(await runAudits(db, { fetchImpl: ia }), 0, "importada so e auditada uma vez");
 db.tables.conversas = db.tables.conversas.filter(c => c.id !== "imp1"); db.tables.mensagens = db.tables.mensagens.filter(x => x.conversa_id !== "imp1");
 db.tables.auditorias = db.tables.auditorias.filter(a => a.conversa_id !== "imp1");
