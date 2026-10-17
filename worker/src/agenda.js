@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { cfg } from "./config.js";
 
-// Reuniao de implementacao confirmada pelo cliente -> evento amarelo na Agenda Google do gestor.
+// Reuniao (de implementacao ou de imersao) confirmada pelo cliente, de qualquer WhatsApp conectado -> evento amarelo na Agenda Google do gestor.
 // O gestor conecta a agenda em Configuracoes (login Google); o refresh_token fica em google_agenda (so o servidor le).
 const SITE = (process.env.SITE_URL || "https://auditoria-comercial-omega.vercel.app").replace(/\/$/, "");
 const AMARELO = "5"; // "Banana" na paleta de cores de evento do Google Agenda
@@ -32,7 +32,7 @@ const somaMin = (iso, min) => new Date(Date.parse(iso) + min * 60_000).toISOStri
 
 export function montarEvento(r, { vendedor, contato, conversaId, duracao = 60, convidar = true, meet = true }) {
   const cliente = r.cliente_nome || `+${contato}`;
-  const titulo = ["Reunião de implementação", cliente, r.empresa].filter(Boolean).join(" · ");
+  const titulo = [r.tipo === "imersao" ? "Reunião de imersão" : "Reunião de implementação", cliente, r.empresa].filter(Boolean).join(" · ");
   const inicio = inicioIso(r);
   const descricao = [
     `Cliente: ${cliente}`, r.empresa && `Empresa: ${r.empresa}`, r.email && `E-mail: ${r.email}`, `WhatsApp: +${contato}`,
@@ -50,9 +50,9 @@ export function montarEvento(r, { vendedor, contato, conversaId, duracao = 60, c
   return ev;
 }
 
-// Cria ou atualiza o evento da reuniao desta conversa. So reuniao de implementacao, confirmada, no futuro.
+// Cria ou atualiza o evento da reuniao desta conversa. Implementacao ou imersao, confirmada, no futuro.
 export async function sincronizarReuniao(db, R, c, r, { fetchImpl = fetch } = {}) {
-  if (!r || r.tipo !== "implementacao" || !r.cliente_confirmou || !r.data || !r.hora) return null;
+  if (!r || !["implementacao", "imersao"].includes(r.tipo) || !r.cliente_confirmou || !r.data || !r.hora) return null;
   const [s] = await db.select("audit_settings", { select: "agenda_ativa,agenda_duracao_min,agenda_convidar,agenda_meet", filters: { id: "eq.1" } });
   if (s && s.agenda_ativa === false) return null;
   const inicio = inicioIso(r);

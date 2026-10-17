@@ -19,9 +19,9 @@ const google = async (url, o) => {
   return { ok: true, json: async () => ({ id: "ev1", htmlLink: "https://calendar.google.com/ev1" }) };
 };
 
-// nao confirmada, ou de imersao: nada vai para a agenda
+// nao confirmada, ou sem tipo de reuniao: nada vai para a agenda
 assert.equal(await sincronizarReuniao(db, R, c, { tipo: "implementacao", cliente_confirmou: false, data: amanha, hora: "15:00" }, { fetchImpl: google }), null);
-assert.equal(await sincronizarReuniao(db, R, c, { tipo: "imersao", cliente_confirmou: true, data: amanha, hora: "15:00" }, { fetchImpl: google }), null);
+assert.equal(await sincronizarReuniao(db, R, c, { tipo: null, cliente_confirmou: true, data: amanha, hora: "15:00" }, { fetchImpl: google }), null);
 // reuniao que ja passou tambem nao
 assert.equal(await sincronizarReuniao(db, R, c, { tipo: "implementacao", cliente_confirmou: true, data: addDays(today(), -2), hora: "15:00" }, { fetchImpl: google }), null);
 assert.equal(pedidos.length, 0);
@@ -51,7 +51,12 @@ assert.equal(patch.metodo, "PATCH"); assert.match(patch.url, /\/events\/ev1\?/);
 const ev2 = JSON.parse(patch.corpo);
 assert.equal(ev2.location, "Rua A, 100 - Fortaleza"); assert.equal(ev2.conferenceData, undefined);
 
+// reuniao de imersao (marcada pelo SDR, de outro WhatsApp) tambem vai, com o titulo certo
+const c2 = { id: "conv2", vendedor_id: "v1", contato: "5584911112222" };
+assert.equal(await sincronizarReuniao(db, R, c2, { ...r, tipo: "imersao", cliente_nome: "Maria", empresa: "", email: "" }, { fetchImpl: google }), "criada");
+assert.equal(JSON.parse(pedidos.at(-1).corpo).summary, "Reunião de imersão · Maria");
+
 // sem email: sem convite; Meet desligado em Configuracoes
 const ev3 = montarEvento({ ...r, email: "" }, { vendedor: "Walter", contato: "5584988887777", conversaId: "x", meet: false });
 assert.equal(ev3.attendees, undefined); assert.equal(ev3.conferenceData, undefined);
-console.log("OK: agenda Google (reuniao de implementacao confirmada, amarelo, convite, Meet, local, sem duplicar)");
+console.log("OK: agenda Google (reuniao de implementacao e de imersao confirmadas, amarelo, convite, Meet, local, sem duplicar)");

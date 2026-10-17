@@ -401,9 +401,9 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
       </Card>
 
       <Card {...cardProps("agenda")} titulo="Agenda Google" recomendado
-        resumo={agenda?.conectada ? `Conectada${agenda.email ? ` (${agenda.email})` : ""} · ${s.agenda_ativa ? "reuniões de implementação entram sozinhas, em amarelo" : "envio desligado"}` : "Não conectada"}>
+        resumo={agenda?.conectada ? `Conectada${agenda.email ? ` (${agenda.email})` : ""} · ${s.agenda_ativa ? "reuniões de implementação e de imersão entram sozinhas, em amarelo" : "envio desligado"}` : "Não conectada"}>
         {retornoAgenda && RETORNO_AGENDA[retornoAgenda] && <p className={`mb-3 text-sm ${RETORNO_AGENDA[retornoAgenda][0] ? "text-ok" : "text-bad"}`}>{RETORNO_AGENDA[retornoAgenda][1]}</p>}
-        <p className="mb-3 text-sm text-mute">Quando o cliente confirma o horário da <b className="text-ink">reunião de implementação</b> na conversa, o Auditor cria o evento na sua Agenda Google, em <b className="text-warn">amarelo</b>, com nome do cliente e da empresa, e-mail, local (se for presencial) e o link da conversa. Se o horário mudar, o evento é atualizado.</p>
+        <p className="mb-3 text-sm text-mute">Quando o cliente confirma o horário de uma <b className="text-ink">reunião de implementação ou de imersão</b>, em qualquer WhatsApp conectado, o Auditor cria o evento na sua Agenda Google, em <b className="text-warn">amarelo</b>, com nome do cliente e da empresa, e-mail, local (se for presencial) e o link da conversa. Se o horário mudar, o evento é atualizado.</p>
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line p-4">
           <div className="min-w-0 flex-1">
             <div className="font-semibold">{agenda?.conectada ? <span className="text-ok">Conectada</span> : "Não conectada"}{agenda?.email && <span className="ml-2 font-normal text-mute">{agenda.email}</span>}</div>
@@ -413,7 +413,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
           {agenda?.conectada && <form action={desconectarAgenda}><button className="btn-ghost">Desconectar</button></form>}
         </div>
         <div className="mt-4 divide-y divide-line">
-          <Linha titulo="Enviar reuniões para a agenda" sub="Só reunião de implementação com horário confirmado pelo cliente"><Toggle on={s.agenda_ativa} onChange={(v) => set({ agenda_ativa: v })} rotulo="Enviar para a agenda" /></Linha>
+          <Linha titulo="Enviar reuniões para a agenda" sub="Reunião de implementação ou de imersão, com horário confirmado pelo cliente"><Toggle on={s.agenda_ativa} onChange={(v) => set({ agenda_ativa: v })} rotulo="Enviar para a agenda" /></Linha>
           <Linha titulo="Duração da reunião" sub="Se a conversa disser outro tempo, vale o da conversa"><Numero valor={s.agenda_duracao_min} onChange={(v) => set({ agenda_duracao_min: v ?? 60 })} min={15} max={480} sufixo="min" largura="w-20" /></Linha>
           <Linha titulo="Convidar o cliente" sub="Quando o cliente passar o e-mail, ele recebe o convite do Google Agenda"><Toggle on={s.agenda_convidar} onChange={(v) => set({ agenda_convidar: v })} rotulo="Convidar o cliente" /></Linha>
           <Linha titulo="Link do Google Meet" sub="Reunião online já sai com link do Meet no evento"><Toggle on={s.agenda_meet} onChange={(v) => set({ agenda_meet: v })} rotulo="Criar link do Meet" /></Linha>
