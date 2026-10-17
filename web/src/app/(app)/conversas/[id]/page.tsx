@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import AutoRefresh from "@/components/AutoRefresh";
 import { exigirPerfil } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { corNota, fmtData, fmtHora, nota, telefone, um } from "@/lib/format";
+import { corDuracao, corNota, duracao, fmtData, fmtHora, nota, telefone, um } from "@/lib/format";
 import { CRITERIOS, GATILHOS, type Auditoria, type Mensagem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +44,10 @@ export default async function ConversaDetalhe({ params: paramsP }: { params: Pro
                 {a.qualidade && <span className={`chip ${a.qualidade === "boa" ? "border-ok text-ok" : a.qualidade === "regular" ? "border-warn text-warn" : "border-bad text-bad"}`}>{a.qualidade}</span>}
                 {a.agendou && <span className="chip border-ok text-ok">agendou</span>}{a.efetiva && <span className="chip border-ok text-ok">conversa efetiva</span>}</div>
               <p>{a.resumo}</p>
+              <div className="grid grid-cols-2 gap-3 rounded-xl border border-line p-3">
+                <div><div className="label">1ª resposta</div><b className={`text-xl ${corDuracao(a.primeira_resposta_seg)}`}>{duracao(a.primeira_resposta_seg)}</b></div>
+                <div><div className="label">Tempo médio</div><b className={`text-xl ${corDuracao(a.tempo_medio_resposta_seg)}`}>{duracao(a.tempo_medio_resposta_seg)}</b>{a.respostas_sdr ? <span className="ml-1 text-xs text-mute">em {a.respostas_sdr} resposta{a.respostas_sdr > 1 ? "s" : ""}</span> : null}</div>
+              </div>
               <div><div className="label">Pontos fortes</div><p>{a.pontos_fortes || "—"}</p></div>
               <div><div className="label">O que melhorar</div><p>{a.pontos_melhoria || "—"}</p></div>
               <div><div className="label">Objeções</div><p>{a.objecoes || "—"}</p></div>

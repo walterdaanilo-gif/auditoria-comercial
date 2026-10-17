@@ -9,7 +9,7 @@ import FiltroPeriodo from "@/components/FiltroPeriodo";
 import Markdown from "@/components/Markdown";
 import { exigirPerfil } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { corNota, fmtHora, nota, pct, telefone, um } from "@/lib/format";
+import { corDuracao, corNota, duracao, fmtHora, nota, pct, telefone, um } from "@/lib/format";
 import { METAS, corSdr, diasUteis, type ChaveMeta } from "@/lib/metas";
 import { diasEntre, lerPeriodo } from "@/lib/periodo";
 import { GATILHOS } from "@/lib/types";
@@ -27,7 +27,19 @@ async function pedirAnalise(fd: FormData) {
 
 type Dia = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; auditadas: number; nota_soma: number; agendados: number; efetivas: number; workshop: number; imersao: number };
 type Totais = Omit<Dia, "dia" | "vendedor_id">;
-type Aud = { vendedor_id: string; gatilhos: Record<string, boolean>; etapa: string | null; objecoes: string | null };
+type Aud = { vendedor_id: string; gatilhos: Record<string, boolean>; etapa: string | null; objecoes: string | null; primeira_resposta_seg: number | null; tempo_medio_resposta_seg: number | null; respostas_sdr: number | null };
+
+// Tempos de resposta do SDR: primeira resposta = media simples por conversa; tempo medio = ponderado pelo numero de respostas
+function tempos(l: Aud[]) {
+  const p = l.filter((a) => a.primeira_resposta_seg != null);
+  const m = l.filter((a) => a.tempo_medio_resposta_seg != null && a.respostas_sdr);
+  const n = m.reduce((x, a) => x + Number(a.respostas_sdr), 0);
+  return {
+    primeira: p.length ? p.reduce((x, a) => x + Number(a.primeira_resposta_seg), 0) / p.length : null,
+    medio: n ? m.reduce((x, a) => x + Number(a.tempo_medio_resposta_seg) * Number(a.respostas_sdr), 0) / n : null,
+    conversas: p.length,
+  };
+}
 type Atividade = { vendedor_id: string; ultima_msg_em: string | null; ultima_ligacao_em: string | null; conversas_hoje: number };
 
 const ZERO: Totais = { contatadas: 0, enviadas: 0, respostas: 0, ligacoes: 0, auditadas: 0, nota_soma: 0, agendados: 0, efetivas: 0, workshop: 0, imersao: 0 };
@@ -48,7 +60,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
 
   const [rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt] = await Promise.all([
     supabase.rpc("resumo_sdr", { p_from: de, p_to: ate }),
-    supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
+    supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
     supabase.from("profiles").select("id,nome,papel,ativo").order("nome"),
     supabase.rpc("ultima_atividade"),
     supabase.from("instancias_whatsapp").select("vendedor_id,status,numero"),
@@ -103,6 +115,8 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
     const k = (a.objecoes || "").trim().toLowerCase().slice(0, 60);
     if (k) obj[k] = (obj[k] || 0) + 1;
   }
+  const tTime = tempos(auds);
+  const tSdr = new Map(sdrs.map((s) => [s.id, tempos(auds.filter((a) => a.vendedor_id === s.id))]));
   const topObj = Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
   const kpi = (t: string, v: React.ReactNode, sub?: string, cls = "") => (
@@ -143,6 +157,11 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
         {kpi("Ligações", total.ligacoes, "gravações enviadas")}
         {kpi("Marcações", total.agendados, `${total.workshop} workshop · ${total.imersao} imersão`)}
         {kpi("Nota média", nota(media(total)), `${total.auditadas} auditadas`, corNota(media(total)))}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {kpi("Tempo de primeira resposta", duracao(tTime.primeira), tTime.conversas ? `média de ${tTime.conversas} conversa${tTime.conversas > 1 ? "s" : ""} auditada${tTime.conversas > 1 ? "s" : ""}: do 1º contato do lead até o SDR responder` : "aparece quando houver conversas auditadas", corDuracao(tTime.primeira))}
+        {kpi("Tempo médio de resposta", duracao(tTime.medio), "toda vez que o lead escreve, quanto o SDR leva para responder", corDuracao(tTime.medio))}
       </div>
 
       {/* Metas por SDR */}
@@ -187,6 +206,8 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-3 text-sm text-mute">
                   <span>Nota média <b className={corNota(media(t))}>{nota(media(t))}</b></span>
                   <span>{t.auditadas} auditadas</span><span>{t.efetivas} conversas efetivas</span>
+                  <span>1ª resposta <b className={corDuracao(tSdr.get(s.id)?.primeira)}>{duracao(tSdr.get(s.id)?.primeira)}</b></span>
+                  <span>Tempo médio <b className={corDuracao(tSdr.get(s.id)?.medio)}>{duracao(tSdr.get(s.id)?.medio)}</b></span>
                 </div>
               </div>
             );
@@ -286,11 +307,11 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
       {/* Tabela por SDR */}
       <section className="card overflow-x-auto">
         <h2 className="mb-3 text-xl font-bold">Resumo por SDR</h2>
-        <table className="w-full"><thead><tr><th className="th">SDR</th><th className="th">Contatadas</th><th className="th">Enviadas</th><th className="th">Respostas</th><th className="th">Taxa de resposta</th><th className="th">Ligações</th><th className="th">Auditadas</th><th className="th">Nota</th><th className="th">Agendados</th></tr></thead>
+        <table className="w-full"><thead><tr><th className="th">SDR</th><th className="th">Contatadas</th><th className="th">Enviadas</th><th className="th">Respostas</th><th className="th">Taxa de resposta</th><th className="th">Ligações</th><th className="th">Auditadas</th><th className="th">Nota</th><th className="th">1ª resposta</th><th className="th">Tempo médio</th><th className="th">Agendados</th></tr></thead>
           <tbody>{sdrs.map((s) => {
             const t = porSdr.get(s.id) ?? ZERO;
-            return <tr key={s.id}><td className="td"><span className="flex items-center gap-2 font-semibold"><Bolinha id={s.id} />{s.nome}</span></td><td className="td">{t.contatadas}</td><td className="td">{t.enviadas}</td><td className="td">{t.respostas}</td><td className="td">{pct(t.respostas, t.contatadas)}</td><td className="td">{t.ligacoes}</td><td className="td">{t.auditadas}</td><td className={`td font-bold ${corNota(media(t))}`}>{nota(media(t))}</td><td className="td">{t.agendados}</td></tr>;
-          })}{!sdrs.length && <tr><td className="td text-mute" colSpan={9}>Sem dados no período.</td></tr>}</tbody></table>
+            return <tr key={s.id}><td className="td"><span className="flex items-center gap-2 font-semibold"><Bolinha id={s.id} />{s.nome}</span></td><td className="td">{t.contatadas}</td><td className="td">{t.enviadas}</td><td className="td">{t.respostas}</td><td className="td">{pct(t.respostas, t.contatadas)}</td><td className="td">{t.ligacoes}</td><td className="td">{t.auditadas}</td><td className={`td font-bold ${corNota(media(t))}`}>{nota(media(t))}</td><td className={`td ${corDuracao(tSdr.get(s.id)?.primeira)}`}>{duracao(tSdr.get(s.id)?.primeira)}</td><td className={`td ${corDuracao(tSdr.get(s.id)?.medio)}`}>{duracao(tSdr.get(s.id)?.medio)}</td><td className="td">{t.agendados}</td></tr>;
+          })}{!sdrs.length && <tr><td className="td text-mute" colSpan={11}>Sem dados no período.</td></tr>}</tbody></table>
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">

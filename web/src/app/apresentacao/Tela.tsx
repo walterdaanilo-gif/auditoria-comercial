@@ -2,13 +2,13 @@ import Link from "next/link";
 import { Suspense } from "react";
 import AbasPainel from "@/components/AbasPainel";
 import AutoRefresh from "@/components/AutoRefresh";
-import { corNota, fmtHora, nota, telefone, um } from "@/lib/format";
+import { corNota, nota } from "@/lib/format";
 import { corSdr, diasUteis } from "@/lib/metas";
 import { diasEntre, type Periodo } from "@/lib/periodo";
 import Controles from "./Controles";
 
 
-// Tela de TV (16:9, sem rolagem) no molde do painel comercial de referencia, nas cores Weevo.
+// Tela de TV (16:9, sem rolagem) no molde do painel comercial de referencia, nas cores Weevo. Grade 2x2.
 // Metas diarias por SDR: 30 contatos (mensagem ou ligacao) e 6 marcacoes (workshop + imersao).
 const META_CONTATOS = 30, META_MARCACOES = 6;
 
@@ -41,23 +41,20 @@ function Painel({ titulo, nota: sub, children, className = "" }: { titulo: strin
   );
 }
 
-export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean }[]; linhas: Linha[]; marcacoes: any[]; semRetorno: { conversa_id: string; vendedor_id: string; contato: string; contato_nome: string | null; ultima_msg_em: string; texto: string }[]; alertas: any[] };
+export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean }[]; linhas: Linha[];  };
 
 // Desenho da tela, separado da busca de dados (permite previa com dados de exemplo)
-export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, marcacoes, semRetorno, alertas }: DadosTela) {
+export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela) {
   const { de, ate } = periodo;
   const sdrs = perfis.filter((p) => p.papel === "vendedor" && p.ativo);
   const cor = new Map(sdrs.map((s, i) => [s.id, corSdr(i)]));
-  const nomes = new Map(perfis.map((p) => [p.id, p.nome]));
   const porSdr = new Map(sdrs.map((s) => [s.id, somar(linhas.filter((l) => l.vendedor_id === s.id))]));
   const time = somar(linhas.filter((l) => cor.has(l.vendedor_id)));
   const uteis = diasUteis(de, ate);
   const nSdr = Math.max(sdrs.length, 1);
   const metaContatos = META_CONTATOS * uteis, metaMarc = META_MARCACOES * uteis;
   const dias = diasEntre(de, ate);
-  const ruins = alertas.filter((a) => a.qualidade === "ruim"), semMarcar = alertas.filter((a) => a.qualidade !== "ruim" && a.efetiva && !a.agendou);
   const Bola = ({ id }: { id: string }) => <span className="inline-block h-[0.6em] w-[0.6em] shrink-0 rounded-full" style={{ background: cor.get(id) ?? "#9ba5a4" }} />;
-  const nomeContato = (c: any) => (c ? c.contato_nome || telefone(c.contato) : "—");
 
   // ---- marcacoes acumuladas x meta (time) ----
   const metaDia = (d: string) => (util(d) ? META_MARCACOES * nSdr : 0);
@@ -133,8 +130,8 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, marcacoes, s
         {kpi("Nota média", <span className={corNota(media(time))}>{nota(media(time))}</span>, <>{time.auditadas} conversas auditadas</>)}
       </section>
 
-      {/* grade 3x2 */}
-      <main className="grid min-h-0 flex-1 gap-[clamp(8px,0.9vh,16px)] lg:grid-cols-[1.35fr_1fr_1fr] lg:grid-rows-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      {/* grade 2x2 */}
+      <main className="grid min-h-0 flex-1 gap-[clamp(8px,0.9vh,16px)] lg:grid-cols-[1.35fr_1fr] lg:grid-rows-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <Painel titulo="Marcações acumuladas x meta" nota={`${META_MARCACOES} por dia útil por SDR`}>
           <div className="mb-[0.3em] flex flex-wrap gap-[1.2em] text-[0.8em] text-mute">
             <span className="flex items-center gap-[0.45em]"><i className="inline-block w-[1.3em] border-t-[2.5px] border-brand" />Realizado</span>
@@ -190,20 +187,6 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, marcacoes, s
             <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm border-2 border-bad" />dia útil sem contato</span>
             <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm border border-dashed border-line" />fim de semana</span>
           </div>
-        </Painel>
-
-        <Painel titulo="Marcações" nota={`${time.workshop} workshop · ${time.imersao} imersão`}>
-          <ul className="min-h-0 flex-1 overflow-auto">
-            {marcacoes.map((a) => { const c = um<any>(a.conversas); return (
-              <li key={a.id} className="grid grid-cols-[4.2em_minmax(0,1fr)_auto] items-center gap-[0.6em] border-b border-line py-[0.36em] last:border-0">
-                <span className="text-[0.8em] tabular-nums text-mute">{c ? ddmm(c.data) : ""}</span>
-                <span className="min-w-0"><Link href={`/conversas/${a.conversa_id}`} className="block truncate text-[0.9em] font-semibold hover:text-brand">{nomeContato(c)}</Link>
-                  <span className="flex items-center gap-[0.35em] text-[0.75em] text-mute"><Bola id={a.vendedor_id} />{nomes.get(a.vendedor_id)} · nota <b className={corNota(a.nota_geral)}>{nota(a.nota_geral)}</b></span></span>
-                <span className={`rounded-full px-[0.6em] py-[0.1em] text-[0.72em] font-semibold ${a.tipo_agendamento === "imersao" ? "bg-[#9085e9]/20 text-[#b9b1f2]" : "bg-brand/15 text-brand"}`}>{a.tipo_agendamento === "imersao" ? "Imersão" : "Workshop"}</span>
-              </li>
-            ); })}
-            {!marcacoes.length && <li className="text-[0.85em] text-mute">Nenhuma marcação no período ainda.</li>}
-          </ul>
         </Painel>
 
         <Painel titulo="Funil por SDR" nota="barra = % da meta · conversão entre etapas">
@@ -266,28 +249,6 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, marcacoes, s
           </div>
         </Painel>
 
-        <Painel titulo="Precisa de atenção" nota="clique para abrir a conversa">
-          <div className="mb-[0.5em] flex flex-wrap gap-[0.5em]">
-            <Pill e={semRetorno.length ? "warn" : "good"}>{semRetorno.length} sem retorno</Pill>
-            <Pill e={ruins.length ? "crit" : "good"}>{ruins.length} nota ruim</Pill>
-            <Pill e={semMarcar.length ? "warn" : "good"}>{semMarcar.length} efetiva sem marcação</Pill>
-          </div>
-          <ul className="min-h-0 flex-1 overflow-auto">
-            {[
-              ...semRetorno.map((c) => ({ k: "s" + c.conversa_id, id: c.conversa_id, quando: fmtHora(c.ultima_msg_em), quem: c.contato_nome || telefone(c.contato), sdr: c.vendedor_id, tag: "sem retorno", obs: `“${c.texto}”` })),
-              ...ruins.map((a) => ({ k: "r" + a.id, id: a.conversa_id, quando: ddmm(um<any>(a.conversas)?.data ?? ""), quem: nomeContato(um<any>(a.conversas)), sdr: a.vendedor_id, tag: `nota ${nota(a.nota_geral)}`, obs: a.resumo })),
-              ...semMarcar.map((a) => ({ k: "m" + a.id, id: a.conversa_id, quando: ddmm(um<any>(a.conversas)?.data ?? ""), quem: nomeContato(um<any>(a.conversas)), sdr: a.vendedor_id, tag: "sem marcação", obs: a.resumo })),
-            ].slice(0, 14).map((i) => (
-              <li key={i.k} className="grid grid-cols-[4.2em_minmax(0,1fr)] gap-x-[0.6em] gap-y-[0.05em] border-b border-line py-[0.36em] last:border-0">
-                <span className="pt-[0.1em] text-[0.8em] tabular-nums text-mute">{i.quando}</span>
-                <span className="flex justify-between gap-1.5 text-[0.88em]"><Link href={`/conversas/${i.id}`} className="truncate font-semibold hover:text-brand">{i.quem}</Link>
-                  <span className="flex items-center gap-[0.35em] whitespace-nowrap text-[0.92em] text-brand"><Bola id={i.sdr} />{nomes.get(i.sdr)} · {i.tag}</span></span>
-                <span className="col-start-2 truncate text-[0.75em] text-mute">{i.obs}</span>
-              </li>
-            ))}
-            {!semRetorno.length && !ruins.length && !semMarcar.length && <li className="text-[0.85em] text-mute">Nada pendente no período.</li>}
-          </ul>
-        </Painel>
       </main>
     </div>
   );

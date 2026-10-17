@@ -43,6 +43,19 @@ function normalizar(a, criterios) {
   };
 }
 
+// Tempos de resposta do SDR. Cada sequencia de mensagens do lead conta uma vez, a partir da primeira dela,
+// ate a proxima mensagem do SDR. A primeira resposta e a primeira dessas medidas.
+export function temposResposta(msgs) {
+  const ord = [...msgs].filter(m => m.enviada_em).sort((a, b) => String(a.enviada_em).localeCompare(String(b.enviada_em)));
+  const esperas = []; let leadDesde = null;
+  for (const m of ord) {
+    if (m.remetente === "cliente") { if (leadDesde === null) leadDesde = Date.parse(m.enviada_em); }
+    else if (leadDesde !== null) { esperas.push(Math.max(0, Math.round((Date.parse(m.enviada_em) - leadDesde) / 1000))); leadDesde = null; }
+  }
+  if (!esperas.length) return { primeira_resposta_seg: null, tempo_medio_resposta_seg: null, respostas_sdr: 0 };
+  return { primeira_resposta_seg: esperas[0], tempo_medio_resposta_seg: Math.round(esperas.reduce((a, b) => a + b, 0) / esperas.length), respostas_sdr: esperas.length };
+}
+
 const linha = m => `${m.remetente === "vendedor" ? "VENDEDOR" : "CLIENTE"}: ${m.tipo === "audio" ? `[audio] ${m.transcricao || ""}` : m.texto || `[${m.tipo}]`}`;
 const cortar = t => (t.length > 14000 ? t.slice(t.length - 14000) : t);
 
@@ -75,9 +88,9 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}
       if (r.pendAudio && parada < 30 * 60000) continue; // espera a transcricao dos audios
       if ((auds.get(c.id) ?? -1) >= r.n) continue;
       try {
-        const msgs = await db.select("mensagens", { select: "remetente,texto,tipo,transcricao", filters: { conversa_id: `eq.${c.id}` }, order: "enviada_em" });
+        const msgs = await db.select("mensagens", { select: "remetente,texto,tipo,transcricao,enviada_em", filters: { conversa_id: `eq.${c.id}` }, order: "enviada_em" });
         const a = normalizar(await callClaude(roteiro, criterios, cortar(msgs.map(linha).join("\n")), fetchImpl), criterios);
-        await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: r.n, ...a }], { onConflict: "conversa_id", returning: false });
+        await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: r.n, ...a, ...temposResposta(msgs) }], { onConflict: "conversa_id", returning: false });
         feitos++;
       } catch (e) { console.error(`[auditoria] conversa ${c.id}:`, e.message); }
     }
@@ -90,11 +103,11 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now() } = {}
     for (const c of imps) {
       if (ja.has(c.id)) continue;
       try {
-        const msgs = await db.select("mensagens", { select: "remetente,texto,tipo,transcricao", filters: { conversa_id: `eq.${c.id}` }, order: "enviada_em" });
+        const msgs = await db.select("mensagens", { select: "remetente,texto,tipo,transcricao,enviada_em", filters: { conversa_id: `eq.${c.id}` }, order: "enviada_em" });
         if (!msgs.some(m => m.remetente === "vendedor") || !msgs.some(m => m.remetente === "cliente")) continue; // sem resposta do lead
         const a = normalizar(await callClaude(roteiro, criterios, cortar(msgs.map(linha).join("\n")), fetchImpl), criterios);
         // sheet_ok: importadas sao teste e nao vao para a planilha
-        await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: msgs.length, ...a, sheet_ok: true }], { onConflict: "conversa_id", returning: false });
+        await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: msgs.length, ...a, ...temposResposta(msgs), sheet_ok: true }], { onConflict: "conversa_id", returning: false });
         feitos++;
       } catch (e) { console.error(`[auditoria] importada ${c.id}:`, e.message); }
     }

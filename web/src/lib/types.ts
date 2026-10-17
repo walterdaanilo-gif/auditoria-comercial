@@ -6,6 +6,7 @@ export interface Conversa { id: string; vendedor_id: string; contato: string; co
 export interface Mensagem { id: string; remetente: "vendedor" | "cliente"; texto: string | null; tipo: string; transcricao: string | null; enviada_em: string }
 export interface Auditoria {
   id: string; conversa_id: string | null; ligacao_id: string | null; vendedor_id: string; nota_geral: number;
+  primeira_resposta_seg: number | null; tempo_medio_resposta_seg: number | null; respostas_sdr: number | null;
   notas: Record<string, number>; gatilhos: Record<string, boolean>; pontos_fortes: string | null; pontos_melhoria: string | null;
   resumo: string | null; qualidade: "boa" | "regular" | "ruim" | null; etapa: string | null; objecoes: string | null;
   agendou: boolean; efetiva: boolean; msg_count: number; atualizado_em: string;

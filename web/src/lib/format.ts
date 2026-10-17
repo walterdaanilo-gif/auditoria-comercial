@@ -9,3 +9,13 @@ export const hojeBR = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Americ
 export const somaDias = (dia: string, n: number) => { const d = new Date(dia + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 // Objeto ou lista (o PostgREST devolve um ou outro conforme a relacao)
 export const um = <T,>(x: T | T[] | null | undefined): T | null => (Array.isArray(x) ? x[0] ?? null : x ?? null);
+// Tempo de resposta em segundos para texto curto: 45s, 12min, 2h05
+export const duracao = (s: number | null | undefined) => {
+  if (s == null) return "—";
+  if (s < 60) return `${Math.round(s)}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}min`;
+  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
+};
+// Ate 5 min e bom, ate 30 min atencao, acima disso ruim
+export const corDuracao = (s: number | null | undefined) => (s == null ? "text-mute" : s <= 300 ? "text-ok" : s <= 1800 ? "text-warn" : "text-bad");

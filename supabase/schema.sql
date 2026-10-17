@@ -568,3 +568,13 @@ language sql stable security invoker set search_path = public as $$
   order by k.dia, k.vendedor_id
 $$;
 grant execute on function public.resumo_sdr(date, date) to authenticated;
+
+-- =====================================================================
+-- Tempos de resposta do SDR, calculados pelo worker na auditoria:
+-- primeira_resposta_seg = da 1a mensagem do lead ate a 1a resposta do SDR depois dela
+-- tempo_medio_resposta_seg = media de cada vez que o lead escreveu ate o SDR responder
+-- respostas_sdr = quantas vezes isso aconteceu (base da media)
+-- =====================================================================
+alter table public.auditorias add column if not exists primeira_resposta_seg integer;
+alter table public.auditorias add column if not exists tempo_medio_resposta_seg integer;
+alter table public.auditorias add column if not exists respostas_sdr integer;
