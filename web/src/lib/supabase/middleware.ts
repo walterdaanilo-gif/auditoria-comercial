@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./config";
 
-const PUBLICAS = ["/login", "/recuperar-senha", "/auth/callback"];
+const PUBLICAS = ["/login", "/recuperar-senha", "/auth/callback", "/privacidade"];
 
 // Renova a sessao e protege todas as rotas: sem login, vai para /login
 export async function updateSession(request: NextRequest) {
