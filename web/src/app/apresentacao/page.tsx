@@ -22,10 +22,10 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
     supabase.from("audit_settings").select("meta_sdr_conversas,meta_sdr_marcacoes").eq("id", 1).maybeSingle(),
     supabase.from("auditorias").select("vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(data,canal)").eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
   ]);
-  // vendas dos SDRs (Closer fica fora desta tela)
+  // vendas do time (quem tem WhatsApp cadastrado ou papel vendedor)
   const equipe = [...new Set((rInst.data ?? []).map((i) => i.vendedor_id as string))];
-  const sdrIds = new Set(((rPerf.data ?? []) as DadosTela["perfis"]).filter((p) => p.ativo && (p.papel === "vendedor" || equipe.includes(p.id)) && p.funcao !== "closer").map((p) => p.id));
-  const ven = ((rVen.data ?? []) as { vendedor_id: string; venda_tipo: string | null; venda_valor: number | null; venda_cupom: boolean }[]).filter((v) => sdrIds.has(v.vendedor_id));
+  const timeIds = new Set(((rPerf.data ?? []) as DadosTela["perfis"]).filter((p) => p.ativo && (p.papel === "vendedor" || equipe.includes(p.id))).map((p) => p.id));
+  const ven = ((rVen.data ?? []) as { vendedor_id: string; venda_tipo: string | null; venda_valor: number | null; venda_cupom: boolean }[]).filter((v) => timeIds.has(v.vendedor_id));
   const vendas: Vendas = {
     inscricoes: ven.filter((v) => v.venda_tipo !== "imersao").length, cupom: ven.filter((v) => v.venda_tipo !== "imersao" && v.venda_cupom).length,
     imersoes: ven.filter((v) => v.venda_tipo === "imersao").length, valor: ven.reduce((s, v) => s + Number(v.venda_cupom ? 0 : v.venda_valor || 0), 0),

@@ -50,7 +50,9 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
   const { de, ate } = periodo;
   const META_CONVERSAS = metas.conversas, META_MARCACOES = metas.marcacoes;
   // Tela dos SDRs: so quem e SDR (Closer fica fora, as metas daqui sao de conversas e marcacoes)
-  const sdrs = perfis.filter((p) => p.ativo && (p.papel === "vendedor" || equipe.includes(p.id)) && p.funcao !== "closer");
+  // Apresentacao do time todo (SDR e Closer); so o Funil por SDR mostra apenas SDRs
+  const sdrs = perfis.filter((p) => p.ativo && (p.papel === "vendedor" || equipe.includes(p.id)));
+  const sdrsFunil = sdrs.filter((p) => p.funcao !== "closer");
   const cor = new Map(sdrs.map((s, i) => [s.id, corSdr(i)]));
   const porSdr = new Map(sdrs.map((s) => [s.id, somar(linhas.filter((l) => l.vendedor_id === s.id))]));
   const time = somar(linhas.filter((l) => cor.has(l.vendedor_id)));
@@ -108,7 +110,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
         <div className="flex min-w-0 items-center gap-[1.1em]">
           <Link href="/" className="flex items-center" title="Voltar ao painel"><img src="/weevo-logo.png" alt="Weevo" className="h-[1.5em] w-auto" /></Link>
           <i className="h-[1.6em] w-px bg-line" />
-          <h1 className="whitespace-nowrap text-[0.72em] font-semibold uppercase tracking-[0.3em] text-brand">Auditoria comercial · SDRs</h1>
+          <h1 className="whitespace-nowrap text-[0.72em] font-semibold uppercase tracking-[0.3em] text-brand">Auditoria comercial</h1>
           <Suspense><AbasPainel atual="apresentacao" /></Suspense>
         </div>
         <Controles p={periodo.p} de={de} ate={ate} atualizadoEm={atualizadoEm} />
@@ -183,7 +185,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
                 })}
               </tbody>
             </table>
-            {!sdrs.length && <p className="text-[0.85em] text-mute">Nenhum SDR ainda. Cadastre na aba WhatsApp com a função SDR.</p>}
+            {!sdrs.length && <p className="text-[0.85em] text-mute">Nenhum vendedor ainda. Cadastre na aba WhatsApp (nome, função e conexão).</p>}
           </div>
           <div className="mt-[0.55em] flex flex-wrap gap-x-[1em] gap-y-1 text-[0.75em] text-mute">
             <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm bg-brand" />bateu a meta</span>
@@ -194,8 +196,9 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
         </Painel>
 
         <Painel titulo="Funil por SDR" nota="barra = % da meta · conversão entre etapas">
-          <div className="grid min-h-0 flex-1 gap-[1.1em] overflow-auto" style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(sdrs.length, 3))}, minmax(0,1fr))` }}>
-            {sdrs.map((s) => {
+          {!sdrsFunil.length && <p className="text-[0.85em] text-mute">Nenhum SDR no time ainda. Quem é Closer não entra no funil.</p>}
+          <div className="grid min-h-0 flex-1 gap-[1.1em] overflow-auto" style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(sdrsFunil.length, 3))}, minmax(0,1fr))` }}>
+            {sdrsFunil.map((s) => {
               const t = porSdr.get(s.id) ?? ZERO; const ct = contatos(t);
               const etapas: { n: string; v: number; alvo: number | null; base: number; conv?: string }[] = [
                 { n: "Contatos", v: ct, alvo: null, base: Math.max(ct, 1) },
