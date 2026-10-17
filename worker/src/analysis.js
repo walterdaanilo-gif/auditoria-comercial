@@ -1,3 +1,4 @@
+import { chamarIA } from "./ia.js";
 import { cfg, today, addDays, dayStart } from "./config.js";
 
 const GAT = { personalizacao: "Personalização", pergunta_aberta: "Pergunta aberta", beneficio_claro: "Benefício claro", prova_social: "Prova social", autoridade: "Autoridade", escassez_urgencia: "Escassez/urgência", reciprocidade: "Reciprocidade", tratamento_objecao: "Tratamento de objeção", chamada_para_acao: "Chamada para ação", followup: "Follow-up" };
@@ -36,13 +37,7 @@ export async function gerarTexto(db, periodo, fetchImpl = fetch) {
     por_vendedor: resumo.map(r => ({ vendedor: nome(r.vendedor_id), ...r, vendedor_id: undefined, nota_media: (() => { const x = auds.filter(a => a.vendedor_id === r.vendedor_id); return x.length ? +(x.reduce((s, a) => s + Number(a.nota_geral), 0) / x.length).toFixed(1) : null; })() })),
     amostra: auds.slice(0, 40).map(a => ({ vendedor: nome(a.vendedor_id), nota: a.nota_geral, resumo: a.resumo, melhorar: a.pontos_melhoria })),
   };
-  const r = await fetchImpl("https://api.anthropic.com/v1/messages", {
-    method: "POST", headers: { "x-api-key": cfg.anthropicKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: cfg.model, max_tokens: 2200, system: PROMPT, messages: [{ role: "user", content: JSON.stringify(dados) }] }),
-  });
-  const j = await r.json();
-  if (!r.ok) throw new Error(`Anthropic ${r.status}: ${JSON.stringify(j.error || j).slice(0, 300)}`);
-  return (j.content || []).map(c => c.text || "").join("").trim();
+  return chamarIA({ system: PROMPT, user: JSON.stringify(dados), maxTokens: 2200, fetchImpl });
 }
 
 // Atende os pedidos criados no painel (status 'pendente') e cria uma analise diaria depois das 20h

@@ -5,13 +5,15 @@ import { syncInstances, statusAtual } from "./whatsapp.js";
 import { uazapiAtivo, syncUazapi, statusAtualUazapi, receberWebhook, segredoOk } from "./uazapi.js";
 import { transcribePending } from "./transcribe.js";
 import { runAudits } from "./auditor.js";
+import { provedor } from "./ia.js";
 import { processAnalyses } from "./analysis.js";
 import { mirrorAll, mirrorEnabled } from "./mirror.js";
 
 // Avisa no log quais variaveis faltam. Sem as do Supabase nao da para rodar nada.
 const faltam = Object.entries({ SUPABASE_URL: cfg.supabaseUrl, SUPABASE_SERVICE_ROLE_KEY: cfg.serviceKey }).filter(([, v]) => !v).map(([k]) => k);
 if (faltam.length) { console.error(`Faltam as variaveis ${faltam.join(", ")} (no Railway: servico worker > Variables). O worker nao inicia sem elas.`); process.exit(1); }
-const opcionais = { UAZAPI_URL: cfg.uazapiUrl, UAZAPI_ADMIN_TOKEN: cfg.uazapiAdminToken, WEBHOOK_URL: cfg.webhookUrl, WEBHOOK_SECRET: cfg.webhookSecret, ANTHROPIC_API_KEY: cfg.anthropicKey, TRANSCRIBE_API_KEY: cfg.transcribeKey };
+const opcionais = { UAZAPI_URL: cfg.uazapiUrl, UAZAPI_ADMIN_TOKEN: cfg.uazapiAdminToken, WEBHOOK_URL: cfg.webhookUrl, WEBHOOK_SECRET: cfg.webhookSecret, TRANSCRIBE_API_KEY: cfg.transcribeKey };
+console.log(provedor() ? `[ia] auditoria com ${provedor() === "anthropic" ? `Anthropic (${cfg.model})` : `OpenAI (${cfg.openaiModel})`}` : "[ia] sem chave de IA (ANTHROPIC_API_KEY ou OPENAI_API_KEY / TRANSCRIBE_API_KEY da OpenAI): nada sera auditado");
 const vazias = Object.entries(opcionais).filter(([, v]) => !v).map(([k]) => k);
 if (vazias.length) console.log(`[config] variaveis vazias: ${vazias.join(", ")}`);
 

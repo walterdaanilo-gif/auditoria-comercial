@@ -806,7 +806,7 @@ language sql stable security invoker set search_path = public as $$
     group by 1, 2
   ), aud as (
     select coalesce(c.data, (l.iniciada_em at time zone 'America/Sao_Paulo')::date) as dia, a.vendedor_id,
-      count(*) as auditadas, sum(a.nota_geral) as nota_soma, count(*) filter (where a.efetiva) as efetivas,
+      count(*) filter (where not a.so_bot) as auditadas, sum(a.nota_geral) filter (where not a.so_bot) as nota_soma, count(*) filter (where a.efetiva) as efetivas,
       count(*) filter (where a.agendou) as marcacoes,
       count(*) filter (where a.agendou and coalesce(a.tipo_agendamento, 'workshop') = 'workshop') as workshop,
       count(*) filter (where a.agendou and a.tipo_agendamento = 'imersao') as imersao

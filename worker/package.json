@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node test/smoke.js && node test/mirror.js && node test/uazapi.js && node test/tempos.js && node test/ligacoes.js"
+    "test": "node test/smoke.js && node test/mirror.js && node test/uazapi.js && node test/tempos.js && node test/ligacoes.js && node test/regras.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.18"
+    "@whiskeysockets/baileys": "^6.7.18",
+    "zod": "^3.25.76"
   }
 }

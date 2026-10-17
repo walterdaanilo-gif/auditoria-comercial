@@ -7,6 +7,10 @@ export interface Mensagem { id: string; remetente: "vendedor" | "cliente"; texto
 export interface Auditoria {
   id: string; conversa_id: string | null; ligacao_id: string | null; vendedor_id: string; nota_geral: number;
   primeira_resposta_seg: number | null; tempo_medio_resposta_seg: number | null; respostas_sdr: number | null;
+  rubrica?: string | null; notas_1a5?: { chave: string; nome: string; peso: number; nota: number; justificativa: string }[] | null;
+  venda?: boolean; venda_tipo?: "workshop" | "imersao" | null; venda_valor?: number | null; venda_cupom?: boolean; venda_evidencia?: string | null;
+  oportunidade?: boolean; oportunidade_tipo?: string | null; oportunidade_evidencia?: string | null;
+  critico?: boolean; critico_motivo?: string | null; so_bot?: boolean; manual?: boolean;
   notas: Record<string, number>; gatilhos: Record<string, boolean>; pontos_fortes: string | null; pontos_melhoria: string | null;
   resumo: string | null; qualidade: "boa" | "regular" | "ruim" | null; etapa: string | null; objecoes: string | null;
   agendou: boolean; efetiva: boolean; msg_count: number; atualizado_em: string;

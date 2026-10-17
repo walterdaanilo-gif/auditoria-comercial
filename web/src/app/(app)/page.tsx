@@ -27,7 +27,7 @@ async function pedirAnalise(fd: FormData) {
 
 type Dia = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; ligacoes_atendidas: number; ligacoes_seg: number; auditadas: number; nota_soma: number; agendados: number; efetivas: number; workshop: number; imersao: number };
 type Totais = Omit<Dia, "dia" | "vendedor_id">;
-type Aud = { vendedor_id: string; gatilhos: Record<string, boolean>; etapa: string | null; objecoes: string | null; primeira_resposta_seg: number | null; tempo_medio_resposta_seg: number | null; respostas_sdr: number | null };
+type Aud = { vendedor_id: string; gatilhos: Record<string, boolean>; etapa: string | null; objecoes: string | null; primeira_resposta_seg: number | null; tempo_medio_resposta_seg: number | null; respostas_sdr: number | null; venda: boolean; venda_tipo: string | null; venda_valor: number | null; venda_cupom: boolean; oportunidade: boolean };
 
 // Tempos de resposta do SDR: primeira resposta = media simples por conversa; tempo medio = ponderado pelo numero de respostas
 function tempos(l: Aud[]) {
@@ -60,7 +60,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
 
   const [rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt] = await Promise.all([
     supabase.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
-    supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
+    supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,venda,venda_tipo,venda_valor,venda_cupom,oportunidade,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
     supabase.from("profiles").select("id,nome,papel,ativo").order("nome"),
     supabase.rpc("ultima_atividade"),
     supabase.from("instancias_whatsapp").select("vendedor_id,status,numero"),
@@ -116,6 +116,14 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
     if (k) obj[k] = (obj[k] || 0) + 1;
   }
   const tTime = tempos(auds);
+  // Vendas detectadas pela auditoria: workshop pago, workshop por cupom (R$ 0) e imersao; mais oportunidades
+  const vendas = (l: Aud[]) => {
+    const w = l.filter((a) => a.venda && a.venda_tipo !== "imersao"), im = l.filter((a) => a.venda && a.venda_tipo === "imersao");
+    const pagos = w.filter((a) => !a.venda_cupom);
+    return { wPagos: pagos.length, wPagosValor: pagos.reduce((x, a) => x + Number(a.venda_valor || 0), 0), wCupom: w.length - pagos.length, imersao: im.length, imersaoValor: im.reduce((x, a) => x + Number(a.venda_valor || 0), 0), oport: l.filter((a) => a.oportunidade).length };
+  };
+  const vTime = vendas(auds);
+  const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
   const tSdr = new Map(sdrs.map((s) => [s.id, tempos(auds.filter((a) => a.vendedor_id === s.id))]));
   const topObj = Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
@@ -302,6 +310,25 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
         <p className="mb-4 text-sm text-mute">{periodo.rotulo}. Passe o mouse para ver os valores de cada dia.</p>
         {dias.length < 2 ? <p className="text-sm text-mute">Escolha um período de 2 dias ou mais (7 dias, 30 dias ou datas livres) para ver a evolução.</p>
           : series.length ? <EvolucaoChart dias={dias} series={series} /> : <p className="text-sm text-mute">Sem SDRs para mostrar.</p>}
+      </section>
+
+      {/* Vendas e oportunidades (detectadas pela auditoria) */}
+      <section className="card overflow-x-auto">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-xl font-bold">Vendas e oportunidades</h2>
+          <span className="text-sm text-mute">Detectadas pela auditoria nas conversas do período</span>
+        </div>
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-line p-4"><div className="label">Workshop pago</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.wPagos}</div><div className="text-sm text-mute">{brl(vTime.wPagosValor)}</div></div>
+          <div className="rounded-2xl border border-line p-4"><div className="label">Workshop com cupom</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.wCupom}</div><div className="text-sm text-mute">convite 100% · {brl(0)}</div></div>
+          <div className="rounded-2xl border border-line p-4"><div className="label">Imersão fechada</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.imersao}</div><div className="text-sm text-mute">{brl(vTime.imersaoValor)}</div></div>
+          <div className="rounded-2xl border border-line p-4"><div className="label">Oportunidades</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.oport}</div><div className="text-sm text-mute">interesse ou reunião marcada</div></div>
+        </div>
+        <table className="w-full"><thead><tr><th className="th">Vendedor</th><th className="th">Workshop pago</th><th className="th">Workshop cupom</th><th className="th">Imersão</th><th className="th">Valor total</th><th className="th">Oportunidades</th></tr></thead>
+          <tbody>{sdrs.map((s) => {
+            const v = vendas(auds.filter((a) => a.vendedor_id === s.id));
+            return <tr key={s.id}><td className="td"><span className="flex items-center gap-2 font-semibold"><Bolinha id={s.id} />{s.nome}</span></td><td className="td">{v.wPagos}</td><td className="td">{v.wCupom}</td><td className="td">{v.imersao}</td><td className="td font-semibold">{brl(v.wPagosValor + v.imersaoValor)}</td><td className="td">{v.oport}</td></tr>;
+          })}{!sdrs.length && <tr><td className="td text-mute" colSpan={6}>Sem vendedores.</td></tr>}</tbody></table>
       </section>
 
       {/* Tabela por SDR */}
