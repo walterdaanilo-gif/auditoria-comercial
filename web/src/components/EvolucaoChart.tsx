@@ -6,7 +6,7 @@ export type Serie = { id: string; nome: string; cor: string; pontos: Ponto[] };
 
 const METRICAS: { chave: keyof Ponto; rotulo: string }[] = [
   { chave: "contatadas", rotulo: "Contatadas" }, { chave: "respostas", rotulo: "Respostas" },
-  { chave: "ligacoes", rotulo: "Ligações" }, { chave: "agendados", rotulo: "Agendados" }, { chave: "nota", rotulo: "Nota média" },
+  { chave: "ligacoes", rotulo: "Ligações atendidas" }, { chave: "agendados", rotulo: "Agendados" }, { chave: "nota", rotulo: "Nota média" },
 ];
 const fmt = (v: number | null, nota: boolean) => (v == null ? "—" : nota ? v.toFixed(1).replace(".", ",") : String(v));
 const ddmm = (d: string) => d.slice(8, 10) + "/" + d.slice(5, 7);

@@ -768,3 +768,67 @@ insert into public.criterios_rubrica (rubrica, chave, nome, descricao, peso, pos
   ('closer','agilidade','Agilidade','Responde rápido e mantém o ritmo da negociação.',5,6),
   ('closer','followup','Follow-up','Retoma quem esfriou com motivo e próximo passo.',10,7)
 on conflict (rubrica, chave) do nothing;
+
+-- =====================================================================
+-- Ligacoes de WhatsApp captadas do numero conectado (o worker grava; sem audio)
+-- atendida: o lead atendeu (gravacao enviada na mao conta como atendida)
+-- =====================================================================
+alter table public.ligacoes add column if not exists direcao text check (direcao in ('entrada','saida'));
+alter table public.ligacoes add column if not exists atendida boolean not null default true;
+alter table public.ligacoes add column if not exists resultado text;
+alter table public.ligacoes add column if not exists wa_call_id text;
+create unique index if not exists ux_lig_wa_call on public.ligacoes(instancia_id, wa_call_id) where wa_call_id is not null;
+create index if not exists ix_lig_contato on public.ligacoes(instancia_id, contato, iniciada_em);
+-- resumo_sdr2 = resumo_sdr + ligacoes_atendidas e ligacoes_seg (tempo falando nas atendidas)
+create or replace function public.resumo_sdr2(p_from date, p_to date)
+returns table (dia date, vendedor_id uuid, contatadas bigint, enviadas bigint, respostas bigint, ligacoes bigint, ligacoes_atendidas bigint, ligacoes_seg bigint,
+               auditadas bigint, nota_soma numeric, efetivas bigint, marcacoes bigint, workshop bigint, imersao bigint)
+language sql stable security invoker set search_path = public as $$
+  with msgs as (
+    select c.data as dia, m.conversa_id, m.vendedor_id,
+      sum((m.remetente = 'vendedor')::int) as env,
+      sum((m.remetente = 'cliente')::int) as rec
+    from public.conversas c join public.mensagens m on m.conversa_id = c.id
+    where c.data between p_from and p_to and c.canal <> 'importada'
+    group by c.data, m.conversa_id, m.vendedor_id
+  ), conv as (
+    select dia, vendedor_id,
+      count(*) filter (where env > 0) as contatadas,
+      coalesce(sum(env), 0)::bigint as enviadas,
+      count(*) filter (where env > 0 and rec > 0) as respostas
+    from msgs group by dia, vendedor_id
+  ), lig as (
+    select (iniciada_em at time zone 'America/Sao_Paulo')::date as dia, vendedor_id, count(*) as ligacoes,
+      count(*) filter (where atendida) as ligacoes_atendidas,
+      coalesce(sum(duracao_seg) filter (where atendida), 0)::bigint as ligacoes_seg
+    from public.ligacoes
+    where (iniciada_em at time zone 'America/Sao_Paulo')::date between p_from and p_to
+    group by 1, 2
+  ), aud as (
+    select coalesce(c.data, (l.iniciada_em at time zone 'America/Sao_Paulo')::date) as dia, a.vendedor_id,
+      count(*) as auditadas, sum(a.nota_geral) as nota_soma, count(*) filter (where a.efetiva) as efetivas,
+      count(*) filter (where a.agendou) as marcacoes,
+      count(*) filter (where a.agendou and coalesce(a.tipo_agendamento, 'workshop') = 'workshop') as workshop,
+      count(*) filter (where a.agendou and a.tipo_agendamento = 'imersao') as imersao
+    from public.auditorias a
+    left join public.conversas c on c.id = a.conversa_id
+    left join public.ligacoes l on l.id = a.ligacao_id
+    where coalesce(c.data, (l.iniciada_em at time zone 'America/Sao_Paulo')::date) between p_from and p_to
+      and coalesce(c.canal, '') <> 'importada'
+    group by 1, 2
+  ), chaves as (
+    select dia, vendedor_id from conv union select dia, vendedor_id from lig union select dia, vendedor_id from aud
+  )
+  select k.dia, k.vendedor_id,
+    coalesce(conv.contatadas, 0), coalesce(conv.enviadas, 0), coalesce(conv.respostas, 0),
+    coalesce(lig.ligacoes, 0), coalesce(lig.ligacoes_atendidas, 0), coalesce(lig.ligacoes_seg, 0),
+    coalesce(aud.auditadas, 0), coalesce(aud.nota_soma, 0), coalesce(aud.efetivas, 0),
+    coalesce(aud.marcacoes, 0), coalesce(aud.workshop, 0), coalesce(aud.imersao, 0)
+  from chaves k
+  left join conv using (dia, vendedor_id)
+  left join lig using (dia, vendedor_id)
+  left join aud using (dia, vendedor_id)
+  order by k.dia, k.vendedor_id
+$$;
+revoke all on function public.resumo_sdr2(date, date) from public, anon;
+grant execute on function public.resumo_sdr2(date, date) to authenticated;

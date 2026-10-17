@@ -25,7 +25,7 @@ async function pedirAnalise(fd: FormData) {
   revalidatePath("/");
 }
 
-type Dia = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; auditadas: number; nota_soma: number; agendados: number; efetivas: number; workshop: number; imersao: number };
+type Dia = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; ligacoes_atendidas: number; ligacoes_seg: number; auditadas: number; nota_soma: number; agendados: number; efetivas: number; workshop: number; imersao: number };
 type Totais = Omit<Dia, "dia" | "vendedor_id">;
 type Aud = { vendedor_id: string; gatilhos: Record<string, boolean>; etapa: string | null; objecoes: string | null; primeira_resposta_seg: number | null; tempo_medio_resposta_seg: number | null; respostas_sdr: number | null };
 
@@ -42,7 +42,7 @@ function tempos(l: Aud[]) {
 }
 type Atividade = { vendedor_id: string; ultima_msg_em: string | null; ultima_ligacao_em: string | null; conversas_hoje: number };
 
-const ZERO: Totais = { contatadas: 0, enviadas: 0, respostas: 0, ligacoes: 0, auditadas: 0, nota_soma: 0, agendados: 0, efetivas: 0, workshop: 0, imersao: 0 };
+const ZERO: Totais = { contatadas: 0, enviadas: 0, respostas: 0, ligacoes: 0, ligacoes_atendidas: 0, ligacoes_seg: 0, auditadas: 0, nota_soma: 0, agendados: 0, efetivas: 0, workshop: 0, imersao: 0 };
 const somar = (linhas: Dia[]): Totais => linhas.reduce((t, l) => {
   const o = { ...t }; for (const k of Object.keys(ZERO) as (keyof Totais)[]) o[k] = Number(o[k]) + Number(l[k] || 0); return o;
 }, { ...ZERO });
@@ -59,7 +59,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   const supabase = await createClient();
 
   const [rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt] = await Promise.all([
-    supabase.rpc("resumo_sdr", { p_from: de, p_to: ate }),
+    supabase.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
     supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
     supabase.from("profiles").select("id,nome,papel,ativo").order("nome"),
     supabase.rpc("ultima_atividade"),
@@ -103,7 +103,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
     id: s.id, nome: s.nome, cor: cor.get(s.id)!,
     pontos: dias.map((d): Ponto => {
       const l = linhas.find((x) => x.vendedor_id === s.id && x.dia === d);
-      return { contatadas: Number(l?.contatadas ?? 0), respostas: Number(l?.respostas ?? 0), ligacoes: Number(l?.ligacoes ?? 0), agendados: Number(l?.agendados ?? 0), nota: l && Number(l.auditadas) ? Number(l.nota_soma) / Number(l.auditadas) : null };
+      return { contatadas: Number(l?.contatadas ?? 0), respostas: Number(l?.respostas ?? 0), ligacoes: Number(l?.ligacoes_atendidas ?? 0), agendados: Number(l?.agendados ?? 0), nota: l && Number(l.auditadas) ? Number(l.nota_soma) / Number(l.auditadas) : null };
     }),
   }));
 
@@ -154,7 +154,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {kpi("Contatadas", total.contatadas, `${total.enviadas} mensagens enviadas`)}
         {kpi("Responderam", total.respostas, `${pct(total.respostas, total.contatadas)} das conversas`)}
-        {kpi("Ligações", total.ligacoes, "gravações enviadas")}
+        {kpi("Ligações atendidas", total.ligacoes_atendidas, total.ligacoes ? `de ${total.ligacoes} ligações · ${duracao(total.ligacoes_seg)} falando` : "ligações de WhatsApp e gravações enviadas")}
         {kpi("Marcações", total.agendados, `${total.workshop} workshop · ${total.imersao} imersão`)}
         {kpi("Nota média", nota(media(total)), `${total.auditadas} auditadas`, corNota(media(total)))}
       </div>
@@ -205,7 +205,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
                 </div>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-3 text-sm text-mute">
                   <span>Nota média <b className={corNota(media(t))}>{nota(media(t))}</b></span>
-                  <span>{t.auditadas} auditadas</span><span>{t.efetivas} conversas efetivas</span>
+                  <span>Ligações atendidas <b className="text-ink">{t.ligacoes_atendidas}</b> de {t.ligacoes}</span><span>{t.auditadas} auditadas</span><span>{t.efetivas} conversas efetivas</span>
                   <span>1ª resposta <b className={corDuracao(tSdr.get(s.id)?.primeira)}>{duracao(tSdr.get(s.id)?.primeira)}</b></span>
                   <span>Tempo médio <b className={corDuracao(tSdr.get(s.id)?.medio)}>{duracao(tSdr.get(s.id)?.medio)}</b></span>
                 </div>
@@ -307,10 +307,10 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
       {/* Tabela por SDR */}
       <section className="card overflow-x-auto">
         <h2 className="mb-3 text-xl font-bold">Resumo por SDR</h2>
-        <table className="w-full"><thead><tr><th className="th">SDR</th><th className="th">Contatadas</th><th className="th">Enviadas</th><th className="th">Respostas</th><th className="th">Taxa de resposta</th><th className="th">Ligações</th><th className="th">Auditadas</th><th className="th">Nota</th><th className="th">1ª resposta</th><th className="th">Tempo médio</th><th className="th">Agendados</th></tr></thead>
+        <table className="w-full"><thead><tr><th className="th">SDR</th><th className="th">Contatadas</th><th className="th">Enviadas</th><th className="th">Respostas</th><th className="th">Taxa de resposta</th><th className="th">Ligações atendidas</th><th className="th">Auditadas</th><th className="th">Nota</th><th className="th">1ª resposta</th><th className="th">Tempo médio</th><th className="th">Agendados</th></tr></thead>
           <tbody>{sdrs.map((s) => {
             const t = porSdr.get(s.id) ?? ZERO;
-            return <tr key={s.id}><td className="td"><span className="flex items-center gap-2 font-semibold"><Bolinha id={s.id} />{s.nome}</span></td><td className="td">{t.contatadas}</td><td className="td">{t.enviadas}</td><td className="td">{t.respostas}</td><td className="td">{pct(t.respostas, t.contatadas)}</td><td className="td">{t.ligacoes}</td><td className="td">{t.auditadas}</td><td className={`td font-bold ${corNota(media(t))}`}>{nota(media(t))}</td><td className={`td ${corDuracao(tSdr.get(s.id)?.primeira)}`}>{duracao(tSdr.get(s.id)?.primeira)}</td><td className={`td ${corDuracao(tSdr.get(s.id)?.medio)}`}>{duracao(tSdr.get(s.id)?.medio)}</td><td className="td">{t.agendados}</td></tr>;
+            return <tr key={s.id}><td className="td"><span className="flex items-center gap-2 font-semibold"><Bolinha id={s.id} />{s.nome}</span></td><td className="td">{t.contatadas}</td><td className="td">{t.enviadas}</td><td className="td">{t.respostas}</td><td className="td">{pct(t.respostas, t.contatadas)}</td><td className="td"><b>{t.ligacoes_atendidas}</b><span className="text-mute"> / {t.ligacoes}</span></td><td className="td">{t.auditadas}</td><td className={`td font-bold ${corNota(media(t))}`}>{nota(media(t))}</td><td className={`td ${corDuracao(tSdr.get(s.id)?.primeira)}`}>{duracao(tSdr.get(s.id)?.primeira)}</td><td className={`td ${corDuracao(tSdr.get(s.id)?.medio)}`}>{duracao(tSdr.get(s.id)?.medio)}</td><td className="td">{t.agendados}</td></tr>;
           })}{!sdrs.length && <tr><td className="td text-mute" colSpan={11}>Sem dados no período.</td></tr>}</tbody></table>
       </section>
 

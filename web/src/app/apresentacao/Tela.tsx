@@ -12,9 +12,9 @@ import Controles from "./Controles";
 // Metas diarias por SDR: 30 contatos (mensagem ou ligacao) e 6 marcacoes (workshop + imersao).
 const META_CONTATOS = 30, META_MARCACOES = 6;
 
-export type Linha = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; auditadas: number; nota_soma: number; efetivas: number; marcacoes: number; workshop: number; imersao: number };
+export type Linha = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; ligacoes_atendidas: number; ligacoes_seg: number; auditadas: number; nota_soma: number; efetivas: number; marcacoes: number; workshop: number; imersao: number };
 type Tot = Omit<Linha, "dia" | "vendedor_id">;
-const ZERO: Tot = { contatadas: 0, enviadas: 0, respostas: 0, ligacoes: 0, auditadas: 0, nota_soma: 0, efetivas: 0, marcacoes: 0, workshop: 0, imersao: 0 };
+const ZERO: Tot = { contatadas: 0, enviadas: 0, respostas: 0, ligacoes: 0, ligacoes_atendidas: 0, ligacoes_seg: 0, auditadas: 0, nota_soma: 0, efetivas: 0, marcacoes: 0, workshop: 0, imersao: 0 };
 const somar = (l: Linha[]): Tot => l.reduce((t, x) => { const o = { ...t }; for (const k of Object.keys(ZERO) as (keyof Tot)[]) o[k] = Number(o[k]) + Number(x[k] || 0); return o; }, { ...ZERO });
 const contatos = (t: Tot) => Number(t.contatadas) + Number(t.ligacoes);
 const media = (t: Tot) => (t.auditadas ? t.nota_soma / t.auditadas : null);
@@ -124,7 +124,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
             <div className="mt-[0.35em]"><Pill e={eMarc}>{fmtPct(time.marcacoes, metaMarc * nSdr)} da meta</Pill></div>
           </div>
         </div>
-        {kpi("Contatos", <>{contatos(time)} <span className="text-[0.55em] font-normal text-mute">/ {metaContatos * nSdr}</span></>, <>{time.contatadas} por mensagem · {time.ligacoes} ligações</>)}
+        {kpi("Contatos", <>{contatos(time)} <span className="text-[0.55em] font-normal text-mute">/ {metaContatos * nSdr}</span></>, <>{time.contatadas} por mensagem · {time.ligacoes} ligações ({time.ligacoes_atendidas} atendidas)</>)}
         {kpi("Responderam", time.respostas, <>{fmtPct(time.respostas, time.contatadas)} das conversas</>)}
         {kpi("Conversas efetivas", time.efetivas, <>{fmtPct(time.marcacoes, time.efetivas)} viraram marcação</>)}
         {kpi("Nota média", <span className={corNota(media(time))}>{nota(media(time))}</span>, <>{time.auditadas} conversas auditadas</>)}
@@ -242,7 +242,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
                     </div>
                   ); })}
                   </div>
-                  <div className="text-[0.72em] text-mute">{t.ligacoes} ligações · {t.enviadas} mensagens enviadas</div>
+                  <div className="text-[0.72em] text-mute">{t.ligacoes_atendidas} de {t.ligacoes} ligações atendidas · {t.enviadas} mensagens enviadas</div>
                 </div>
               );
             })}

@@ -16,7 +16,7 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
   const supabase = await createClient();
 
   const [rRes, rPerf] = await Promise.all([
-    supabase.rpc("resumo_sdr", { p_from: de, p_to: ate }),
+    supabase.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
     supabase.from("profiles").select("id,nome,papel,ativo").order("nome"),
   ]);
   return <Tela periodo={periodo} hoje={hoje} perfis={(rPerf.data ?? []) as DadosTela["perfis"]} linhas={(rRes.data ?? []) as Linha[]}
