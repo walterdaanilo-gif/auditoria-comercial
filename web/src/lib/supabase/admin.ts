@@ -8,3 +8,9 @@ export function createAdminClient() {
   if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY nao configurada");
   return createClient(SUPABASE_URL, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
+
+// Mensagem clara quando a service role key da Vercel esta errada (o Supabase responde 401)
+export const erroAdmin = (e: { message?: string; status?: number } | null | undefined, padrao: string) =>
+  e?.status === 401 || /invalid api key|unauthorized|jwt/i.test(e?.message ?? "")
+    ? "A chave secreta do Supabase configurada na Vercel (SUPABASE_SERVICE_ROLE_KEY) está inválida. Troque pela Secret key do projeto e faça Redeploy."
+    : e?.message || padrao;

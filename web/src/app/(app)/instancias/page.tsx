@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import AutoRefresh from "@/components/AutoRefresh";
 import { exigirAdmin, exigirGestor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, erroAdmin } from "@/lib/supabase/admin";
 import { fmtDataHora } from "@/lib/format";
 import type { Instancia } from "@/lib/types";
 import QrCard from "./QrCard";
@@ -25,7 +25,7 @@ async function criar(fd: FormData) {
   if (!vendedor_id) {
     const email = `vendedor-${crypto.randomUUID().slice(0, 12)}@sem-login.invalid`;
     const { data, error } = await admin.auth.admin.createUser({ email, password: crypto.randomUUID() + crypto.randomUUID(), email_confirm: true, user_metadata: { nome: vendedor } });
-    if (error || !data.user) redirect("/instancias?erro=" + encodeURIComponent("Não consegui cadastrar o vendedor: " + (error?.message ?? "erro desconhecido")));
+    if (error || !data.user) redirect("/instancias?erro=" + encodeURIComponent("Não consegui cadastrar o vendedor: " + erroAdmin(error, "erro desconhecido")));
     vendedor_id = data.user!.id;
     await admin.from("profiles").upsert({ id: vendedor_id, nome: vendedor, email, papel: "vendedor", ativo: true });
   }
