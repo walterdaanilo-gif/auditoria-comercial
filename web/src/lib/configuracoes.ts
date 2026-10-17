@@ -37,7 +37,7 @@ export type Settings = {
   venda_nao_conta: string[];
   oportunidade_conta: string[];
   oportunidade_nao_conta: string[];
-  meta_sdr_contatos: number;
+  meta_sdr_conversas: number;
   meta_sdr_marcacoes: number;
   meta_closer_reunioes: number | null;
   meta_closer_vendas: number | null;
@@ -144,7 +144,7 @@ export function validar(e: Estado): string[] {
   const envio = e.numeros.find((n) => n.id === s.instancia_envio_id)?.numero;
   if (envio && e.alertas.some((t) => normalizarTelefone(t) === normalizarTelefone(envio))) erros.push("O WhatsApp que envia não pode estar também em quem recebe: a mensagem cairia no \"conversar comigo mesmo\", sem notificação.");
   for (const t of [...e.alertas, ...e.ignorados]) if (!normalizarTelefone(t)) erros.push(`Telefone inválido: ${t}`);
-  if (!inteiro(s.meta_sdr_contatos, 0, 1000) || !inteiro(s.meta_sdr_marcacoes, 0, 1000)) erros.push("Metas do SDR: use números de 0 a 1000.");
+  if (!inteiro(s.meta_sdr_conversas, 0, 1000) || !inteiro(s.meta_sdr_marcacoes, 0, 1000)) erros.push("Metas do SDR: use números de 0 a 1000.");
   for (const m of [s.meta_closer_reunioes, s.meta_closer_vendas]) if (m !== null && !inteiro(m, 0, 1000)) erros.push("Metas do closer: use números de 0 a 1000.");
   for (const v of e.vendedores) if (!["sdr", "closer"].includes(v.funcao)) erros.push(`Função inválida para ${v.nome}.`);
   const rubricas: [string, Criterio[]][] = s.rubrica_modo === "personalizada" ? [["personalizada", e.rubricas.personalizada]] : [["do SDR", e.rubricas.sdr], ["do Closer", e.rubricas.closer]];

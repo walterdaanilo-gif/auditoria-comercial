@@ -9,8 +9,8 @@ import Controles from "./Controles";
 
 
 // Tela de TV (16:9, sem rolagem) no molde do painel comercial de referencia, nas cores Weevo. Grade 2x2.
-// Metas diarias por SDR: 30 contatos (mensagem ou ligacao) e 6 marcacoes (workshop + imersao).
-const META_CONTATOS = 30, META_MARCACOES = 6;
+// Metas diarias por SDR: 25 conversas trocadas (o lead respondeu) e 6 marcacoes (workshop + imersao).
+const META_CONVERSAS = 25, META_MARCACOES = 6;
 
 export type Linha = { dia: string; vendedor_id: string; contatadas: number; enviadas: number; respostas: number; ligacoes: number; ligacoes_atendidas: number; ligacoes_seg: number; auditadas: number; nota_soma: number; efetivas: number; marcacoes: number; workshop: number; imersao: number };
 type Tot = Omit<Linha, "dia" | "vendedor_id">;
@@ -52,7 +52,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
   const time = somar(linhas.filter((l) => cor.has(l.vendedor_id)));
   const uteis = diasUteis(de, ate);
   const nSdr = Math.max(sdrs.length, 1);
-  const metaContatos = META_CONTATOS * uteis, metaMarc = META_MARCACOES * uteis;
+  const metaConversas = META_CONVERSAS * uteis, metaMarc = META_MARCACOES * uteis;
   const dias = diasEntre(de, ate);
   const Bola = ({ id }: { id: string }) => <span className="inline-block h-[0.6em] w-[0.6em] shrink-0 rounded-full" style={{ background: cor.get(id) ?? "#9ba5a4" }} />;
 
@@ -73,12 +73,12 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
   const ultimo = serie[serie.length - 1] ?? { real: 0, meta: 0 };
   const passos = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(topo * f));
 
-  // ---- calendario de contatos (ultimos 31 dias do periodo) ----
+  // ---- calendario de conversas trocadas (ultimos 31 dias do periodo) ----
   const diasCal = dias.slice(-31);
-  const contatosDia = (id: string, d: string) => linhas.filter((l) => l.vendedor_id === id && l.dia === d).reduce((n, l) => n + Number(l.contatadas) + Number(l.ligacoes), 0);
+  const conversasDia = (id: string, d: string) => linhas.filter((l) => l.vendedor_id === id && l.dia === d).reduce((n, l) => n + Number(l.respostas), 0);
   const celula = (id: string, d: string) => {
-    const n = contatosDia(id, d);
-    if (n >= META_CONTATOS) return { cls: "bg-brand", n };
+    const n = conversasDia(id, d);
+    if (n >= META_CONVERSAS) return { cls: "bg-brand", n };
     if (n > 0) return { cls: "bg-[linear-gradient(135deg,#6dcfc0_0_50%,#2b3433_50%_100%)]", n };
     if (!util(d)) return { cls: "border border-dashed border-line", n };
     if (d === hoje) return { cls: "border-[1.5px] border-dashed border-brand", n };
@@ -124,8 +124,8 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
             <div className="mt-[0.35em]"><Pill e={eMarc}>{fmtPct(time.marcacoes, metaMarc * nSdr)} da meta</Pill></div>
           </div>
         </div>
-        {kpi("Contatos", <>{contatos(time)} <span className="text-[0.55em] font-normal text-mute">/ {metaContatos * nSdr}</span></>, <>{time.contatadas} por mensagem · {time.ligacoes} ligações ({time.ligacoes_atendidas} atendidas)</>)}
-        {kpi("Responderam", time.respostas, <>{fmtPct(time.respostas, time.contatadas)} das conversas</>)}
+        {kpi("Contatos", contatos(time), <>{time.contatadas} por mensagem · {time.ligacoes} ligações ({time.ligacoes_atendidas} atendidas)</>)}
+        {kpi("Conversas trocadas", <>{time.respostas} <span className="text-[0.55em] font-normal text-mute">/ {metaConversas * nSdr}</span></>, <>{fmtPct(time.respostas, time.contatadas)} das conversas</>)}
         {kpi("Conversas efetivas", time.efetivas, <>{fmtPct(time.marcacoes, time.efetivas)} viraram marcação</>)}
         {kpi("Nota média", <span className={corNota(media(time))}>{nota(media(time))}</span>, <>{time.auditadas} conversas auditadas</>)}
       </section>
@@ -161,18 +161,18 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
           </div>
         </Painel>
 
-        <Painel titulo="Contatos por dia" nota={`meta ${META_CONTATOS} por dia útil`}>
+        <Painel titulo="Conversas trocadas por dia" nota={`meta ${META_CONVERSAS} por dia útil`}>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="w-full border-separate border-spacing-[2px] tabular-nums">
               <thead><tr><th />{diasCal.map((d) => <th key={d} className={`text-center text-[0.68em] font-medium leading-tight ${d === hoje ? "text-brand" : "text-mute"}`}>{d.slice(8, 10)}</th>)}<th /></tr></thead>
               <tbody>
                 {sdrs.map((s) => {
                   const passados = diasCal.filter((d) => util(d) && d <= hoje);
-                  const batidos = passados.filter((d) => contatosDia(s.id, d) >= META_CONTATOS).length;
+                  const batidos = passados.filter((d) => conversasDia(s.id, d) >= META_CONVERSAS).length;
                   return (
                     <tr key={s.id}>
                       <th className="whitespace-nowrap pr-1 text-left text-[0.95em] font-bold"><span className="flex items-center gap-[0.4em]"><Bola id={s.id} />{s.nome}</span></th>
-                      {diasCal.map((d) => { const c = celula(s.id, d); return <td key={d}><span className={`block h-[1.6em] min-w-[0.8em] rounded-[5px] ${c.cls}`} title={`${s.nome} · ${ddmm(d)}: ${c.n} contatos`} /></td>; })}
+                      {diasCal.map((d) => { const c = celula(s.id, d); return <td key={d}><span className={`block h-[1.6em] min-w-[0.8em] rounded-[5px] ${c.cls}`} title={`${s.nome} · ${ddmm(d)}: ${c.n} conversas trocadas`} /></td>; })}
                       <td className="whitespace-nowrap pl-1 text-right"><Pill e={estado(batidos, passados.length)}>{batidos}/{passados.length}</Pill></td>
                     </tr>
                   );
@@ -184,7 +184,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
           <div className="mt-[0.55em] flex flex-wrap gap-x-[1em] gap-y-1 text-[0.75em] text-mute">
             <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm bg-brand" />bateu a meta</span>
             <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm bg-[linear-gradient(135deg,#6dcfc0_0_50%,#2b3433_50%_100%)]" />abaixo da meta</span>
-            <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm border-2 border-bad" />dia útil sem contato</span>
+            <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm border-2 border-bad" />dia útil sem conversa</span>
             <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm border border-dashed border-line" />fim de semana</span>
           </div>
         </Painel>
@@ -194,8 +194,8 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
             {sdrs.map((s) => {
               const t = porSdr.get(s.id) ?? ZERO; const ct = contatos(t);
               const etapas: { n: string; v: number; alvo: number | null; base: number; conv?: string }[] = [
-                { n: "Contatos", v: ct, alvo: metaContatos, base: metaContatos },
-                { n: "Responderam", v: t.respostas, alvo: null, base: Math.max(t.contatadas, 1), conv: `${fmtPct(t.respostas, t.contatadas)} das conversas` },
+                { n: "Contatos", v: ct, alvo: null, base: Math.max(ct, 1) },
+                { n: "Conversas trocadas", v: t.respostas, alvo: metaConversas, base: metaConversas, conv: `${fmtPct(t.respostas, t.contatadas)} das conversas` },
                 { n: "Efetivas", v: t.efetivas, alvo: null, base: Math.max(t.respostas, 1), conv: `${fmtPct(t.efetivas, t.respostas)} de quem respondeu` },
                 { n: "Marcações", v: t.marcacoes, alvo: metaMarc, base: metaMarc, conv: `${fmtPct(t.marcacoes, t.efetivas)} das efetivas` },
               ];
@@ -224,8 +224,8 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas }: DadosTela)
             {sdrs.map((s) => {
               const t = porSdr.get(s.id) ?? ZERO; const ct = contatos(t); const nm = media(t);
               const linhasP: { n: string; q: string; v: number; alvo: number | null; base: number }[] = [
-                { n: "Contatos", q: `${ct} / ${metaContatos}`, v: ct, alvo: metaContatos, base: metaContatos },
-                { n: "Responderam", q: `${t.respostas} · ${fmtPct(t.respostas, t.contatadas)}`, v: t.respostas, alvo: null, base: Math.max(t.contatadas, 1) },
+                { n: "Contatos", q: `${ct}`, v: ct, alvo: null, base: Math.max(ct, 1) },
+                { n: "Conversas trocadas", q: `${t.respostas} / ${metaConversas}`, v: t.respostas, alvo: metaConversas, base: metaConversas },
                 { n: "Marcações", q: `${t.marcacoes} / ${metaMarc}`, v: t.marcacoes, alvo: metaMarc, base: metaMarc },
                 { n: "Nota média", q: nota(nm), v: nm ?? 0, alvo: 7, base: 10 },
               ];

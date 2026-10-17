@@ -620,7 +620,8 @@ create table if not exists public.audit_settings (
   venda_nao_conta        text[] not null default '{}',
   oportunidade_conta     text[] not null default '{}',
   oportunidade_nao_conta text[] not null default '{}',
-  meta_sdr_contatos      integer not null default 30,
+  meta_sdr_contatos      integer not null default 30, -- nao usada: a meta do SDR passou a ser conversas trocadas
+  meta_sdr_conversas     integer not null default 25,
   meta_sdr_marcacoes     integer not null default 6,
   meta_closer_reunioes   integer,
   meta_closer_vendas     integer,
@@ -633,6 +634,8 @@ insert into public.audit_settings (id, regras_criticas, venda_conta, venda_nao_c
   array['Lead quer saber datas ou valores do workshop','Lead quer saber sobre a imersão','Reunião de imersão marcada','Reunião de implementação marcada'],
   array['Curiosidade sem intenção','Conversa pessoal sem contexto comercial','Spam ou bot'])
 on conflict (id) do nothing;
+-- Meta do SDR: conversas trocadas (o lead respondeu) no lugar de contatos
+alter table public.audit_settings add column if not exists meta_sdr_conversas integer not null default 25;
 
 -- Numeros que nunca sao auditados automaticamente (55 + DDD + numero)
 create table if not exists public.numeros_ignorados (

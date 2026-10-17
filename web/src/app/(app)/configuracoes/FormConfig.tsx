@@ -298,7 +298,7 @@ export default function FormConfig({ inicial }: { inicial: Estado }) {
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border border-line p-4">
             <div className="label mb-1">Metas diárias do SDR</div>
-            <Linha titulo="Contatos" sub="Mensagens e ligações"><Numero valor={s.meta_sdr_contatos} onChange={(v) => set({ meta_sdr_contatos: v ?? 0 })} sufixo="por dia" /></Linha>
+            <Linha titulo="Conversas trocadas" sub="O lead respondeu à mensagem do SDR"><Numero valor={s.meta_sdr_conversas} onChange={(v) => set({ meta_sdr_conversas: v ?? 0 })} sufixo="por dia" /></Linha>
             <Linha titulo="Marcações" sub="Workshop + reunião de imersão"><Numero valor={s.meta_sdr_marcacoes} onChange={(v) => set({ meta_sdr_marcacoes: v ?? 0 })} sufixo="por dia" /></Linha>
           </div>
           <div className="rounded-2xl border border-line p-4">

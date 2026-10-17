@@ -1,11 +1,11 @@
 // Metas diarias por SDR (definidas pelo Walter em 2026-10-16).
-// "Contatos" soma conversas em que o SDR mandou mensagem e ligacoes feitas: o contato pode ser por qualquer um dos dois.
-// "Responderam" = conversas em que o lead respondeu (sem meta propria: mostra o numero e a taxa sobre os contatos).
-// "Marcacoes" = workshop + reuniao de imersao, meta unica de 6 por dia util.
+// "Contatos" soma conversas em que o SDR mandou mensagem e ligacoes feitas (sem meta propria: mostra o numero).
+// "Conversas trocadas" = conversas em que o SDR mandou mensagem e o lead respondeu (campo respostas), meta de 25 por dia util.
+// "Marcacoes" = workshop + reuniao de imersao, meta de 6 por dia util.
 // Confirmados e presentes ficam de fora: o sistema ainda nao mede isso.
 export const METAS = [
-  { chave: "contatos", rotulo: "Contatos (ligação ou mensagem)", meta: 30, soma: ["contatadas", "ligacoes"] },
-  { chave: "respostas", rotulo: "Responderam", meta: null, soma: ["respostas"] },
+  { chave: "contatos", rotulo: "Contatos (ligação ou mensagem)", meta: null, soma: ["contatadas", "ligacoes"] },
+  { chave: "respostas", rotulo: "Conversas trocadas", meta: 25, soma: ["respostas"] },
   { chave: "agendados", rotulo: "Marcações (workshop + imersão)", meta: 6, soma: ["agendados"] },
 ] as const;
 export type ChaveMeta = (typeof METAS)[number]["soma"][number];

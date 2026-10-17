@@ -43,7 +43,7 @@ export async function montarRelatorio(db, de, ate) {
 
   const pessoas = perfis.map(p => {
     const ls = linhas.filter(l => l.vendedor_id === p.id), r = resumo(auds.filter(a => a.vendedor_id === p.id));
-    const contatos = somar(ls, "contatadas") + somar(ls, "ligacoes"), marc = somar(ls, "marcacoes");
+    const marc = somar(ls, "marcacoes");
     const closer = p.funcao === "closer";
     const vendas = closer ? r.imersao : r.wCupom + r.wPagos;
     const partes = [`⭐ ${nota(r.nota)}`];
@@ -51,7 +51,7 @@ export async function montarRelatorio(db, de, ate) {
       partes.push(`${r.reunioesImpl}${s.meta_closer_reunioes != null ? `/${s.meta_closer_reunioes * uteis}` : ""} reuniões de implementação`);
       partes.push(`${r.imersao}${s.meta_closer_vendas != null ? `/${s.meta_closer_vendas * uteis}` : ""} imersões${r.imValor ? ` (${brl(r.imValor)})` : ""}`);
     } else {
-      partes.push(`${contatos}/${(s.meta_sdr_contatos ?? 30) * uteis} contatos`);
+      partes.push(`${somar(ls, "respostas")}/${(s.meta_sdr_conversas ?? 25) * uteis} conversas trocadas`);
       partes.push(`${marc}/${(s.meta_sdr_marcacoes ?? 6) * uteis} marcações`);
       if (vendas) partes.push(`${insc(vendas)} no workshop`);
     }
