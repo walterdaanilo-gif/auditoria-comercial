@@ -173,8 +173,8 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {kpi("Tempo de primeira resposta", duracao(tTime.primeira), tTime.conversas ? `média de ${tTime.conversas} conversa${tTime.conversas > 1 ? "s" : ""} auditada${tTime.conversas > 1 ? "s" : ""}: do 1º contato do lead até o SDR responder` : "aparece quando houver conversas auditadas", corDuracao(tTime.primeira))}
-        {kpi("Tempo médio de resposta", duracao(tTime.medio), "toda vez que o lead escreve, quanto o SDR leva para responder", corDuracao(tTime.medio))}
+        {kpi("Tempo de primeira resposta", duracao(tTime.primeira), tTime.conversas ? `média de ${tTime.conversas} conversa${tTime.conversas > 1 ? "s" : ""} auditada${tTime.conversas > 1 ? "s" : ""}: do 1º contato do lead até o vendedor responder` : "aparece quando houver conversas auditadas", corDuracao(tTime.primeira))}
+        {kpi("Tempo médio de resposta", duracao(tTime.medio), "toda vez que o lead escreve, quanto o vendedor leva para responder", corDuracao(tTime.medio))}
       </div>
 
       {/* Metas por SDR */}
