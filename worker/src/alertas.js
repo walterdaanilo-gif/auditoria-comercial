@@ -20,8 +20,9 @@ const brl = n => Number(n || 0).toLocaleString("pt-BR", { style: "currency", cur
 // Eventos de uma auditoria, do mais urgente para o menos
 export function eventosDe(a, funcao) {
   const ev = [];
-  if (a.venda && a.venda_tipo === "imersao") ev.push({ chave: "venda_imersao", tipo: "venda", titulo: "💎 *Imersão fechada*", extra: a.venda_valor ? brl(a.venda_valor) : "valor não informado", evidencia: a.venda_evidencia });
-  if (a.venda && a.venda_tipo !== "imersao") ev.push({ chave: "venda_workshop", tipo: "venda", titulo: "💰 *Inscrição no workshop*", extra: a.venda_cupom ? "cupom de convite · R$ 0" : a.venda_valor != null ? brl(a.venda_valor) : "valor não informado", evidencia: a.venda_evidencia });
+  // dinheiro = entrou dinheiro de verdade (imersao fechada ou workshop pago; cupom de R$ 0 nao conta)
+  if (a.venda && a.venda_tipo === "imersao") ev.push({ chave: "venda_imersao", tipo: "venda", dinheiro: true, produto: "IMERSÃO FECHADA", titulo: "💎 *Imersão fechada*", extra: a.venda_valor ? brl(a.venda_valor) : "valor não informado", evidencia: a.venda_evidencia });
+  if (a.venda && a.venda_tipo !== "imersao") ev.push({ chave: "venda_workshop", tipo: "venda", dinheiro: !a.venda_cupom && Number(a.venda_valor ?? 1) > 0, produto: "WORKSHOP PAGO", titulo: "💰 *Inscrição no workshop*", extra: a.venda_cupom ? "cupom de convite · R$ 0" : a.venda_valor != null ? brl(a.venda_valor) : "valor não informado", evidencia: a.venda_evidencia });
   const reuniao = a.oportunidade_tipo === "reuniao_implementacao" || a.oportunidade_tipo === "reuniao_imersao" ? a.oportunidade_tipo
     : a.agendou && a.tipo_agendamento === "imersao" ? (funcao === "closer" ? "reuniao_implementacao" : "reuniao_imersao") : null;
   if (reuniao === "reuniao_implementacao") ev.push({ chave: reuniao, tipo: "marcacao", titulo: "🤝 *Reunião de implementação marcada*", evidencia: a.oportunidade_evidencia });
@@ -30,8 +31,34 @@ export function eventosDe(a, funcao) {
   return ev;
 }
 
+// Venda com dinheiro entrando: aviso bem animado, com variacoes para nao ficar repetitivo
+const ABERTURAS = [
+  n => `🚨🚨🚨 HEIIIIIIIIIIIIIIIII 🚨🚨🚨\n💸💸 PINGOU UMA VENDA DE ${n}!!! 💸💸`,
+  n => `🔔🔔🔔 PLIM PLIM PLIIIIIIIM 🔔🔔🔔\n💰💰 CAIU DINHEIRO COM ${n}!!! 💰💰`,
+  n => `🚀🚀🚀 ALERTA DE VENDAAAAAAA 🚀🚀🚀\n🤑🤑 ${n} ACABOU DE FECHAR!!! 🤑🤑`,
+  n => `📣📣📣 PAREM TUDOOOOOOO 📣📣📣\n💵💵 TEM VENDA DE ${n} NA ÁREA!!! 💵💵`,
+  n => `🎰🎰🎰 JACKPOOOOOOT 🎰🎰🎰\n🤑🤑 ${n} FEZ O CAIXA TOCAR!!! 🤑🤑`,
+];
+const FECHOS = [n => "🍾🎉 BORA, TIME! QUEM É O PRÓXIMO? 🎉🍾", n => `👏👏👏 APLAUSOS PARA ${n}! 👏👏👏`, n => "🔥🔥 QUE DIA, MEU POVO! 🔥🔥", n => `🏆 ${n} ON FIRE! 🏆`];
+const sorteio = (id, l) => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return l[h % l.length]; };
+export function textoVenda(e, { vendedor, lead, conversaId, outros = [] }) {
+  const n = String(vendedor).split(" ")[0].toUpperCase();
+  return [
+    sorteio(conversaId, ABERTURAS)(n),
+    ``,
+    `🔥 ${e.produto} · ${e.extra} 🔥`,
+    `👤 Lead: ${lead}`,
+    ...(e.evidencia ? [`💬 "${String(e.evidencia).slice(0, 200)}"`] : []),
+    ...(outros.length ? [`➕ Também: ${outros.map(o => o.titulo.replace(/\*/g, "")).join(" · ")}`] : []),
+    ``,
+    sorteio(conversaId + "f", FECHOS)(n),
+    `Ver conversa: ${SITE}/conversas/${conversaId}`,
+  ].join("\n");
+}
+
 // Uma mensagem por conversa: o evento mais urgente no titulo e os outros na linha "Também"
 export function textoAlerta(e, { vendedor, funcao, lead, conversaId, formato, outros = [] }) {
+  if (e.dinheiro) return textoVenda(e, { vendedor, lead, conversaId, outros });
   const quem = `${vendedor}${funcao ? ` (${funcao === "closer" ? "Closer" : "SDR"})` : ""} com ${lead}`;
   const tambem = outros.length ? `Também: ${outros.map(o => o.titulo.replace(/\*/g, "")).join(" · ")}` : null;
   if (formato === "resumido") return `${e.titulo}${e.extra ? ` (${e.extra})` : ""}: ${quem}${tambem ? `\n${tambem}` : ""}`;

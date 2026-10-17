@@ -49,8 +49,15 @@ assert.equal(await rapida(), 1);
 assert.equal(enviados.length, 1, "nao repete aviso do mesmo evento");
 
 // formato resumido e o closer
-assert.match(textoAlerta(eventosDe({ venda: true, venda_tipo: "imersao", venda_valor: 4800 }, "closer")[0], { vendedor: "Carla", funcao: "closer", lead: "João", conversaId: "x", formato: "resumido" }), /^💎 \*Imersão fechada\* \(R\$\s4\.800\): Carla \(Closer\) com João$/);
+assert.equal(textoAlerta(eventosDe({ agendou: true, tipo_agendamento: "imersao" }, "closer")[0], { vendedor: "Carla", funcao: "closer", lead: "João", conversaId: "x", formato: "resumido" }), "🤝 *Reunião de implementação marcada*: Carla (Closer) com João");
 assert.equal(eventosDe({ agendou: true, tipo_agendamento: "imersao" }, "closer")[0].chave, "reuniao_implementacao");
+
+// venda com dinheiro (imersao fechada / workshop pago): aviso animado; cupom R$ 0 continua no formato normal
+const festa = textoAlerta(eventosDe({ venda: true, venda_tipo: "imersao", venda_valor: 4800, venda_evidencia: "mandei o pix" }, "closer")[0], { vendedor: "Walter Danilo", funcao: "closer", lead: "João", conversaId: "abc", formato: "resumido" });
+assert.match(festa, /WALTER/); assert.match(festa, /IMERSÃO FECHADA · R\$\s4\.800/); assert.match(festa, /💬 "mandei o pix"/); assert.match(festa, /Ver conversa: .*\/conversas\/abc/);
+assert.equal(eventosDe({ venda: true, venda_tipo: "workshop", venda_valor: 197 }, "sdr")[0].dinheiro, true);
+assert.equal(eventosDe({ venda: true, venda_tipo: "workshop", venda_cupom: true, venda_valor: 0 }, "sdr")[0].dinheiro, false);
+console.log("\n--- exemplo do aviso de venda com dinheiro ---\n" + festa + "\n");
 
 // marcacoes desligadas: nao avisa, mas registra para nao avisar depois
 db.tables.audit_settings[0].alerta_marcacao = false;
