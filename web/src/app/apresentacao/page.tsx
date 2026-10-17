@@ -20,16 +20,19 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
     supabase.from("profiles").select("id,nome,papel,ativo,funcao").order("nome"),
     supabase.from("instancias_whatsapp").select("vendedor_id"),
     supabase.from("audit_settings").select("meta_sdr_conversas,meta_sdr_marcacoes").eq("id", 1).maybeSingle(),
-    supabase.from("auditorias").select("venda_tipo,venda_valor,venda_cupom,conversas!inner(data,canal)").eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
+    supabase.from("auditorias").select("vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(data,canal)").eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
   ]);
-  const ven = (rVen.data ?? []) as { venda_tipo: string | null; venda_valor: number | null; venda_cupom: boolean }[];
+  // vendas dos SDRs (Closer fica fora desta tela)
+  const equipe = [...new Set((rInst.data ?? []).map((i) => i.vendedor_id as string))];
+  const sdrIds = new Set(((rPerf.data ?? []) as DadosTela["perfis"]).filter((p) => p.ativo && (p.papel === "vendedor" || equipe.includes(p.id)) && p.funcao !== "closer").map((p) => p.id));
+  const ven = ((rVen.data ?? []) as { vendedor_id: string; venda_tipo: string | null; venda_valor: number | null; venda_cupom: boolean }[]).filter((v) => sdrIds.has(v.vendedor_id));
   const vendas: Vendas = {
     inscricoes: ven.filter((v) => v.venda_tipo !== "imersao").length, cupom: ven.filter((v) => v.venda_tipo !== "imersao" && v.venda_cupom).length,
     imersoes: ven.filter((v) => v.venda_tipo === "imersao").length, valor: ven.reduce((s, v) => s + Number(v.venda_cupom ? 0 : v.venda_valor || 0), 0),
   };
   const cfg = rCfg.data as { meta_sdr_conversas: number | null; meta_sdr_marcacoes: number | null } | null;
   return <Tela periodo={periodo} hoje={hoje} perfis={(rPerf.data ?? []) as DadosTela["perfis"]} linhas={(rRes.data ?? []) as Linha[]}
-    equipe={[...new Set((rInst.data ?? []).map((i) => i.vendedor_id as string))]} vendas={vendas}
+    equipe={equipe} vendas={vendas}
     metas={{ conversas: cfg?.meta_sdr_conversas ?? 25, marcacoes: cfg?.meta_sdr_marcacoes ?? 6 }}
     atualizadoEm={new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })} />;
 }

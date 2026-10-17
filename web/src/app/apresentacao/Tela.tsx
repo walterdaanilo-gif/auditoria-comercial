@@ -49,7 +49,8 @@ export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; 
 export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, metas, vendas }: DadosTela) {
   const { de, ate } = periodo;
   const META_CONVERSAS = metas.conversas, META_MARCACOES = metas.marcacoes;
-  const sdrs = perfis.filter((p) => p.ativo && (p.papel === "vendedor" || equipe.includes(p.id)));
+  // Tela dos SDRs: so quem e SDR (Closer fica fora, as metas daqui sao de conversas e marcacoes)
+  const sdrs = perfis.filter((p) => p.ativo && (p.papel === "vendedor" || equipe.includes(p.id)) && p.funcao !== "closer");
   const cor = new Map(sdrs.map((s, i) => [s.id, corSdr(i)]));
   const porSdr = new Map(sdrs.map((s) => [s.id, somar(linhas.filter((l) => l.vendedor_id === s.id))]));
   const time = somar(linhas.filter((l) => cor.has(l.vendedor_id)));
@@ -182,7 +183,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
                 })}
               </tbody>
             </table>
-            {!sdrs.length && <p className="text-[0.85em] text-mute">Cadastre os vendedores na aba WhatsApp (nome, função e conexão).</p>}
+            {!sdrs.length && <p className="text-[0.85em] text-mute">Nenhum SDR ainda. Cadastre na aba WhatsApp com a função SDR.</p>}
           </div>
           <div className="mt-[0.55em] flex flex-wrap gap-x-[1em] gap-y-1 text-[0.75em] text-mute">
             <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm bg-brand" />bateu a meta</span>

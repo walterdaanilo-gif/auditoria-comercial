@@ -61,7 +61,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   const [rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt, rMetas] = await Promise.all([
     supabase.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
     supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,venda,venda_tipo,venda_valor,venda_cupom,oportunidade,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
-    supabase.from("profiles").select("id,nome,papel,ativo").order("nome"),
+    supabase.from("profiles").select("id,nome,papel,ativo,funcao").order("nome"),
     supabase.rpc("ultima_atividade"),
     supabase.from("instancias_whatsapp").select("vendedor_id,status,numero"),
     supabase.from("mensagens").select("id,vendedor_id,remetente,texto,tipo,transcricao,enviada_em,conversa_id,conversas!inner(contato,contato_nome,canal)").neq("conversas.canal", "importada").order("enviada_em", { ascending: false }).limit(15),
@@ -75,7 +75,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   ]);
 
   // SDRs = perfis com papel vendedor. A cor segue a pessoa (ordem por nome na lista completa), nunca o filtro.
-  const perfis = (rPerf.data ?? []) as { id: string; nome: string; papel: string; ativo: boolean }[];
+  const perfis = (rPerf.data ?? []) as { id: string; nome: string; papel: string; ativo: boolean; funcao: string | null }[];
   const nomes = new Map(perfis.map((x) => [x.id, x.nome]));
   // equipe = quem tem WhatsApp cadastrado (o cadastro do vendedor e feito na aba WhatsApp) ou papel vendedor
   const donos = new Set(((rInst.data ?? []) as { vendedor_id: string }[]).map((i) => i.vendedor_id));
@@ -184,7 +184,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
           <span className="text-sm text-mute">Meta diária × {uteis} dia{uteis > 1 ? "s" : ""} út{uteis > 1 ? "eis" : "il"} no período</span>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          {sdrs.map((s) => {
+          {sdrs.filter((s) => s.funcao !== "closer").map((s) => {
             const t = porSdr.get(s.id) ?? ZERO; const sit = situacao(s.id); const w = inst.get(s.id);
             return (
               <div key={s.id} className="card">
@@ -339,7 +339,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
 
       {/* Tabela por SDR */}
       <section className="card overflow-x-auto">
-        <h2 className="mb-3 text-xl font-bold">Resumo por SDR</h2>
+        <h2 className="mb-3 text-xl font-bold">Resumo por vendedor</h2>
         <table className="w-full"><thead><tr><th className="th">SDR</th><th className="th">Contatadas</th><th className="th">Enviadas</th><th className="th">Respostas</th><th className="th">Taxa de resposta</th><th className="th">Ligações atendidas</th><th className="th">Auditadas</th><th className="th">Nota</th><th className="th">1ª resposta</th><th className="th">Tempo médio</th><th className="th">Agendados</th></tr></thead>
           <tbody>{sdrs.map((s) => {
             const t = porSdr.get(s.id) ?? ZERO;
