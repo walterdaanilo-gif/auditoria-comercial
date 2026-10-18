@@ -1,5 +1,6 @@
 import { cfg, today, addDays, dayOf } from "./config.js";
 import { enviarWhatsApp } from "./envio.js";
+import { ASSINATURA } from "./alertas.js";
 
 const SITE = (process.env.SITE_URL || "https://auditoria-comercial-omega.vercel.app").replace(/\/$/, "");
 const brl = n => Number(n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -60,8 +61,12 @@ export async function montarRelatorio(db, de, ate) {
   }).sort((a, b) => (b.nota ?? -1) - (a.nota ?? -1) || b.vendas - a.vendas);
 
   const titulo = de === ate ? `do dia ${ddmm(ate)}` : `de ${ddmm(de)} a ${ddmm(ate)}`;
+  const hora = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: cfg.tz }).format(new Date()));
+  const saudacao = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
   return [
-    `📊 *Relatório ${titulo} · Weevo*`,
+    ASSINATURA,
+    ``,
+    `${saudacao}, gestão! 👋 Aqui vai o resumo ${titulo} da Weevo:`,
     ``,
     `✅ Auditorias: ${t.n} · ⭐ Nota média: ${nota(t.nota)}`,
     `⏱️ 1ª resposta: ${dur(t.primeira)} · tempo médio de resposta: ${dur(t.medio)}`,
@@ -71,10 +76,11 @@ export async function montarRelatorio(db, de, ate) {
     `🎯 Oportunidades: ${t.oport}`,
     ...(t.criticos ? [`⚠️ Alertas críticos: ${t.criticos} (veja no sistema)`] : []),
     ``,
-    `🏆 *Por vendedor*`,
-    ...(pessoas.length ? pessoas.map((p, i) => `${i + 1}. ${p.nome} (${p.funcao}): ${p.linha}`) : ["Sem atividade no período."]),
+    `🏆 *Destaques por vendedor*`,
+    ...(pessoas.length ? pessoas.map((p, i) => `${i + 1}. ${p.nome} (${p.funcao}): ${p.linha}`) : ["Hoje o time não teve atividade registrada."]),
     ``,
-    `Detalhes: ${SITE}`,
+    t.wPagos + t.imersao > 0 ? `Dia com dinheiro no caixa! 💸 Bom descanso e até amanhã 🚀` : `Bom descanso e até amanhã, que amanhã tem mais 🚀`,
+    `👉 Detalhes no painel: ${SITE}`,
   ].join("\n");
 }
 

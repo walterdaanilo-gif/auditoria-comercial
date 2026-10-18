@@ -31,6 +31,9 @@ export function eventosDe(a, funcao) {
   return ev;
 }
 
+// Toda mensagem para a gestao sai assinada pelo robo do Auditor
+export const ASSINATURA = "🤖 *Aviso do Elon Musk*";
+
 // Venda com dinheiro entrando: aviso bem animado, com variacoes para nao ficar repetitivo
 const ABERTURAS = [
   n => `🚨🚨🚨 HEIIIIIIIIIIIIIIIII 🚨🚨🚨\n💸💸 PINGOU UMA VENDA DE ${n}!!! 💸💸`,
@@ -41,28 +44,48 @@ const ABERTURAS = [
 ];
 const FECHOS = [n => "🍾🎉 BORA, TIME! QUEM É O PRÓXIMO? 🎉🍾", n => `👏👏👏 APLAUSOS PARA ${n}! 👏👏👏`, n => "🔥🔥 QUE DIA, MEU POVO! 🔥🔥", n => `🏆 ${n} ON FIRE! 🏆`];
 const sorteio = (id, l) => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return l[h % l.length]; };
+const verConversa = id => `👉 Dá uma olhada na conversa: ${SITE}/conversas/${id}`;
+const tambemDe = outros => (outros.length ? `➕ E ainda: ${outros.map(o => o.titulo.replace(/\*/g, "")).join(" · ")}` : null);
 export function textoVenda(e, { vendedor, lead, conversaId, outros = [] }) {
   const n = String(vendedor).split(" ")[0].toUpperCase();
   return [
+    ASSINATURA,
+    ``,
     sorteio(conversaId, ABERTURAS)(n),
     ``,
     `🔥 ${e.produto} · ${e.extra} 🔥`,
     `👤 Lead: ${lead}`,
     ...(e.evidencia ? [`💬 "${String(e.evidencia).slice(0, 200)}"`] : []),
-    ...(outros.length ? [`➕ Também: ${outros.map(o => o.titulo.replace(/\*/g, "")).join(" · ")}`] : []),
+    ...(outros.length ? [tambemDe(outros)] : []),
     ``,
     sorteio(conversaId + "f", FECHOS)(n),
-    `Ver conversa: ${SITE}/conversas/${conversaId}`,
+    verConversa(conversaId),
   ].join("\n");
 }
 
-// Uma mensagem por conversa: o evento mais urgente no titulo e os outros na linha "Também"
+// O que aconteceu, contado de um jeito leve (sem cara de recado de sistema)
+function frase(e, quem, lead) {
+  if (e.chave === "venda_workshop") return `${quem} garantiu mais uma inscrição no workshop com ${lead} 🎟️`;
+  if (e.chave === "reuniao_implementacao") return `${quem} acabou de marcar uma reunião de implementação com ${lead} 🤝`;
+  if (e.chave === "reuniao_imersao") return `${quem} acabou de marcar uma reunião de imersão com ${lead} 📅`;
+  return `${lead} mostrou interesse ${e.chave === "interesse_imersao" ? "na imersão" : "no workshop"} conversando com ${quem} 🎯`;
+}
+
+// Uma mensagem por conversa: o evento mais importante na frase principal e os outros na linha "E ainda"
 export function textoAlerta(e, { vendedor, funcao, lead, conversaId, formato, outros = [] }) {
   if (e.dinheiro) return textoVenda(e, { vendedor, lead, conversaId, outros });
-  const quem = `${vendedor}${funcao ? ` (${funcao === "closer" ? "Closer" : "SDR"})` : ""} com ${lead}`;
-  const tambem = outros.length ? `Também: ${outros.map(o => o.titulo.replace(/\*/g, "")).join(" · ")}` : null;
-  if (formato === "resumido") return `${e.titulo}${e.extra ? ` (${e.extra})` : ""}: ${quem}${tambem ? `\n${tambem}` : ""}`;
-  return [`${e.titulo}${e.extra ? ` · ${e.extra}` : ""}`, quem, ...(e.evidencia ? [`"${String(e.evidencia).slice(0, 220)}"`] : []), ...(tambem ? [tambem] : []), `Ver conversa: ${SITE}/conversas/${conversaId}`].join("\n");
+  const quem = `${vendedor}${funcao ? ` (${funcao === "closer" ? "Closer" : "SDR"})` : ""}`;
+  const principal = frase(e, quem, lead);
+  if (formato === "resumido") return `${ASSINATURA}: ${principal}${e.extra ? ` (${e.extra})` : ""}${outros.length ? `\n${tambemDe(outros)}` : ""}`;
+  const abertura = e.tipo === "oportunidade" ? "Oi, gestão! 👋 Fica de olho nessa:" : "Oi, gestão! 👋 Passando pra contar uma boa notícia:";
+  return [
+    ASSINATURA, ``, abertura, principal,
+    ...(e.extra ? [e.chave === "venda_workshop" && /cupom/.test(e.extra) ? `🎟️ Convite com cupom · R$ 0` : `💰 ${e.extra}`] : []),
+    ...(e.evidencia ? [`💬 "${String(e.evidencia).slice(0, 220)}"`] : []),
+    ...(outros.length ? [tambemDe(outros)] : []),
+    ...(e.tipo === "oportunidade" ? [`Vale um empurrãozinho para virar marcação 😉`] : []),
+    ``, verConversa(conversaId),
+  ].join("\n");
 }
 
 // Depois de cada auditoria: avisa no WhatsApp do gestor o que e novo nesta conversa (uma mensagem, a do evento mais urgente).

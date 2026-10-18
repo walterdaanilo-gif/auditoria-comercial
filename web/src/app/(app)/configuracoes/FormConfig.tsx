@@ -175,22 +175,24 @@ function EditorRubrica({ lista, onChange }: { lista: Criterio[]; onChange: (l: C
 
 // ---------- previews ----------
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const ELON = "🤖 *Aviso do Elon Musk*";
 function previewAlerta(s: Settings) {
   const det = s.alerta_formato === "detalhado";
   const blocos: string[] = [];
   if (s.alerta_venda) blocos.push(det
-    ? `💰 *Inscrição no workshop* · cupom de convite · ${brl(0)}\nRuan (SDR) com Maria Silva\n"Show, pode me inscrever então!"\nVer conversa: <link>`
-    : `💰 *Inscrição no workshop* (cupom de convite · ${brl(0)}): Ruan (SDR) com Maria Silva`);
+    ? `${ELON}\n\nOi, gestão! 👋 Passando pra contar uma boa notícia:\nRuan (SDR) garantiu mais uma inscrição no workshop com Maria Silva 🎟️\n🎟️ Convite com cupom · ${brl(0)}\n💬 "Show, pode me inscrever então!"\n\n👉 Dá uma olhada na conversa: <link>`
+    : `${ELON}: Ruan (SDR) garantiu mais uma inscrição no workshop com Maria Silva 🎟️ (cupom de convite · ${brl(0)})`);
+  if (s.alerta_venda) blocos.push(`${ELON}\n\n🚨🚨🚨 HEIIIIIIIIIIIIIIIII 🚨🚨🚨\n💸💸 PINGOU UMA VENDA DE WALTER!!! 💸💸\n\n🔥 IMERSÃO FECHADA · ${brl(4800)} 🔥\n👤 Lead: João Souza\n💬 "mandei o pix"\n\n🍾🎉 BORA, TIME! QUEM É O PRÓXIMO? 🎉🍾\n👉 Dá uma olhada na conversa: <link>`);
   if (s.alerta_marcacao) blocos.push(det
-    ? `📅 *Reunião de imersão marcada*\nNick (SDR) com João Souza\n"Combinado, quinta às 19h com o closer"\nVer conversa: <link>`
-    : `📅 *Reunião de imersão marcada*: Nick (SDR) com João Souza`);
+    ? `${ELON}\n\nOi, gestão! 👋 Passando pra contar uma boa notícia:\nNick (SDR) acabou de marcar uma reunião de imersão com João Souza 📅\n💬 "Combinado, quinta às 19h"\n\n👉 Dá uma olhada na conversa: <link>`
+    : `${ELON}: Nick (SDR) acabou de marcar uma reunião de imersão com João Souza 📅`);
   if (s.alerta_oportunidade) blocos.push(det
-    ? `🎯 *Oportunidade*: interesse na imersão\nNick (SDR) com Paula Lima\n"Quero entender melhor a imersão"\nVer conversa: <link>`
-    : `🎯 *Oportunidade*: interesse na imersão: Nick (SDR) com Paula Lima`);
-  return blocos.length ? blocos.join("\n\n") : "Nenhum aviso marcado: os telefones recebem só o relatório do dia.";
+    ? `${ELON}\n\nOi, gestão! 👋 Fica de olho nessa:\nPaula Lima mostrou interesse na imersão conversando com Nick (SDR) 🎯\n💬 "Quero entender melhor a imersão"\nVale um empurrãozinho para virar marcação 😉\n\n👉 Dá uma olhada na conversa: <link>`
+    : `${ELON}: Paula Lima mostrou interesse na imersão conversando com Nick (SDR) 🎯`);
+  return blocos.length ? blocos.join("\n\n─────────\n\n") : "Nenhum aviso marcado: os telefones recebem só o relatório do dia.";
 }
 function previewResumo() {
-  return `📊 *Relatório do dia 17/10 · Weevo*\n\n✅ Auditorias: 12 · ⭐ Nota média: 7,8\n⏱️ 1ª resposta: 4min · tempo médio de resposta: 12min\n📞 Ligações atendidas: 9 de 15\n💰 Workshop: 5 inscrições (3 com cupom ${brl(0)} · 2 pagas ${brl(394)})\n💎 Imersão: 1 fechada · ${brl(4800)}\n🎯 Oportunidades: 7\n\n🏆 *Por vendedor*\n1. Ruan (SDR): ⭐ 8,4 · 28/30 contatos · 5/6 marcações · 3 inscrições no workshop · 📞 5 atendidas\n2. Nick (SDR): ⭐ 7,6 · 31/30 contatos · 4/6 marcações · 2 inscrições no workshop · 📞 4 atendidas\n\nDetalhes: <link do sistema>`;
+  return `${ELON}\n\nBoa noite, gestão! 👋 Aqui vai o resumo do dia 17/10 da Weevo:\n\n✅ Auditorias: 12 · ⭐ Nota média: 7,8\n⏱️ 1ª resposta: 4min · tempo médio de resposta: 12min\n📞 Ligações atendidas: 9 de 15\n💰 Workshop: 5 inscrições (3 com cupom ${brl(0)} · 2 pagas ${brl(394)})\n💎 Imersão: 1 fechada · ${brl(4800)}\n🎯 Oportunidades: 7\n\n🏆 *Destaques por vendedor*\n1. Ruan (SDR): ⭐ 8,4 · 22/25 conversas trocadas · 5/6 marcações · 3 inscrições no workshop · 📞 5 atendidas\n2. Nick (SDR): ⭐ 7,6 · 26/25 conversas trocadas · 4/6 marcações · 2 inscrições no workshop · 📞 4 atendidas\n\nDia com dinheiro no caixa! 💸 Bom descanso e até amanhã 🚀\n👉 Detalhes no painel: <link do sistema>`;
 }
 
 // ---------- card em acordeao ----------
