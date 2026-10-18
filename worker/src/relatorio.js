@@ -1,6 +1,6 @@
 import { cfg, today, addDays, dayOf } from "./config.js";
 import { enviarWhatsApp } from "./envio.js";
-import { ASSINATURA } from "./alertas.js";
+import { ASSINATURA, sorteio } from "./alertas.js";
 
 const SITE = (process.env.SITE_URL || "https://auditoria-comercial-omega.vercel.app").replace(/\/$/, "");
 const brl = n => Number(n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -63,10 +63,20 @@ export async function montarRelatorio(db, de, ate) {
   const titulo = de === ate ? `do dia ${ddmm(ate)}` : `de ${ddmm(de)} a ${ddmm(ate)}`;
   const hora = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: cfg.tz }).format(new Date()));
   const saudacao = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
+  const dinheiro = t.wPagos + t.imersao > 0;
+  const abre = sorteio(ate, [
+    `${saudacao}, gestão! 😄 Passando pra fechar o dia com o resumo ${titulo}. Bora ver como o time foi:`,
+    `${saudacao}, pessoal! 👋 Chegou a hora do resumo ${titulo}. Pega o café e vem comigo ☕`,
+    `${saudacao}, gestão! ${de === ate ? "Dia encerrado" : "Dias encerrados"}, então lá vai o resumo ${titulo} da Weevo 📊`,
+  ]);
+  const top = pessoas.find(p => p.nota != null);
+  const fecha = dinheiro
+    ? sorteio(ate, ["Hoje o caixa cantou! 💸 Parabéns, time. Bom descanso e amanhã tem mais 🚀", "Dia com dinheiro entrando, assim que eu gosto! 💸 Descansem que amanhã a gente repete 🚀", "Que dia, hein! 💸 Orgulho desse time. Até amanhã 🚀"])
+    : sorteio(ate, ["Hoje foi dia de plantar, amanhã a gente colhe 🌱 Bom descanso, time!", "Amanhã é dia de virar o jogo 💪 Bom descanso, pessoal!", "Valeu pelo dia, time! Amanhã tem mais e vai ser melhor 🚀"]);
   return [
     ASSINATURA,
     ``,
-    `${saudacao}, gestão! 👋 Aqui vai o resumo ${titulo} da Weevo:`,
+    abre,
     ``,
     `✅ Auditorias: ${t.n} · ⭐ Nota média: ${nota(t.nota)}`,
     `⏱️ 1ª resposta: ${dur(t.primeira)} · tempo médio de resposta: ${dur(t.medio)}`,
@@ -76,11 +86,12 @@ export async function montarRelatorio(db, de, ate) {
     `🎯 Oportunidades: ${t.oport}`,
     ...(t.criticos ? [`⚠️ Alertas críticos: ${t.criticos} (veja no sistema)`] : []),
     ``,
-    `🏆 *Destaques por vendedor*`,
+    `🏆 *Como cada um foi*`,
     ...(pessoas.length ? pessoas.map((p, i) => `${i + 1}. ${p.nome} (${p.funcao}): ${p.linha}`) : ["Hoje o time não teve atividade registrada."]),
+    ...(top ? [``, `👑 Destaque ${de === ate ? "do dia" : "do período"}: *${top.nome}*, com nota ${nota(top.nota)}. Manda aquele parabéns! 👏`] : []),
     ``,
-    t.wPagos + t.imersao > 0 ? `Dia com dinheiro no caixa! 💸 Bom descanso e até amanhã 🚀` : `Bom descanso e até amanhã, que amanhã tem mais 🚀`,
-    `👉 Detalhes no painel: ${SITE}`,
+    fecha,
+    `Quer ver tudo com calma? Tá no painel 👉 ${SITE}`,
   ].join("\n");
 }
 

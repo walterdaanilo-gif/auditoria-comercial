@@ -40,7 +40,7 @@ assert.equal(await rapida(), 1);
 assert.equal(conv.auditar_rapido, false);
 assert.equal(enviados.length, 1);
 assert.equal(enviados[0].tel, "5584999990000"); assert.equal(enviados[0].inst, "inst-walter");
-assert.match(enviados[0].texto, /^🤖 \*Aviso do Elon Musk\*\n\nOi, gestão! 👋 Passando pra contar uma boa notícia:\nRuan \(SDR\) garantiu mais uma inscrição no workshop com Maria Silva 🎟️\n🎟️ Convite com cupom · R\$ 0\n💬 "Show, pode me inscrever então!"\n➕ E ainda: 📅 Reunião de imersão marcada\n\n👉 Dá uma olhada na conversa: .*\/conversas\//);
+{ const t = enviados[0].texto; assert.match(t, /^🚀 \*Aviso do Elon Musk\*\n\n/); assert.match(t, /Ruan \(SDR\)/); assert.match(t, /Maria Silva/); assert.match(t, /workshop/); assert.match(t, /cupom de convite/); assert.match(t, /"Show, pode me inscrever então!"/); assert.match(t, /E não parou por aí: reunião de imersão marcada também!/); assert.match(t, /\/conversas\//); assert.doesNotMatch(t, /Lead:|💬|➕/); }
 assert.deepEqual(db.tables.auditorias[0].alertas_enviados.sort(), ["reuniao_imersao", "venda_workshop"]);
 
 // mesma conversa reauditada com os mesmos eventos: nao repete
@@ -49,12 +49,12 @@ assert.equal(await rapida(), 1);
 assert.equal(enviados.length, 1, "nao repete aviso do mesmo evento");
 
 // formato resumido e o closer
-assert.equal(textoAlerta(eventosDe({ agendou: true, tipo_agendamento: "imersao" }, "closer")[0], { vendedor: "Carla", funcao: "closer", lead: "João", conversaId: "x", formato: "resumido" }), "🤖 *Aviso do Elon Musk*: Carla (Closer) acabou de marcar uma reunião de implementação com João 🤝");
+{ const r = textoAlerta(eventosDe({ agendou: true, tipo_agendamento: "imersao" }, "closer")[0], { vendedor: "Carla", funcao: "closer", lead: "João", conversaId: "x", formato: "resumido" }); assert.match(r, /^🚀 \*Aviso do Elon Musk\*: /); assert.match(r, /Carla \(Closer\)/); assert.match(r, /reunião de implementação/i); assert.match(r, /João/); assert.ok(!r.includes("\n"), r); }
 assert.equal(eventosDe({ agendou: true, tipo_agendamento: "imersao" }, "closer")[0].chave, "reuniao_implementacao");
 
 // venda com dinheiro (imersao fechada / workshop pago): aviso animado; cupom R$ 0 continua no formato normal
 const festa = textoAlerta(eventosDe({ venda: true, venda_tipo: "imersao", venda_valor: 4800, venda_evidencia: "mandei o pix" }, "closer")[0], { vendedor: "Walter Danilo", funcao: "closer", lead: "João", conversaId: "abc", formato: "resumido" });
-assert.match(festa, /^🤖 \*Aviso do Elon Musk\*\n\n/); assert.match(festa, /WALTER/); assert.match(festa, /IMERSÃO FECHADA · R\$\s4\.800/); assert.match(festa, /💬 "mandei o pix"/); assert.match(festa, /Dá uma olhada na conversa: .*\/conversas\/abc/);
+assert.match(festa, /^🚀 \*Aviso do Elon Musk\*\n\n/); assert.match(festa, /WALTER/); assert.match(festa, /IMERSÃO FECHADA · R\$\s4\.800/); assert.match(festa, /"mandei o pix"/); assert.match(festa, /Quem comprou: /); assert.match(festa, /👉 .*\/conversas\/abc/);
 assert.equal(eventosDe({ venda: true, venda_tipo: "workshop", venda_valor: 197 }, "sdr")[0].dinheiro, true);
 assert.equal(eventosDe({ venda: true, venda_tipo: "workshop", venda_cupom: true, venda_valor: 0 }, "sdr")[0].dinheiro, false);
 console.log("\n--- exemplo do aviso de venda com dinheiro ---\n" + festa + "\n");
