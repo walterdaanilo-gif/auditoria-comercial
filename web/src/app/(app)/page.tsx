@@ -160,7 +160,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
       <AutoRefresh segundos={60} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h1 className="page-title">Painel de atendimento</h1><p className="page-sub">O que o time está fazendo, comparado com as metas. Atualiza sozinho na hora em que sai uma auditoria, ligação ou mensagem nova.</p></div>
-        {gestor && <Suspense><AbasPainel atual="painel" /></Suspense>}
+        <Suspense><AbasPainel atual="painel" /></Suspense>
       </div>
 
       <FiltroPeriodo base="/" periodo={periodo} vendedores={gestor ? sdrsTodos.map((s) => [s.id, s.nome]) : undefined} vendedor={filtroV} />

@@ -1,5 +1,5 @@
 import { exigirPerfil } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { hojeBR } from "@/lib/format";
 import { lerPeriodo } from "@/lib/periodo";
 import { Tela, type DadosTela, type Linha, type Vendas, type WorkshopPor } from "./Tela";
@@ -13,7 +13,9 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
   const periodo = lerPeriodo(sp, "semana");
   const { de, ate } = periodo;
   const hoje = hojeBR();
-  const supabase = await createClient();
+  // Apresentacao e do time todo, inclusive para o vendedor: le pelo servidor com a service role (so numeros
+  // agregados e nomes vao para a tela; conversas e mensagens dos outros continuam bloqueadas pela RLS)
+  const supabase = createAdminClient();
 
   const [rRes, rPerf, rInst, rCfg, rVen] = await Promise.all([
     supabase.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
