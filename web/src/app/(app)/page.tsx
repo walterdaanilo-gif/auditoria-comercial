@@ -62,7 +62,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   const [rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt, rMetas] = await Promise.all([
     supabase.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
     supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,venda,venda_tipo,venda_valor,venda_cupom,oportunidade,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
-    supabase.from("profiles").select("id,nome,papel,ativo,funcao").order("nome"),
+    supabase.from("profiles").select("id,nome,papel,ativo,funcao,foto_url").order("nome"),
     supabase.rpc("ultima_atividade"),
     supabase.from("instancias_whatsapp").select("vendedor_id,status,numero"),
     supabase.from("mensagens").select("id,vendedor_id,remetente,texto,tipo,transcricao,enviada_em,conversa_id,conversas!inner(contato,contato_nome,canal)").neq("conversas.canal", "importada").order("enviada_em", { ascending: false }).limit(15),
@@ -76,7 +76,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   ]);
 
   // SDRs = perfis com papel vendedor. A cor segue a pessoa (ordem por nome na lista completa), nunca o filtro.
-  const perfis = (rPerf.data ?? []) as { id: string; nome: string; papel: string; ativo: boolean; funcao: string | null }[];
+  const perfis = (rPerf.data ?? []) as { id: string; nome: string; papel: string; ativo: boolean; funcao: string | null; foto_url: string | null }[];
   const nomes = new Map(perfis.map((x) => [x.id, x.nome]));
   // equipe = quem tem WhatsApp cadastrado (o cadastro do vendedor e feito na aba WhatsApp) ou papel vendedor
   const donos = new Set(((rInst.data ?? []) as { vendedor_id: string }[]).map((i) => i.vendedor_id));
@@ -141,7 +141,11 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
       <span>{l}</span><div className="h-2.5 overflow-hidden rounded-full bg-track"><div className="h-full rounded-full bg-brand" style={{ width: tot ? `${Math.round((v / tot) * 100)}%` : "0%" }} /></div><span className="text-mute">{pct(v, tot)}</span>
     </div>
   ));
-  const Bolinha = ({ id }: { id: string }) => <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: cor.get(id) ?? "#9ba5a4" }} />;
+  // foto da pessoa (Configuracoes > Equipe) com contorno na cor dela; sem foto, a bolinha de cor
+  const foto = new Map(perfis.map((p) => [p.id, p.foto_url]));
+  const Bolinha = ({ id, tam = 22 }: { id: string; tam?: number }) => foto.get(id)
+    ? <img src={foto.get(id)!} alt="" className="shrink-0 rounded-full object-cover" style={{ width: tam, height: tam, boxShadow: `0 0 0 2px ${cor.get(id) ?? "#9ba5a4"}` }} />
+    : <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: cor.get(id) ?? "#9ba5a4" }} />;
   const contato = (c: { contato: string; contato_nome: string | null } | null) => (c ? c.contato_nome || telefone(c.contato) : "—");
 
   // Situacao ao vivo de um SDR: icone + texto (nunca so cor)
@@ -190,7 +194,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
             return (
               <div key={s.id} className="card">
                 <div className="mb-4 flex flex-wrap items-center gap-3">
-                  <Bolinha id={s.id} /><b className="text-lg">{s.nome}</b>
+                  <Bolinha id={s.id} tam={40} /><b className="text-lg">{s.nome}</b>
                   <span className={`flex items-center gap-1 text-sm ${sit.cls}`}><sit.Icone size={15} />{sit.txt}</span>
                   <span className={`ml-auto chip ${w?.status === "conectado" ? "border-ok text-ok" : "border-line text-mute"}`}>WhatsApp {w?.status === "conectado" ? "conectado" : w ? w.status.replace("_", " ") : "não criado"}</span>
                 </div>
@@ -280,7 +284,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
               const sit = situacao(s.id); const a = ativ.get(s.id);
               return (
                 <div key={s.id} className="rounded-2xl border border-line bg-bg/40 p-3 text-sm">
-                  <div className="flex items-center gap-2"><Bolinha id={s.id} /><b>{s.nome}</b></div>
+                  <div className="flex items-center gap-2"><Bolinha id={s.id} tam={30} /><b>{s.nome}</b></div>
                   <div className={`mt-1 flex items-center gap-1 ${sit.cls}`}><sit.Icone size={14} />{sit.txt}</div>
                   <div className="mt-1 text-xs text-mute">
                     {a?.ultima_msg_em ? `Última mensagem às ${fmtHora(a.ultima_msg_em)}` : "Nenhuma mensagem"} · {Number(a?.conversas_hoje ?? 0)} conversas hoje

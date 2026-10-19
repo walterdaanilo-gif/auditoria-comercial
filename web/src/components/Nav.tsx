@@ -13,7 +13,9 @@ export default function Nav({ perfil }: { perfil: Perfil }) {
         <Sino usuarioId={perfil.id} />
         <form action="/logout" method="post"><button className="text-[15px] font-semibold text-ink hover:text-brand">Sair</button></form>
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-track text-sm font-bold">{iniciais(perfil.nome)}</span>
+          {perfil.foto_url
+            ? <img src={perfil.foto_url} alt={`Foto de ${perfil.nome}`} className="h-10 w-10 rounded-full object-cover ring-2 ring-line" />
+            : <span className="grid h-10 w-10 place-items-center rounded-full bg-track text-sm font-bold">{iniciais(perfil.nome)}</span>}
           <div className="hidden leading-tight sm:block">
             <div className="text-[15px] font-bold">{perfil.nome}</div>
             <div className="text-xs text-mute">{PAPEL[perfil.papel] ?? perfil.papel}</div>

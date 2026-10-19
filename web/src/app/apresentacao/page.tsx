@@ -19,7 +19,7 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
 
   const [rRes, rPerf, rInst, rCfg, rVen] = await Promise.all([
     supabase.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
-    supabase.from("profiles").select("id,nome,papel,ativo,funcao").order("nome"),
+    supabase.from("profiles").select("id,nome,papel,ativo,funcao,foto_url").order("nome"),
     supabase.from("instancias_whatsapp").select("vendedor_id"),
     supabase.from("audit_settings").select("meta_sdr_conversas,meta_sdr_marcacoes").eq("id", 1).maybeSingle(),
     supabase.from("auditorias").select("vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(data,canal)").eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),

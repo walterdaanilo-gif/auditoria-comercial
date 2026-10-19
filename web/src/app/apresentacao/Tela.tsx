@@ -48,7 +48,7 @@ function Painel({ titulo, nota: sub, children, className = "" }: { titulo: strin
 }
 
 // equipe = quem tem WhatsApp cadastrado (o cadastro do vendedor e feito na aba WhatsApp) ou papel vendedor
-export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean; funcao?: string | null }[]; linhas: Linha[]; equipe: string[]; metas: { conversas: number; marcacoes: number }; vendas: Vendas; workshopPor: WorkshopPor };
+export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean; funcao?: string | null; foto_url?: string | null }[]; linhas: Linha[]; equipe: string[]; metas: { conversas: number; marcacoes: number }; vendas: Vendas; workshopPor: WorkshopPor };
 
 // Desenho da tela, separado da busca de dados (permite previa com dados de exemplo)
 export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, metas, vendas, workshopPor }: DadosTela) {
@@ -65,7 +65,11 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
   const nSdr = Math.max(sdrs.length, 1);
   const metaConversas = META_CONVERSAS * uteis, metaMarc = META_MARCACOES * uteis;
   const dias = diasEntre(de, ate);
-  const Bola = ({ id }: { id: string }) => <span className="inline-block h-[0.6em] w-[0.6em] shrink-0 rounded-full" style={{ background: cor.get(id) ?? "#9ba5a4" }} />;
+  // foto da pessoa (Configuracoes > Equipe) com contorno na cor dela; sem foto, a bolinha de cor
+  const foto = new Map(sdrs.map((p) => [p.id, p.foto_url ?? null]));
+  const Bola = ({ id, tam = "1.5em" }: { id: string; tam?: string }) => foto.get(id)
+    ? <img src={foto.get(id)!} alt="" className="shrink-0 rounded-full object-cover" style={{ width: tam, height: tam, boxShadow: `0 0 0 2px ${cor.get(id) ?? "#9ba5a4"}` }} />
+    : <span className="inline-block h-[0.6em] w-[0.6em] shrink-0 rounded-full" style={{ background: cor.get(id) ?? "#9ba5a4" }} />;
 
   // ---- marcacoes acumuladas x meta (time) ----
   const metaDia = (d: string) => (util(d) ? META_MARCACOES * nSdr : 0);
@@ -120,7 +124,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
             )}
           </div>
           <div className="mt-[0.4em] flex flex-wrap gap-x-[1.2em] gap-y-1 border-t border-line pt-[0.45em] text-[0.82em]">
-            {sdrs.map((s) => { const t = porSdr.get(s.id) ?? ZERO; return <span key={s.id} className="flex items-center gap-[0.4em] whitespace-nowrap"><Bola id={s.id} /><b>{s.nome}</b> {t.marcacoes} <span className="text-mute">({t.workshop} workshop · {t.imersao} reunião de impl.)</span></span>; })}
+            {sdrs.map((s) => { const t = porSdr.get(s.id) ?? ZERO; return <span key={s.id} className="flex items-center gap-[0.4em] whitespace-nowrap"><Bola id={s.id} tam="1.3em" /><b>{s.nome}</b> {t.marcacoes} <span className="text-mute">({t.workshop} workshop · {t.imersao} reunião de impl.)</span></span>; })}
           </div>
         </Painel>
   );
@@ -138,7 +142,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
               );
               return (
                 <div key={s.id}>
-                  <div className="mb-[0.35em] flex items-center gap-[0.45em] text-[1.1em] font-bold"><Bola id={s.id} />{s.nome}</div>
+                  <div className="mb-[0.35em] flex items-center gap-[0.45em] text-[1.1em] font-bold"><Bola id={s.id} tam="1.8em" />{s.nome}</div>
                   <div className="grid grid-cols-2 gap-[1.2em]">
                     {barra("Conversas trocadas", Number(t.respostas), metaConversas)}
                     {barra("Marcações", Number(t.marcacoes), metaMarc)}
@@ -166,7 +170,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
               ];
               return (
                 <div key={s.id} className="flex min-w-0 flex-col justify-between">
-                  <h3 className="mb-[0.35em] flex items-center gap-[0.4em] truncate text-[1.25em] font-extrabold tracking-[-0.035em]"><Bola id={s.id} />{s.nome}</h3>
+                  <h3 className="mb-[0.35em] flex items-center gap-[0.4em] truncate text-[1.25em] font-extrabold tracking-[-0.035em]"><Bola id={s.id} tam="1.6em" />{s.nome}</h3>
                   {etapas.map((e) => { const est = estado(e.v, e.alvo); const larg = Math.min(100, (e.v / Math.max(e.base, 1)) * 100); return (
                     <div key={e.n} className="grid gap-[0.2em] py-[0.25em] tabular-nums">
                       <div className="flex justify-between gap-1.5 text-[0.85em]"><span className="text-side-text/80">{e.n}</span><span><b>{e.v}</b>{e.alvo !== null && <span className="text-mute"> / {e.alvo}</span>}</span></div>
