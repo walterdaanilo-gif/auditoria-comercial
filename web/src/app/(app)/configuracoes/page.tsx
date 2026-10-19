@@ -16,7 +16,7 @@ export default async function Configuracoes({ searchParams: spP }: { searchParam
     db.from("criterios_rubrica").select("rubrica,chave,nome,descricao,peso,ativo,posicao").order("posicao"),
     db.from("numeros_ignorados").select("telefone").order("criado_em"),
     db.from("telefones_alerta").select("telefone").order("criado_em"),
-    db.from("profiles").select("id,nome,funcao,ativo").order("nome"),
+    db.from("profiles").select("id,nome,funcao,ativo,foto_url").order("nome"),
     db.from("instancias_whatsapp").select("id,vendedor_id,nome,numero,status,horario").order("nome"),
     db.rpc("status_agenda"),
   ]);
@@ -28,7 +28,7 @@ export default async function Configuracoes({ searchParams: spP }: { searchParam
   const inicial: Estado = {
     settings: settings as Settings,
     // vendedor = quem tem conexao de WhatsApp (o cadastro e feito na aba WhatsApp)
-    vendedores: (rPerf.data ?? []).filter((p) => (rInst.data ?? []).some((i) => i.vendedor_id === p.id)).map(({ id, nome, funcao, ativo }) => ({ id, nome, funcao, ativo })) as Vendedor[],
+    vendedores: (rPerf.data ?? []).filter((p) => (rInst.data ?? []).some((i) => i.vendedor_id === p.id)).map(({ id, nome, funcao, ativo, foto_url }) => ({ id, nome, funcao, ativo, foto_url })) as Vendedor[],
     numeros: (rInst.data ?? []) as Numero[],
     ignorados: (rIgn.data ?? []).map((x) => x.telefone as string),
     alertas: (rAl.data ?? []).map((x) => x.telefone as string),

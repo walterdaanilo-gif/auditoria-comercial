@@ -938,3 +938,9 @@ create table if not exists public.crm_corte (
   corte timestamptz not null,
   criado_em timestamptz not null default now());
 alter table public.crm_corte enable row level security;
+
+-- Foto de perfil do vendedor (pasta publica "fotos" no Storage; envio so pelo servidor, por gestor/admin)
+alter table public.profiles add column if not exists foto_url text;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('fotos', 'fotos', true, 2097152, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update set public = true, file_size_limit = 2097152, allowed_mime_types = array['image/jpeg','image/png','image/webp'];

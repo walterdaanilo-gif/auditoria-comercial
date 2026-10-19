@@ -56,3 +56,28 @@ export async function desconectarAgenda(): Promise<void> {
   await createAdminClient().from("google_agenda").upsert({ id: 1, email: null, refresh_token: null, conectado_em: null, erro: null });
   revalidatePath("/configuracoes");
 }
+
+// Foto do perfil do vendedor: guardada no Storage (pasta publica "fotos") e o endereco vai para profiles.foto_url
+const TIPOS_FOTO: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+export async function enviarFoto(fd: FormData): Promise<{ ok: boolean; url?: string; erro?: string }> {
+  await exigirGestor();
+  const id = String(fd.get("id") || "");
+  const arq = fd.get("foto");
+  if (!id || !(arq instanceof File) || !arq.size) return { ok: false, erro: "Escolha uma imagem." };
+  if (!TIPOS_FOTO[arq.type]) return { ok: false, erro: "Use JPG, PNG ou WEBP." };
+  if (arq.size > 2 * 1024 * 1024) return { ok: false, erro: "A foto pode ter no máximo 2 MB." };
+  const admin = createAdminClient();
+  const caminho = `perfis/${id}.${TIPOS_FOTO[arq.type]}`;
+  const up = await admin.storage.from("fotos").upload(caminho, Buffer.from(await arq.arrayBuffer()), { contentType: arq.type, upsert: true });
+  if (up.error) return { ok: false, erro: up.error.message };
+  const url = `${admin.storage.from("fotos").getPublicUrl(caminho).data.publicUrl}?v=${Date.now()}`; // ?v= troca a foto na hora (sem cache)
+  const { error } = await admin.from("profiles").update({ foto_url: url }).eq("id", id);
+  if (error) return { ok: false, erro: error.message };
+  revalidatePath("/configuracoes"); revalidatePath("/conversas");
+  return { ok: true, url };
+}
+export async function removerFoto(id: string): Promise<void> {
+  await exigirGestor();
+  await createAdminClient().from("profiles").update({ foto_url: null }).eq("id", id);
+  revalidatePath("/configuracoes"); revalidatePath("/conversas");
+}

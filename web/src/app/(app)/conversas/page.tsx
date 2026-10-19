@@ -32,7 +32,7 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
   if (gestor && sp.v) q = q.eq("vendedor_id", sp.v);
   const [{ data }, { data: perfis }, { data: insts }, { data: porVend }] = await Promise.all([
     q,
-    supabase.from("profiles").select("id,nome,papel,funcao,ativo").order("nome"),
+    supabase.from("profiles").select("id,nome,papel,funcao,ativo,foto_url").order("nome"),
     gestor ? supabase.from("instancias_whatsapp").select("vendedor_id") : Promise.resolve({ data: [] as any[] }),
     // contagem por pessoa no periodo (para os perfis), sem o filtro de vendedor
     gestor ? supabase.from("conversas").select("vendedor_id").gte("data", periodo.de).lte("data", periodo.ate).limit(10000) : Promise.resolve({ data: [] as any[] }),
@@ -40,7 +40,7 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
   const nomes = new Map<string, string>((perfis ?? []).map((x: any) => [x.id, x.nome]));
   // Perfis do time (quem tem WhatsApp cadastrado ou papel vendedor), na mesma ordem e cor do painel
   const donos = new Set(((insts ?? []) as { vendedor_id: string }[]).map((i) => i.vendedor_id));
-  const time = ((perfis ?? []) as { id: string; nome: string; papel: string; funcao: string | null; ativo: boolean }[]).filter((x) => x.ativo && (x.papel === "vendedor" || donos.has(x.id)));
+  const time = ((perfis ?? []) as { id: string; nome: string; papel: string; funcao: string | null; ativo: boolean; foto_url: string | null }[]).filter((x) => x.ativo && (x.papel === "vendedor" || donos.has(x.id)));
   const qtd = new Map<string, number>();
   for (const r of (porVend ?? []) as { vendedor_id: string }[]) qtd.set(r.vendedor_id, (qtd.get(r.vendedor_id) ?? 0) + 1);
   const totalPeriodo = (porVend ?? []).length;
@@ -68,13 +68,15 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
 
       {gestor && (
         <div className="flex flex-wrap gap-3" role="tablist" aria-label="Conversas por vendedor">
-          {[{ id: "", nome: "Todos", funcao: null as string | null, cor: "#6dcfc0", n: totalPeriodo }, ...time.map((x, i) => ({ id: x.id, nome: x.nome, funcao: x.funcao, cor: corSdr(i), n: qtd.get(x.id) ?? 0 }))].map((p) => {
+          {[{ id: "", nome: "Todos", funcao: null as string | null, foto: null as string | null, cor: "#6dcfc0", n: totalPeriodo }, ...time.map((x, i) => ({ id: x.id, nome: x.nome, funcao: x.funcao, foto: x.foto_url, cor: corSdr(i), n: qtd.get(x.id) ?? 0 }))].map((p) => {
             const on = (sp.v ?? "") === p.id;
             const href = "/conversas?" + new URLSearchParams({ ...(periodo.p === "livre" ? { de: periodo.de, ate: periodo.ate } : { p: periodo.p }), ...(p.id ? { v: p.id } : {}), aba });
             return (
               <Link key={p.id || "todos"} href={href} role="tab" aria-selected={on}
                 className={`flex min-w-[150px] items-center gap-3 rounded-2xl border px-4 py-3 transition ${on ? "border-side-edge bg-side-active" : "border-line hover:border-side-edge"}`}>
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-extrabold text-bg" style={{ background: p.cor }}>{p.id ? p.nome.slice(0, 1).toUpperCase() : <MessagesSquare size={18} />}</span>
+                {p.foto
+                  ? <img src={p.foto} alt={`Foto de ${p.nome}`} className="h-10 w-10 shrink-0 rounded-full object-cover" style={{ boxShadow: `0 0 0 2px ${p.cor}` }} />
+                  : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-extrabold text-bg" style={{ background: p.cor }}>{p.id ? p.nome.slice(0, 1).toUpperCase() : <MessagesSquare size={18} />}</span>}
                 <span className="min-w-0">
                   <b className={`block truncate ${on ? "text-ink" : ""}`}>{p.nome}</b>
                   <span className="text-xs text-mute">{p.id ? `${p.funcao === "closer" ? "Closer" : "SDR"} · ` : ""}{p.n} conversa{p.n === 1 ? "" : "s"}</span>

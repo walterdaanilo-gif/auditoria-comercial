@@ -7,7 +7,7 @@ import {
   chaveDe, fmtTelefone, normalizarTelefone, somaPesos, validar,
   type Criterio, type Estado, type Horario, type Settings,
 } from "@/lib/configuracoes";
-import { desconectarAgenda, salvarConfiguracoes } from "./actions";
+import { desconectarAgenda, enviarFoto, removerFoto, salvarConfiguracoes } from "./actions";
 
 export type StatusAgenda = { conectada: boolean; email: string | null; conectado_em: string | null; erro: string | null };
 const RETORNO_AGENDA: Record<string, [boolean, string]> = {
@@ -173,6 +173,33 @@ function EditorRubrica({ lista, onChange }: { lista: Criterio[]; onChange: (l: C
   );
 }
 
+// ---------- foto do vendedor ----------
+function FotoVendedor({ v }: { v: { id: string; nome: string; foto_url?: string | null } }) {
+  const [url, setUrl] = useState(v.foto_url ?? null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [enviando, start] = useTransition();
+  const escolher = (arq: File | undefined) => {
+    if (!arq) return;
+    if (arq.size > 2 * 1024 * 1024) { setErro("Máximo 2 MB"); return; }
+    const fd = new FormData(); fd.set("id", v.id); fd.set("foto", arq);
+    start(async () => { const r = await enviarFoto(fd); if (r.ok) { setUrl(r.url ?? null); setErro(null); } else setErro(r.erro ?? "Não foi possível enviar"); });
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <label className="group relative h-12 w-12 shrink-0 cursor-pointer overflow-hidden rounded-full border border-line bg-track" title={url ? "Trocar a foto" : "Adicionar foto"}>
+        {url ? <img src={url} alt={`Foto de ${v.nome}`} className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-lg font-extrabold text-mute">{v.nome.slice(0, 1).toUpperCase()}</span>}
+        <span className={`absolute inset-0 flex items-center justify-center bg-black/55 text-[10px] font-semibold text-white transition ${enviando ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>{enviando ? "Enviando" : url ? "Trocar" : "Foto"}</span>
+        <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={enviando} onChange={(ev) => { escolher(ev.target.files?.[0]); ev.target.value = ""; }} />
+      </label>
+      <div className="flex flex-col text-xs">
+        {!url && !erro && <span className="text-mute">Adicionar foto</span>}
+        {url && <button type="button" className="text-left text-mute hover:text-bad" onClick={() => start(async () => { await removerFoto(v.id); setUrl(null); })}>Remover foto</button>}
+        {erro && <span className="text-bad">{erro}</span>}
+      </div>
+    </div>
+  );
+}
+
 // ---------- previews ----------
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const ELON = "🚀 *Aviso do Elon Musk*";
@@ -290,6 +317,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
             const nums = e.numeros.filter((n) => n.vendedor_id === v.id);
             return (
               <div key={v.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 ${v.ativo ? "" : "opacity-50"}`}>
+                <FotoVendedor v={v} />
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold">{v.nome}{!v.ativo && <span className="ml-2 text-xs text-mute">(inativo)</span>}</div>
                   <div className="text-xs text-mute">{nums.length ? nums.map((n) => `${n.numero ? fmtTelefone(n.numero) : n.nome} · ${n.status === "conectado" ? "conectado" : n.status.replace("_", " ")}`).join(" | ") : "WhatsApp não criado"}</div>
@@ -300,7 +328,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
           })}
           {!e.vendedores.length && <p className="px-4 py-3 text-sm text-mute">Nenhum vendedor ainda. Cadastre ao criar a conexão em WhatsApp.</p>}
         </div>
-        <p className="mt-2 text-xs text-mute">Vendedores e função (SDR ou Closer) são cadastrados e alterados na aba <Link href="/instancias" className="font-semibold text-brand hover:underline">WhatsApp</Link>, junto com a conexão.</p>
+        <p className="mt-2 text-xs text-mute">Clique no círculo para colocar a foto de perfil (JPG, PNG ou WEBP, até 2 MB); ela aparece nos perfis das Conversas. Vendedores e função (SDR ou Closer) são cadastrados e alterados na aba <Link href="/instancias" className="font-semibold text-brand hover:underline">WhatsApp</Link>, junto com a conexão.</p>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border border-line p-4">
             <div className="label mb-1">Metas diárias do SDR</div>
