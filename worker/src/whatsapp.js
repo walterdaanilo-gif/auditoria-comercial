@@ -9,6 +9,17 @@ const quiet = { level: "silent", child() { return quiet; }, trace() {}, debug() 
 
 const running = new Map(); // instancia_id -> { sock, stop() }
 
+// Mensagens que o sistema enviou (avisos e relatorio), guardadas por 24h: quando o celular de quem recebe nao consegue
+// decifrar de primeira, ele pede reenvio e o Baileys busca a mensagem aqui (getMessage). Sem isso fica "Aguardando mensagem".
+const enviadas = new Map(); // id -> { message, em, para, instancia }
+const guardarEnviada = (id, message, para, instancia) => {
+  enviadas.set(id, { message, em: Date.now(), para, instancia });
+  for (const [k, v] of enviadas) if (Date.now() - v.em > 864e5) enviadas.delete(k);
+};
+// Contador de tentativas de reenvio por mensagem (o Baileys aceita qualquer objeto com get/set/del/flushAll)
+const cacheSimples = () => { const m = new Map(); return { get: k => m.get(k), set: (k, v) => { m.set(k, v); return true; }, del: k => m.delete(k), flushAll: () => m.clear() }; };
+const STATUS = { 1: "pendente", 2: "no servidor", 3: "entregue", 4: "lida", 5: "ouvida" };
+
 export const textOf = m => {
   const x = m.message; if (!x) return { tipo: "outro", texto: "" };
   const msg = x.ephemeralMessage?.message || x.viewOnceMessage?.message || x.viewOnceMessageV2?.message || x;
@@ -56,7 +67,11 @@ async function startInstance(db, inst) {
     if (handle.stopped) return;
     const { state, saveCreds } = await B.useMultiFileAuthState(dir);
     let version; try { ({ version } = await B.fetchLatestBaileysVersion()); } catch {}
-    const sock = makeWASocket({ auth: state, version, logger: quiet, printQRInTerminal: false, syncFullHistory: false, markOnlineOnConnect: false, browser: ["Auditoria Comercial", "Chrome", "1.0"] });
+    const sock = makeWASocket({
+      auth: { creds: state.creds, keys: B.makeCacheableSignalKeyStore(state.keys, quiet) }, version, logger: quiet, printQRInTerminal: false, syncFullHistory: false, markOnlineOnConnect: false, browser: ["Auditoria Comercial", "Chrome", "1.0"],
+      msgRetryCounterCache: handle.retry ??= cacheSimples(),
+      getMessage: async key => enviadas.get(key.id)?.message,
+    });
     handle.sock = sock;
     sock.ev.on("creds.update", saveCreds);
     sock.ev.on("connection.update", async u => {
@@ -82,6 +97,13 @@ async function startInstance(db, inst) {
       for (const m of messages) saveMessage(db, inst, m, { sock, B }).catch(e => console.error(`[${inst.nome}] mensagem:`, e.message));
     };
     sock.ev.on("messages.upsert", onMsgs("upsert"));
+    // confirma se o aviso do sistema chegou no celular de quem recebe (entregue/lida), nao so no servidor
+    sock.ev.on("messages.update", ups => {
+      for (const { key, update } of ups) {
+        const e = enviadas.get(key?.id);
+        if (e && update?.status) console.log(`[envio] mensagem para ${e.para}: ${STATUS[update.status] || update.status}`);
+      }
+    });
     sock.ev.on("messaging-history.set", onMsgs("historico"));
     const onCall = acompanharChamadas(db, inst, () => sock.user?.id);
     sock.ev.on("call", calls => {
@@ -118,5 +140,8 @@ export async function enviarTextoBaileys(instanciaId, numero, texto) {
   if (!sock?.user) throw new Error("WhatsApp de envio nao esta conectado neste worker");
   const [r] = (await sock.onWhatsApp(numero)) || [];
   if (!r?.exists) throw new Error(`o numero ${numero} nao tem WhatsApp`);
-  await sock.sendMessage(r.jid, { text: texto });
+  const msg = await sock.sendMessage(r.jid, { text: texto });
+  if (msg?.key?.id) guardarEnviada(msg.key.id, msg.message, numero, instanciaId);
+  console.log(`[envio] enviada para ${numero} (${r.jid})`);
+  return msg;
 }
