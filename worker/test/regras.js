@@ -74,3 +74,16 @@ assert.equal(chaveTelefone("5584988887777"), chaveTelefone("8488887777"));
 const R = await carregarRegras(db);
 assert.ok(montarPrompt(R, rubricaDe(R, CLOSER)).includes("reuniao_implementacao"));
 console.log("OK: auditoria com OpenAI seguindo Configuracoes (rubrica por funcao, ignorados, venda, critico, auditar agora)");
+
+// Membro da Carbone Educacao: presenca de cortesia no workshop = CONVITE (R$ 0), mesmo sem cupom
+{
+  const { interpretar } = await import("../src/auditor.js");
+  const R0 = { funcao: "sdr", rubrica: "sdr", criterios: [{ chave: "conducao", nome: "Condução", peso: 100 }] };
+  const a = interpretar(({ notas: [{ criterio: "conducao", nota: 4 }], venda: { detectada: true, tipo: "workshop", valor: 197, cupom: false, origem_convite: "carbone", evidencia: "Como você é membro Carbone, a sua presença fica por nossa conta" } }), R0);
+  assert.equal(a.venda_cupom, true); assert.equal(a.venda_valor, 0); assert.equal(a.venda_convite_origem, "carbone");
+  const b = interpretar(({ notas: [{ criterio: "conducao", nota: 4 }], venda: { detectada: true, tipo: "workshop", valor: 0, cupom: true, origem_convite: "cupom" } }), R0);
+  assert.equal(b.venda_cupom, true); assert.equal(b.venda_convite_origem, "cupom");
+  const c = interpretar(({ notas: [{ criterio: "conducao", nota: 4 }], venda: { detectada: true, tipo: "workshop", valor: 197, cupom: false } }), R0);
+  assert.equal(c.venda_cupom, false); assert.equal(c.venda_convite_origem, null); assert.equal(c.venda_valor, 197);
+  console.log("OK: membro Carbone conta como convite (R$ 0), separado do cupom");
+}

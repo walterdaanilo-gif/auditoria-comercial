@@ -13,8 +13,8 @@ import Controles from "./Controles";
 // Tela de TV (16:9, sem rolagem) no molde do painel comercial de referencia, nas cores Weevo. Grade 2x2.
 // Metas diarias por SDR vem de Configuracoes (padrao: 25 conversas trocadas e 6 marcacoes).
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-// vendas com dinheiro (workshop pago e imersao) e convites (workshop com cupom R$ 0, nao e dinheiro)
-export type Vendas = { wPagos: number; wValor: number; imersoes: number; imValor: number; convites: number };
+// vendas com dinheiro (workshop pago e imersao) e convites (cupom 100% ou membro Carbone, R$ 0, nao e dinheiro)
+export type Vendas = { wPagos: number; wValor: number; imersoes: number; imValor: number; convites: number; carbone?: number };
 // workshop por vendedor: confirmacoes por convite (cupom R$ 0) e vendas com dinheiro (pagas)
 export type WorkshopPor = Record<string, { convites: number; pagos: number; valor: number }>;
 
@@ -165,7 +165,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
                 { n: "Conversas trocadas", v: t.respostas, alvo: metaConversas, base: metaConversas, conv: `${fmtPct(t.respostas, t.contatadas)} das conversas` },
                 { n: "Efetivas", v: t.efetivas, alvo: null, base: Math.max(t.respostas, 1), conv: `${fmtPct(t.efetivas, t.respostas)} de quem respondeu` },
                 { n: "Marcações", v: t.marcacoes, alvo: metaMarc, base: metaMarc, conv: `${fmtPct(t.marcacoes, t.efetivas)} das efetivas` },
-                { n: "Confirmações de workshop (convite)", v: w.convites, alvo: null, base: Math.max(t.marcacoes, w.convites, 1), conv: `${fmtPct(w.convites, t.marcacoes)} das marcações · cupom R$ 0` },
+                { n: "Confirmações de workshop (convite)", v: w.convites, alvo: null, base: Math.max(t.marcacoes, w.convites, 1), conv: `${fmtPct(w.convites, t.marcacoes)} das marcações · cupom ou Carbone, R$ 0` },
                 { n: "Vendas workshop", v: w.pagos, alvo: null, base: Math.max(t.marcacoes, w.pagos, 1), conv: w.pagos ? `${brl(w.valor)} em dinheiro` : "nenhuma paga ainda" },
               ];
               return (
@@ -257,7 +257,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
             ))}
           </div>
         </div>
-        {kpi("Convites", vendas.convites, <>workshop com cupom · R$ 0</>)}
+        {kpi("Convites", vendas.convites, <>{vendas.carbone ? `${vendas.carbone} Carbone · ` : ""}cupom 100% ou Carbone · R$ 0</>)}
         {kpi("Marcações", <>{time.marcacoes} <span className="text-[0.55em] font-normal text-mute">/ {metaMarc * nSdr}</span></>, <><Pill e={eMarc}>{fmtPct(time.marcacoes, metaMarc * nSdr)}</Pill> {time.workshop} workshop · {time.imersao} reunião de impl.</>)}
         {kpi("Conversas trocadas", <>{time.respostas} <span className="text-[0.55em] font-normal text-mute">/ {metaConversas * nSdr}</span></>, <>{fmtPct(time.respostas, time.contatadas)} das conversas</>)}
         {kpi("Contatos", contatos(time), <>{time.contatadas} msg · {time.ligacoes_atendidas}/{time.ligacoes} lig. atendidas</>)}

@@ -25,7 +25,7 @@ export function eventosDe(a, funcao) {
   const ev = [];
   // dinheiro = entrou dinheiro de verdade (imersao fechada ou workshop pago; cupom de R$ 0 nao conta)
   if (a.venda && a.venda_tipo === "imersao") ev.push({ chave: "venda_imersao", tipo: "venda", dinheiro: true, produto: "IMERSÃO FECHADA", titulo: "💎 *Imersão fechada*", extra: a.venda_valor ? brl(a.venda_valor) : "valor não informado", evidencia: a.venda_evidencia });
-  if (a.venda && a.venda_tipo !== "imersao") ev.push({ chave: "venda_workshop", tipo: "venda", dinheiro: !a.venda_cupom && Number(a.venda_valor ?? 1) > 0, produto: "WORKSHOP PAGO", titulo: "💰 *Inscrição no workshop*", extra: a.venda_cupom ? "cupom de convite · R$ 0" : a.venda_valor != null ? brl(a.venda_valor) : "valor não informado", evidencia: a.venda_evidencia });
+  if (a.venda && a.venda_tipo !== "imersao") ev.push({ chave: "venda_workshop", tipo: "venda", dinheiro: !a.venda_cupom && Number(a.venda_valor ?? 1) > 0, produto: "WORKSHOP PAGO", titulo: "💰 *Inscrição no workshop*", extra: a.venda_cupom ? (a.venda_convite_origem === "carbone" ? "convite Carbone · R$ 0" : "cupom de convite · R$ 0") : a.venda_valor != null ? brl(a.venda_valor) : "valor não informado", evidencia: a.venda_evidencia });
   let reuniao = a.oportunidade_tipo === "reuniao_implementacao" || a.oportunidade_tipo === "reuniao_imersao" ? a.oportunidade_tipo
     : a.agendou && a.tipo_agendamento === "imersao" ? (funcao === "closer" ? "reuniao_implementacao" : "reuniao_imersao") : null;
   // Aviso de reuniao so quando o lead aceitou E o vendedor confirmou (pergunta "posso confirmar?" ainda nao vale).
@@ -108,7 +108,7 @@ export function textoAlerta(e, { vendedor, funcao, lead, conversaId, formato, ou
   if (e.dinheiro) return textoVenda(e, { vendedor, lead, conversaId, outros });
   const quem = `${vendedor}${funcao ? ` (${funcao === "closer" ? "Closer" : "SDR"})` : ""}`;
   const principal = frase(e, quem, lead, conversaId);
-  const cupom = e.chave === "venda_workshop" && /cupom/.test(e.extra || "");
+  const cupom = e.chave === "venda_workshop" && /cupom|convite/.test(e.extra || "");
   const topo = e.tipo === "marcacao" ? "📅 *ALERTA DE REUNIÃO*" : null;
   if (formato === "resumido") return `${topo ? `${topo}: ` : ""}${principal}${cupom ? " (com cupom de convite)" : e.extra ? ` (${e.extra})` : ""}${outros.length ? `\n${tambemDe(outros)}` : ""}`;
   const op = e.tipo === "oportunidade";

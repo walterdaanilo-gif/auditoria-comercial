@@ -77,7 +77,7 @@ export function montarPrompt(R, { funcao, criterios }, { primeiraResposta } = {}
   const s = R.s;
   const papel = funcao === "closer"
     ? `Este vendedor é CLOSER. Venda = imersão FECHADA (lead aceitou e pagou ou assinou), com o valor. Reunião de implementação marcada NÃO é venda: é oportunidade do tipo "reuniao_implementacao". Interesse claro na imersão sem fechar = oportunidade "interesse_imersao". Em "agendou", marque true quando a reunião de implementação foi marcada (tipo_agendamento "imersao").`
-    : `Este vendedor é SDR. Venda = inscrição no WORKSHOP confirmada, separada com cuidado em dois tipos: CONVITE = o lead entra com o cupom de convite que zera o ingresso (100% de desconto, R$ 0): "cupom" true e "valor" 0. VENDIDO = o lead pagou o ingresso (pix, cartão, link de pagamento pago, comprovante enviado): "cupom" false e "valor" = quanto pagou; cupom de desconto PARCIAL (ex.: 50%) com pagamento também é VENDIDO, com o valor pago. Lead que aceitou, reservou ou recebeu o link mas ainda não pagou nem usou o convite NÃO é venda ainda: é oportunidade "interesse_workshop". Na dúvida entre convite e vendido, use a evidência da conversa (valor, cupom, comprovante) e explique em "evidencia". Reunião para a imersão marcada NÃO é venda: é oportunidade do tipo "reuniao_imersao". Interesse claro no workshop ou na imersão sem fechar = oportunidade "interesse_workshop" ou "interesse_imersao". Em "agendou", marque true quando o lead se inscreveu no workshop (tipo_agendamento "workshop") ou marcou a reunião de imersão (tipo_agendamento "imersao").`;
+    : `Este vendedor é SDR. Venda = inscrição no WORKSHOP confirmada, separada com cuidado em dois tipos: CONVITE = o lead entra de cortesia, R$ 0: "cupom" true e "valor" 0. São dois jeitos de convite: (1) o cupom de convite que zera o ingresso (100% de desconto), "origem_convite" "cupom"; (2) cliente/membro da CARBONE EDUCAÇÃO (aparece como Carbone, CarboneE, Casa Carbone, "membro Carbone"), que ganha a presença no workshop sem cupom ("a sua presença fica por nossa conta"), "origem_convite" "carbone". Membro Carbone que confirmou presença no workshop é CONVITE, nunca venda paga. VENDIDO = o lead pagou o ingresso (pix, cartão, link de pagamento pago, comprovante enviado): "cupom" false e "valor" = quanto pagou; cupom de desconto PARCIAL (ex.: 50%) com pagamento também é VENDIDO, com o valor pago. Lead que aceitou, reservou ou recebeu o link mas ainda não pagou nem usou o convite NÃO é venda ainda: é oportunidade "interesse_workshop". Na dúvida entre convite e vendido, use a evidência da conversa (valor, cupom, comprovante) e explique em "evidencia". Reunião para a imersão marcada NÃO é venda: é oportunidade do tipo "reuniao_imersao". Interesse claro no workshop ou na imersão sem fechar = oportunidade "interesse_workshop" ou "interesse_imersao". Em "agendou", marque true quando o lead se inscreveu no workshop (tipo_agendamento "workshop") ou marcou a reunião de imersão (tipo_agendamento "imersao").`;
   return `Você é o Auditor comercial da Weevo. Avalia conversas de WhatsApp (e transcrições de ligações) entre um vendedor da Weevo e um lead. Escreva em português do Brasil, direto e prático.
 
 ## Contexto
@@ -130,7 +130,7 @@ Responda APENAS com um JSON neste formato:
 {"notas": [${criterios.map(c => `{"criterio": "${c.chave}", "nota": 1 a 5, "justificativa": "curta"}`).join(", ")}],
 "qualidade": "boa"|"regular"|"ruim", "etapa": "abertura"|"descoberta"|"proposta"|"objecao"|"agendamento"|"perdido"|"sem_resposta", "efetiva": true|false,
 "agendou": true|false, "tipo_agendamento": "workshop"|"imersao"|null,
-"venda": {"detectada": true|false, "tipo": "workshop"|"imersao"|null, "valor": número em reais ou null, "cupom": true só para convite 100% (R$ 0)|false, "evidencia": "trecho ou explicação curta"},
+"venda": {"detectada": true|false, "tipo": "workshop"|"imersao"|null, "valor": número em reais ou null, "cupom": true só para convite (cupom 100% ou membro Carbone, R$ 0)|false, "origem_convite": "cupom"|"carbone"|null, "evidencia": "trecho ou explicação curta"},
 "oportunidade": {"detectada": true|false, "tipo": "interesse_workshop"|"interesse_imersao"|"reuniao_imersao"|"reuniao_implementacao"|null, "evidencia": "curta"},
 "critico": {"detectado": true|false, "motivo": "curto ou vazio"},
 "conversa_so_bot": true|false,
@@ -152,7 +152,7 @@ const Resposta = z.object({
   efetiva: bool.default(false),
   agendou: bool.default(false),
   tipo_agendamento: opc(["workshop", "imersao"]).default(null),
-  venda: z.object({ detectada: bool.default(false), tipo: opc(["workshop", "imersao"]).default(null), valor: z.preprocess(v => (v === "" || v == null || isNaN(Number(v)) ? null : Number(v)), z.number().min(0).nullable()).default(null), cupom: bool.default(false), evidencia: txt.default("") }).default({}),
+  venda: z.object({ detectada: bool.default(false), tipo: opc(["workshop", "imersao"]).default(null), valor: z.preprocess(v => (v === "" || v == null || isNaN(Number(v)) ? null : Number(v)), z.number().min(0).nullable()).default(null), cupom: bool.default(false), origem_convite: opc(["cupom", "carbone"]).default(null), evidencia: txt.default("") }).default({}),
   oportunidade: z.object({ detectada: bool.default(false), tipo: opc(["interesse_workshop", "interesse_imersao", "reuniao_imersao", "reuniao_implementacao"]).default(null), evidencia: txt.default("") }).default({}),
   critico: z.object({ detectado: bool.default(false), motivo: txt.default("") }).default({}),
   conversa_so_bot: bool.default(false),
@@ -185,7 +185,9 @@ export function interpretar(bruto, { funcao, rubrica, criterios }) {
   // Venda coerente com a funcao: SDR vende workshop, Closer vende imersao
   const vendaTipo = a.venda.detectada ? (funcao === "closer" ? "imersao" : a.venda.tipo || "workshop") : null;
   // Convite = cupom 100% (R$ 0). Cupom com valor pago acima de zero e desconto parcial: conta como vendido.
-  const convite = !!(a.venda.detectada && vendaTipo === "workshop" && a.venda.cupom && !(Number(a.venda.valor) > 0));
+  // Convite: cupom 100% ou membro Carbone Educacao (cortesia). Membro Carbone e sempre convite, mesmo sem a IA marcar cupom.
+  const carbone = a.venda.detectada && vendaTipo === "workshop" && (a.venda.origem_convite === "carbone" || /carbone/i.test(a.venda.evidencia || ""));
+  const convite = !!(a.venda.detectada && vendaTipo === "workshop" && (carbone || (a.venda.cupom && !(Number(a.venda.valor) > 0))));
   return {
     nota_geral: nota, rubrica,
     notas_1a5: criterios.filter(c => por.has(c.chave)).map(c => ({ chave: c.chave, nome: c.nome, peso: Number(c.peso), nota: por.get(c.chave).nota, justificativa: por.get(c.chave).justificativa })),
@@ -194,7 +196,7 @@ export function interpretar(bruto, { funcao, rubrica, criterios }) {
     etapa: a.etapa, efetiva: a.efetiva, agendou: a.agendou,
     tipo_agendamento: a.agendou ? (funcao === "closer" ? "imersao" : a.tipo_agendamento || "workshop") : null,
     venda: a.venda.detectada, venda_tipo: vendaTipo, venda_valor: a.venda.detectada ? (convite ? 0 : a.venda.valor) : null,
-    venda_cupom: convite, venda_evidencia: a.venda.detectada ? a.venda.evidencia : null,
+    venda_cupom: convite, venda_convite_origem: convite ? (carbone ? "carbone" : "cupom") : null, venda_evidencia: a.venda.detectada ? a.venda.evidencia : null,
     oportunidade: a.oportunidade.detectada, oportunidade_tipo: a.oportunidade.detectada ? a.oportunidade.tipo : null, oportunidade_evidencia: a.oportunidade.detectada ? a.oportunidade.evidencia : null,
     critico: a.critico.detectado, critico_motivo: a.critico.detectado ? a.critico.motivo : null,
     so_bot: a.conversa_so_bot,

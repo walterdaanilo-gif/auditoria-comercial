@@ -952,3 +952,6 @@ do $do$ begin
     execute 'alter publication supabase_realtime add table public.notificacoes';
   end if;
 end $do$;
+
+-- Convite do workshop: de onde veio a cortesia (cupom 100% ou membro da Carbone Educacao)
+alter table public.auditorias add column if not exists venda_convite_origem text check (venda_convite_origem in ('cupom','carbone'));

@@ -22,18 +22,18 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
     supabase.from("profiles").select("id,nome,papel,ativo,funcao,foto_url").order("nome"),
     supabase.from("instancias_whatsapp").select("vendedor_id"),
     supabase.from("audit_settings").select("meta_sdr_conversas,meta_sdr_marcacoes").eq("id", 1).maybeSingle(),
-    supabase.from("auditorias").select("vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(data,canal)").eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
+    supabase.from("auditorias").select("vendedor_id,venda_tipo,venda_valor,venda_cupom,venda_convite_origem,conversas!inner(data,canal)").eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
   ]);
   // vendas do time (quem tem WhatsApp cadastrado ou papel vendedor)
   const equipe = [...new Set((rInst.data ?? []).map((i) => i.vendedor_id as string))];
   const timeIds = new Set(((rPerf.data ?? []) as DadosTela["perfis"]).filter((p) => p.ativo && (p.papel === "vendedor" || equipe.includes(p.id))).map((p) => p.id));
-  const ven = ((rVen.data ?? []) as { vendedor_id: string; venda_tipo: string | null; venda_valor: number | null; venda_cupom: boolean }[]).filter((v) => timeIds.has(v.vendedor_id));
+  const ven = ((rVen.data ?? []) as { vendedor_id: string; venda_tipo: string | null; venda_valor: number | null; venda_cupom: boolean; venda_convite_origem: string | null }[]).filter((v) => timeIds.has(v.vendedor_id));
   const ws = ven.filter((v) => v.venda_tipo !== "imersao"), im = ven.filter((v) => v.venda_tipo === "imersao");
   const pagos = ws.filter((v) => !v.venda_cupom);
   const vendas: Vendas = {
     wPagos: pagos.length, wValor: pagos.reduce((s, v) => s + Number(v.venda_valor || 0), 0),
     imersoes: im.length, imValor: im.reduce((s, v) => s + Number(v.venda_valor || 0), 0),
-    convites: ws.length - pagos.length,
+    convites: ws.length - pagos.length, carbone: ws.filter((v) => v.venda_cupom && v.venda_convite_origem === "carbone").length,
   };
   const workshopPor: WorkshopPor = {};
   for (const v of ven.filter((x) => x.venda_tipo !== "imersao")) {
