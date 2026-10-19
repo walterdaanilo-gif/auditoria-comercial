@@ -181,15 +181,15 @@ function previewAlerta(s: Settings) {
   const det = s.alerta_formato === "detalhado";
   const blocos: string[] = [];
   if (s.alerta_venda) blocos.push(det
-    ? `${ELON}\n\nÔôô gestão, chega mais! 😄\n\nRuan (SDR) acabou de colocar Maria Silva pra dentro do workshop! 🎟️\nVeio com cupom de convite, então entrou de cortesia 🎟️\nO lead soltou essa: "Show, pode me inscrever então!"\n\n${LINK}`
-    : `${ELON}: Ruan (SDR) acabou de colocar Maria Silva pra dentro do workshop! 🎟️ (com cupom de convite)`);
-  if (s.alerta_venda) blocos.push(`${ELON}\n\n🚨🚨🚨 HEIIIIIIIIIIIIIIIII 🚨🚨🚨\n💸💸 PINGOU UMA VENDA DE WALTER!!! 💸💸\n\n🔥 IMERSÃO FECHADA · ${brl(4800)} 🔥\nQuem comprou: João Souza 🙌\nE olha o que o lead mandou: "mandei o pix"\n\n🍾🎉 BORA, TIME! QUEM É O PRÓXIMO? 🎉🍾\nCorre ver a conversa completa 👉 <link>`);
+    ? `Ruan (SDR) acabou de colocar Maria Silva pra dentro do workshop! 🎟️\nVeio com cupom de convite, então entrou de cortesia 🎟️\nO lead soltou essa: "Show, pode me inscrever então!"\n\n${LINK}`
+    : `Ruan (SDR) acabou de colocar Maria Silva pra dentro do workshop! 🎟️ (com cupom de convite)`);
+  if (s.alerta_venda) blocos.push(`🚨🚨🚨 HEIIIIIIIIIIIIIIIII 🚨🚨🚨\n💸💸 PINGOU UMA VENDA DE WALTER!!! 💸💸\n\n🔥 IMERSÃO FECHADA · ${brl(4800)} 🔥\nQuem comprou: João Souza 🙌\nE olha o que o lead mandou: "mandei o pix"\n\n🍾🎉 BORA, TIME! QUEM É O PRÓXIMO? 🎉🍾\nCorre ver a conversa completa 👉 <link>`);
   if (s.alerta_marcacao) blocos.push(det
-    ? `${ELON}\n\nGente, olha que coisa boa acabou de acontecer 🙌\n\nTem reunião de imersão vindo aí: João Souza topou com Nick (SDR) 📅\nPalavras do próprio lead: "Combinado, quinta às 19h"\n\n${LINK}`
-    : `${ELON}: Tem reunião de imersão vindo aí: João Souza topou com Nick (SDR) 📅`);
+    ? `Tem reunião de imersão vindo aí: João Souza topou com Nick (SDR) 📅\nPalavras do próprio lead: "Combinado, quinta às 19h"\n\n${LINK}`
+    : `Tem reunião de imersão vindo aí: João Souza topou com Nick (SDR) 📅`);
   if (s.alerta_oportunidade) blocos.push(det
-    ? `${ELON}\n\nPsiu, gestão! Tem lead quentinho aqui 👀\n\nPaula Lima tá de olho na imersão e foi conversar com Nick (SDR). Esse tá esquentando! 🔥\nPalavras do próprio lead: "Quero entender melhor a imersão"\nUm empurrãozinho agora e vira marcação 😉\n\n${LINK}`
-    : `${ELON}: Paula Lima tá de olho na imersão e foi conversar com Nick (SDR). Esse tá esquentando! 🔥`);
+    ? `Paula Lima tá de olho na imersão e foi conversar com Nick (SDR). Esse tá esquentando! 🔥\nPalavras do próprio lead: "Quero entender melhor a imersão"\nUm empurrãozinho agora e vira marcação 😉\n\n${LINK}`
+    : `Paula Lima tá de olho na imersão e foi conversar com Nick (SDR). Esse tá esquentando! 🔥`);
   return blocos.length ? ["As frases variam de uma conversa para outra, para não ficar repetitivo. Exemplos:", ...blocos].join("\n\n─────────\n\n") : "Nenhum aviso marcado: os telefones recebem só o relatório do dia.";
 }
 function previewResumo() {

@@ -31,7 +31,7 @@ export function eventosDe(a, funcao) {
   return ev;
 }
 
-// Toda mensagem para a gestao sai assinada pelo Elon Musk, o robo do Auditor
+// Assinatura do Elon Musk, o robo do Auditor (so no relatorio do dia; os avisos vao direto ao ponto)
 export const ASSINATURA = "🚀 *Aviso do Elon Musk*";
 
 // Sorteio fixo por conversa: a mesma conversa sempre gera o mesmo texto, conversas diferentes variam
@@ -54,8 +54,6 @@ const tambemDe = outros => (outros.length ? `E não parou por aí: ${outros.map(
 export function textoVenda(e, { vendedor, lead, conversaId, outros = [] }) {
   const n = String(vendedor).split(" ")[0].toUpperCase();
   return [
-    ASSINATURA,
-    ``,
     sorteio(conversaId, ABERTURAS)(n),
     ``,
     `🔥 ${e.produto} · ${e.extra} 🔥`,
@@ -92,8 +90,6 @@ const FRASES = {
     (q, l, o) => `${l} quer saber mais ${o}, e quem tá no atendimento é ${q} 👀`,
   ],
 };
-const BOA = ["Ôôô gestão, chega mais! 😄", "Gente, olha que coisa boa acabou de acontecer 🙌", "Para tudo que eu tenho novidade! 🤩", "Ei, gestão! Vim correndo contar 🏃💨", "Notícia boa fresquinha pra vocês! ☕"];
-const OLHO = ["Psiu, gestão! Tem lead quentinho aqui 👀", "Ei, dá uma espiada nessa 👀", "Gestão, fica de olho nessa aqui 🔎"];
 const EMPURRAO = ["Um empurrãozinho agora e vira marcação 😉", "Se der, dá uma força, que esse tá perto 😉", "Tá no ponto de virar reunião, hein! 😉"];
 function frase(e, quem, lead, id) {
   if (FRASES[e.chave]) return sorteio(id + "p", FRASES[e.chave])(quem, lead);
@@ -106,10 +102,10 @@ export function textoAlerta(e, { vendedor, funcao, lead, conversaId, formato, ou
   const quem = `${vendedor}${funcao ? ` (${funcao === "closer" ? "Closer" : "SDR"})` : ""}`;
   const principal = frase(e, quem, lead, conversaId);
   const cupom = e.chave === "venda_workshop" && /cupom/.test(e.extra || "");
-  if (formato === "resumido") return `${ASSINATURA}: ${principal}${cupom ? " (com cupom de convite)" : e.extra ? ` (${e.extra})` : ""}${outros.length ? `\n${tambemDe(outros)}` : ""}`;
+  if (formato === "resumido") return `${principal}${cupom ? " (com cupom de convite)" : e.extra ? ` (${e.extra})` : ""}${outros.length ? `\n${tambemDe(outros)}` : ""}`;
   const op = e.tipo === "oportunidade";
   return [
-    ASSINATURA, ``, sorteio(conversaId + "a", op ? OLHO : BOA), ``, principal,
+    principal,
     ...(cupom ? [`Veio com cupom de convite, então entrou de cortesia 🎟️`] : e.extra ? [`Valor: ${e.extra} 💰`] : []),
     ...(e.evidencia ? [fala(conversaId, e.evidencia, 220)] : []),
     ...(outros.length ? [tambemDe(outros)] : []),
