@@ -1,4 +1,4 @@
-import { cfg, today, addDays, dayOf } from "./config.js";
+import { cfg, today } from "./config.js";
 import { enviarWhatsApp } from "./envio.js";
 import { ASSINATURA, sorteio } from "./alertas.js";
 
@@ -7,25 +7,27 @@ const brl = n => Number(n || 0).toLocaleString("pt-BR", { style: "currency", cur
 const nota = n => (n == null ? "—" : n.toFixed(1).replace(".", ","));
 const dur = s => (s == null ? "—" : s < 60 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)}min` : `${Math.floor(s / 3600)}h${String(Math.round((s % 3600) / 60)).padStart(2, "0")}`);
 const ddmm = d => d.split("-").reverse().slice(0, 2).join("/");
-const diasUteis = (de, ate) => { let n = 0; for (let d = de; d <= ate; d = addDays(d, 1)) { const w = new Date(d + "T12:00:00Z").getUTCDay(); if (w > 0 && w < 6) n++; } return Math.max(1, n); };
-
 const somar = (l, k) => l.reduce((s, x) => s + Number(x[k] || 0), 0);
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+const hh = h => `${Number(String(h).slice(0, 2))}h`;
 
-// Relatorio do periodo (normalmente o dia; acumula os dias em que nao houve envio)
-export async function montarRelatorio(db, de, ate) {
+// Contadores que somam ao longo do dia: a tarde = dia - manha (guardada as 13h)
+const CONTA = ["respostas", "marc", "wCupom", "wPagos", "wValor", "imersao", "imValor", "reunioesImpl", "ligAt", "lig", "oport"];
+
+// Numeros de um dia: time inteiro e cada vendedor
+export async function calcularDia(db, dia) {
   const [[s = {}], linhas, convs] = await Promise.all([
     db.select("audit_settings", { filters: { id: "eq.1" } }),
-    db.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
-    db.selectAll("conversas", { select: "id,data", filters: { data: `gte.${de}`, canal: "neq.importada" } }),
+    db.rpc("resumo_sdr2", { p_from: dia, p_to: dia }),
+    db.selectAll("conversas", { select: "id,data,canal", filters: { data: `eq.${dia}`, canal: "neq.importada" } }),
   ]);
-  const ids = convs.filter(c => !c.data || c.data <= ate).map(c => c.id);
+  const ids = convs.map(c => c.id);
   const auds = [];
   for (let i = 0; i < ids.length; i += 150) auds.push(...await db.select("auditorias", { select: "vendedor_id,nota_geral,so_bot,venda,venda_tipo,venda_valor,venda_cupom,oportunidade,oportunidade_tipo,critico,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr", filters: { conversa_id: `in.(${ids.slice(i, i + 150).join(",")})` } }));
   const vendIds = [...new Set([...linhas.map(l => l.vendedor_id), ...auds.map(a => a.vendedor_id)])];
   const perfis = vendIds.length ? await db.select("profiles", { select: "id,nome,funcao", filters: { id: `in.(${vendIds.join(",")})` } }) : [];
-  const uteis = diasUteis(de, ate);
 
-  const resumo = l => {
+  const resumo = (l, ls) => {
     const notas = l.filter(a => !a.so_bot);
     const w = l.filter(a => a.venda && a.venda_tipo !== "imersao"), im = l.filter(a => a.venda && a.venda_tipo === "imersao");
     const pr = l.filter(a => a.primeira_resposta_seg != null), md = l.filter(a => a.tempo_medio_resposta_seg != null && a.respostas_sdr);
@@ -37,87 +39,142 @@ export async function montarRelatorio(db, de, ate) {
       oport: l.filter(a => a.oportunidade).length, reunioesImpl: l.filter(a => a.oportunidade_tipo === "reuniao_implementacao").length, criticos: l.filter(a => a.critico).length,
       primeira: pr.length ? somar(pr, "primeira_resposta_seg") / pr.length : null,
       medio: nResp ? md.reduce((x, a) => x + a.tempo_medio_resposta_seg * a.respostas_sdr, 0) / nResp : null,
+      respostas: somar(ls, "respostas"), marc: somar(ls, "marcacoes"), ligAt: somar(ls, "ligacoes_atendidas"), lig: somar(ls, "ligacoes"),
     };
   };
-  const t = resumo(auds);
-  const ligAt = somar(linhas, "ligacoes_atendidas"), lig = somar(linhas, "ligacoes");
+  const time = resumo(auds, linhas);
+  const pessoas = perfis.map(p => ({ id: p.id, nome: p.nome, closer: p.funcao === "closer", ...resumo(auds.filter(a => a.vendedor_id === p.id), linhas.filter(l => l.vendedor_id === p.id)) }))
+    .sort((a, b) => (b.nota ?? -1) - (a.nota ?? -1) || (b.wCupom + b.wPagos + b.imersao) - (a.wCupom + a.wPagos + a.imersao));
+  return { s, time, pessoas };
+}
 
-  const pessoas = perfis.map(p => {
-    const ls = linhas.filter(l => l.vendedor_id === p.id), r = resumo(auds.filter(a => a.vendedor_id === p.id));
-    const marc = somar(ls, "marcacoes");
-    const closer = p.funcao === "closer";
-    const vendas = closer ? r.imersao : r.wCupom + r.wPagos;
-    const partes = [`⭐ ${nota(r.nota)}`];
-    if (closer) {
-      partes.push(`${r.reunioesImpl}${s.meta_closer_reunioes != null ? `/${s.meta_closer_reunioes * uteis}` : ""} reuniões de implementação`);
-      partes.push(`${r.imersao}${s.meta_closer_vendas != null ? `/${s.meta_closer_vendas * uteis}` : ""} imersões${r.imValor ? ` (${brl(r.imValor)})` : ""}`);
-    } else {
-      partes.push(`${somar(ls, "respostas")}/${(s.meta_sdr_conversas ?? 25) * uteis} conversas trocadas`);
-      partes.push(`${marc}/${(s.meta_sdr_marcacoes ?? 6) * uteis} marcações`);
-      if (r.wCupom) partes.push(`🎟️ ${r.wCupom} convite${r.wCupom === 1 ? "" : "s"}`);
-      if (r.wPagos) partes.push(`💰 ${r.wPagos} vendido${r.wPagos === 1 ? "" : "s"} (${brl(r.wValor)})`);
-    }
-    partes.push(`📞 ${somar(ls, "ligacoes_atendidas")} atendidas`);
-    return { nome: p.nome, funcao: closer ? "Closer" : "SDR", nota: r.nota, vendas, linha: partes.join(" · ") };
-  }).sort((a, b) => (b.nota ?? -1) - (a.nota ?? -1) || b.vendas - a.vendas);
+// So os contadores (guardados as 13h para separar a tarde as 19h)
+const contadores = d => ({ time: Object.fromEntries(CONTA.map(k => [k, d.time[k]])), pessoas: Object.fromEntries(d.pessoas.map(p => [p.id, Object.fromEntries(CONTA.map(k => [k, p[k]]))])) });
+const menos = (a, b = {}) => Object.fromEntries(CONTA.map(k => [k, Math.max(0, Number(a[k] || 0) - Number(b[k] || 0))]));
 
-  const titulo = de === ate ? `do dia ${ddmm(ate)}` : `de ${ddmm(de)} a ${ddmm(ate)}`;
-  const hora = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: cfg.tz }).format(new Date()));
-  const saudacao = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
-  const dinheiro = t.wPagos + t.imersao > 0;
-  const abre = sorteio(ate, [
-    `${saudacao}, gestão! 😄 Passando pra fechar o dia com o resumo ${titulo}. Bora ver como o time foi:`,
-    `${saudacao}, pessoal! 👋 Chegou a hora do resumo ${titulo}. Pega o café e vem comigo ☕`,
-    `${saudacao}, gestão! ${de === ate ? "Dia encerrado" : "Dias encerrados"}, então lá vai o resumo ${titulo} da Weevo 📊`,
-  ]);
-  const top = pessoas.find(p => p.nota != null);
-  const fecha = dinheiro
-    ? sorteio(ate, ["Hoje o caixa cantou! 💸 Parabéns, time. Bom descanso e amanhã tem mais 🚀", "Dia com dinheiro entrando, assim que eu gosto! 💸 Descansem que amanhã a gente repete 🚀", "Que dia, hein! 💸 Orgulho desse time. Até amanhã 🚀"])
-    : sorteio(ate, ["Hoje foi dia de plantar, amanhã a gente colhe 🌱 Bom descanso, time!", "Amanhã é dia de virar o jogo 💪 Bom descanso, pessoal!", "Valeu pelo dia, time! Amanhã tem mais e vai ser melhor 🚀"]);
+// Bloco de numeros completo (manha ou dia)
+const blocoNumeros = t => [
+  `✅ Auditorias: ${t.n} · ⭐ Nota média: ${nota(t.nota)}`,
+  `⏱️ 1ª resposta: ${dur(t.primeira)} · tempo médio de resposta: ${dur(t.medio)}`,
+  `💬 Conversas trocadas: ${t.respostas} · 📅 Marcações: ${t.marc}`,
+  `📞 Ligações atendidas: ${t.ligAt} de ${t.lig}`,
+  `🎟️ Workshop por convite (cupom 100%): ${t.wCupom}`,
+  `💰 Workshop vendido: ${t.wPagos}${t.wValor ? ` · ${brl(t.wValor)}` : ""}`,
+  `💎 Imersão: ${plural(t.imersao, "fechada", "fechadas")}${t.imValor ? ` · ${brl(t.imValor)}` : ""}`,
+  `🎯 Oportunidades: ${t.oport}`,
+  ...(t.criticos ? [`⚠️ Alertas críticos: ${t.criticos} (veja no sistema)`] : []),
+];
+
+// Linha de cada vendedor, com a meta do dia
+function linhaPessoa(p, s) {
+  const partes = [`⭐ ${nota(p.nota)}`];
+  if (p.closer) {
+    partes.push(`${p.reunioesImpl}${s.meta_closer_reunioes != null ? `/${s.meta_closer_reunioes}` : ""} reuniões de implementação`);
+    partes.push(`${p.imersao}${s.meta_closer_vendas != null ? `/${s.meta_closer_vendas}` : ""} imersões${p.imValor ? ` (${brl(p.imValor)})` : ""}`);
+  } else {
+    partes.push(`${p.respostas}/${s.meta_sdr_conversas ?? 25} conversas trocadas`);
+    partes.push(`${p.marc}/${s.meta_sdr_marcacoes ?? 6} marcações`);
+  }
+  if (p.wCupom) partes.push(`🎟️ ${plural(p.wCupom, "convite", "convites")}`);
+  if (p.wPagos) partes.push(`💰 ${plural(p.wPagos, "vendido", "vendidos")} (${brl(p.wValor)})`);
+  partes.push(`📞 ${plural(p.ligAt, "atendida", "atendidas")}`);
+  return `${p.nome} (${p.closer ? "Closer" : "SDR"}): ${partes.join(" · ")}`;
+}
+const ranking = (pessoas, s) => (pessoas.length ? pessoas.map((p, i) => `${i + 1}. ${linhaPessoa(p, s)}`) : ["Ainda sem atividade registrada."]);
+const destaque = (pessoas, quando) => { const top = pessoas.find(p => p.nota != null); return top ? [``, `👑 Destaque ${quando}: *${top.nome}*, com nota ${nota(top.nota)}. Manda aquele parabéns! 👏`] : []; };
+
+// Resumo do turno da manha (13h)
+export function textoManha(d, dia) {
+  const { s, time, pessoas } = d;
   return [
-    ASSINATURA,
-    ``,
-    abre,
-    ``,
-    `✅ Auditorias: ${t.n} · ⭐ Nota média: ${nota(t.nota)}`,
-    `⏱️ 1ª resposta: ${dur(t.primeira)} · tempo médio de resposta: ${dur(t.medio)}`,
-    `📞 Ligações atendidas: ${ligAt} de ${lig}`,
-    `🎟️ Workshop por convite (cupom 100%): ${t.wCupom}`,
-    `💰 Workshop vendido: ${t.wPagos}${t.wValor ? ` · ${brl(t.wValor)}` : ""}`,
-    `💎 Imersão: ${t.imersao} fechada${t.imersao === 1 ? "" : "s"}${t.imValor ? ` · ${brl(t.imValor)}` : ""}`,
-    `🎯 Oportunidades: ${t.oport}`,
-    ...(t.criticos ? [`⚠️ Alertas críticos: ${t.criticos} (veja no sistema)`] : []),
-    ``,
-    `🏆 *Como cada um foi*`,
-    ...(pessoas.length ? pessoas.map((p, i) => `${i + 1}. ${p.nome} (${p.funcao}): ${p.linha}`) : ["Hoje o time não teve atividade registrada."]),
-    ...(top ? [``, `👑 Destaque ${de === ate ? "do dia" : "do período"}: *${top.nome}*, com nota ${nota(top.nota)}. Manda aquele parabéns! 👏`] : []),
-    ``,
-    fecha,
+    ASSINATURA, ``,
+    sorteio(dia + "m", [
+      `Boa tarde, gestão! ☀️ Fechou o turno da manhã de hoje (${ddmm(dia)}). Olha como o time foi:`,
+      `Boa tarde, pessoal! 👋 Metade do dia já foi, então lá vai o resumo da manhã (${ddmm(dia)}):`,
+      `Boa tarde, gestão! 🌤️ Resumo do turno da manhã de ${ddmm(dia)} chegando:`,
+    ]), ``,
+    ...blocoNumeros(time), ``,
+    `🏆 *Como cada um foi na manhã*`,
+    ...ranking(pessoas, s),
+    ...destaque(pessoas, "da manhã"), ``,
+    sorteio(dia + "mf", ["Bora pra tarde que ainda dá pra bater a meta! 🚀", "Segundo tempo começando: foco total à tarde! ⚽🔥", "Almoço tomado, agora é acelerar a tarde! 💪"]),
     `Quer ver tudo com calma? Tá no painel 👉 ${SITE}`,
   ].join("\n");
 }
 
-// Envia o relatorio para os telefones de Alertas ao gestor, pelo WhatsApp escolhido em Configuracoes.
-// Dia fora dos dias marcados nao envia; o proximo envio cobre os dias acumulados (ate 7).
-export async function enviarRelatorio(db, { envio = enviarWhatsApp } = {}) {
-  const [s] = await db.select("audit_settings", { filters: { id: "eq.1" } });
-  if (!s?.resumo_ativo) return "resumo desligado";
-  const hoje = today();
-  if (!(s.resumo_dias || []).includes(new Date(hoje + "T12:00:00Z").getUTCDay())) return "hoje nao e dia de resumo";
-  if (!s.instancia_envio_id) return "sem WhatsApp de envio";
-  const tels = await db.select("telefones_alerta", { select: "telefone" });
-  if (!tels.length) return "sem telefones de alerta";
-  const ultimo = s.resumo_ultimo_envio ? dayOf(s.resumo_ultimo_envio) : null;
-  let de = ultimo && ultimo < hoje ? addDays(ultimo, 1) : hoje;
-  if (de < addDays(hoje, -6)) de = addDays(hoje, -6);
-  const texto = await montarRelatorio(db, de, hoje);
+// Resumo das 19h: a tarde (dia menos a manha guardada) e o dia completo
+export function textoTarde(d, dia, manha) {
+  const { s, time, pessoas } = d;
+  const tarde = manha ? menos(time, manha.time) : null;
+  const dinheiro = time.wPagos + time.imersao > 0;
+  const ativo = (p, t) => t.respostas + t.marc + t.wCupom + t.wPagos + t.imersao + t.reunioesImpl + t.ligAt > 0;
+  const linhaTarde = p => {
+    const t = menos(p, manha?.pessoas?.[p.id]);
+    if (!ativo(p, t)) return null;
+    const partes = [`${t.respostas} conversas`, `${plural(t.marc, "marcação", "marcações")}`];
+    if (t.wCupom) partes.push(`🎟️ ${plural(t.wCupom, "convite", "convites")}`);
+    if (t.wPagos) partes.push(`💰 ${plural(t.wPagos, "vendido", "vendidos")}`);
+    if (t.imersao) partes.push(`💎 ${plural(t.imersao, "imersão", "imersões")}`);
+    if (t.ligAt) partes.push(`📞 ${plural(t.ligAt, "atendida", "atendidas")}`);
+    return `• ${p.nome}: ${partes.join(" · ")}`;
+  };
+  return [
+    ASSINATURA, ``,
+    sorteio(dia, [
+      `Boa noite, gestão! 🌙 Fechando o dia ${ddmm(dia)} com o resumo da tarde e do dia completo:`,
+      `Boa noite, pessoal! 👋 Expediente encerrado, então lá vai como foi a tarde e o dia ${ddmm(dia)}:`,
+      `Boa noite, gestão! 📊 Dia ${ddmm(dia)} fechado. Pega o café e vem ver a tarde e o dia ☕`,
+    ]), ``,
+    ...(tarde ? [
+      `🌇 *Tarde (${hh(s.resumo_manha_hora || "13:00")} às ${hh(s.rodada_final_hora || "19:00")})*`,
+      `💬 Conversas trocadas: ${tarde.respostas} · 📅 Marcações: ${tarde.marc}`,
+      `🎟️ Convites: ${tarde.wCupom} · 💰 Workshop vendido: ${tarde.wPagos}${tarde.wValor ? ` (${brl(tarde.wValor)})` : ""} · 💎 Imersão: ${tarde.imersao}${tarde.imValor ? ` (${brl(tarde.imValor)})` : ""}`,
+      `📞 Ligações atendidas: ${tarde.ligAt} de ${tarde.lig}`,
+      ...pessoas.map(linhaTarde).filter(Boolean),
+      ``,
+    ] : []),
+    `📊 *Dia completo*`,
+    ...blocoNumeros(time), ``,
+    `🏆 *Como cada um foi no dia*`,
+    ...ranking(pessoas, s),
+    ...destaque(pessoas, "do dia"), ``,
+    dinheiro
+      ? sorteio(dia, ["Hoje o caixa cantou! 💸 Parabéns, time. Bom descanso e amanhã tem mais 🚀", "Dia com dinheiro entrando, assim que eu gosto! 💸 Descansem que amanhã a gente repete 🚀", "Que dia, hein! 💸 Orgulho desse time. Até amanhã 🚀"])
+      : sorteio(dia, ["Hoje foi dia de plantar, amanhã a gente colhe 🌱 Bom descanso, time!", "Amanhã é dia de virar o jogo 💪 Bom descanso, pessoal!", "Valeu pelo dia, time! Amanhã tem mais e vai ser melhor 🚀"]),
+    `Quer ver tudo com calma? Tá no painel 👉 ${SITE}`,
+  ].join("\n");
+}
+
+// Para quem e por onde mandar (Configuracoes > Alertas ao gestor); null = nao manda hoje (com o motivo)
+export async function destinoResumo(db, s) {
+  if (!s?.resumo_ativo) return { motivo: "resumo desligado" };
+  if (!(s.resumo_dias || []).includes(new Date(today() + "T12:00:00Z").getUTCDay())) return { motivo: "hoje nao e dia de resumo" };
+  if (!s.instancia_envio_id) return { motivo: "sem WhatsApp de envio" };
+  const tels = (await db.select("telefones_alerta", { select: "telefone" })).map(t => t.telefone);
+  if (!tels.length) return { motivo: "sem telefones de alerta" };
+  return { instancia: s.instancia_envio_id, tels };
+}
+export async function mandar(db, dest, texto, envio, rotulo) {
   let ok = 0;
-  for (const t of tels) {
-    try { await envio(db, s.instancia_envio_id, t.telefone, texto); ok++; }
-    catch (e) { console.error(`[relatorio] envio para ${t.telefone}:`, e.message); }
+  for (const t of dest.tels) {
+    try { await envio(db, dest.instancia, t, texto); ok++; }
+    catch (e) { console.error(`[${rotulo}] envio para ${t}:`, e.message); }
   }
+  return ok;
+}
+
+// turno "manha" (13h): resumo da manha e guarda os numeros. turno "dia" (19h): tarde + dia completo.
+export async function enviarRelatorio(db, { turno = "dia", envio = enviarWhatsApp } = {}) {
+  const hoje = today();
+  const d = await calcularDia(db, hoje);
+  if (turno === "manha") await db.insert("resumos_turno", [{ data: hoje, turno: "manha", dados: contadores(d) }], { onConflict: "data,turno", returning: false });
+  const dest = await destinoResumo(db, d.s);
+  if (!dest.tels) return dest.motivo;
+  const manha = turno === "dia" ? (await db.select("resumos_turno", { select: "dados", filters: { data: `eq.${hoje}`, turno: "eq.manha" } }))[0]?.dados : null;
+  const texto = turno === "manha" ? textoManha(d, hoje) : textoTarde(d, hoje, manha);
+  const ok = await mandar(db, dest, texto, envio, "relatorio");
   if (ok) await db.update("audit_settings", { id: "eq.1" }, { resumo_ultimo_envio: new Date().toISOString() });
-  return `enviado para ${ok} de ${tels.length}`;
+  return `${turno === "manha" ? "resumo da manha" : "resumo da tarde e do dia"} enviado para ${ok} de ${dest.tels.length}`;
 }
 
 export const horaAgora = () => new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: cfg.tz }).format(new Date());

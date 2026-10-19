@@ -129,7 +129,8 @@ export async function avisarEventos(db, R, c, a, jaEnviados = [], { envio = envi
   const novos = eventosDe(a, funcao).filter(e => !jaEnviados.includes(e.chave));
   if (!novos.length) return null;
   const s = R.alertas;
-  const permitidos = novos.filter(e => (e.tipo === "venda" && s.venda) || (e.tipo === "marcacao" && s.marcacao) || (e.tipo === "oportunidade" && s.oportunidade));
+  // venda avisada na hora = so imersao fechada (workshop vai nos resumos); marcacao e oportunidade so se ligadas em Configuracoes
+  const permitidos = novos.filter(e => (e.chave === "venda_imersao" && s.venda) || (e.tipo === "marcacao" && s.marcacao) || (e.tipo === "oportunidade" && s.oportunidade));
   let enviou = false;
   if (permitidos.length && s.instancia && s.telefones.length) {
     const texto = textoAlerta(permitidos[0], { vendedor: R.nomes.get(c.vendedor_id) || "Vendedor", funcao, lead: c.contato_nome || `+${c.telefone || c.contato}`, conversaId: c.id, formato: s.formato, outros: permitidos.slice(1) });

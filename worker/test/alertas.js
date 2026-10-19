@@ -13,7 +13,7 @@ for (const t of ["oi, tudo bem?", "quanto custa?", "vou pensar", "me manda mais 
 const db = fakeSupa();
 const SDR = "sdr-1", INST = { id: "inst-1", vendedor_id: SDR, nome: "WA do Ruan" };
 db.tables.profiles = [{ id: SDR, nome: "Ruan", funcao: "sdr", papel: "vendedor", ativo: true }];
-db.tables.audit_settings = [{ id: 1, auditoria_automatica: true, min_mensagens: 2, alerta_venda: true, alerta_marcacao: true, alerta_oportunidade: false, alerta_formato: "detalhado", instancia_envio_id: "inst-walter" }];
+db.tables.audit_settings = [{ id: 1, auditoria_automatica: true, min_mensagens: 2, alerta_venda: true, alerta_marcacao: false, alerta_oportunidade: false, alerta_formato: "detalhado", instancia_envio_id: "inst-walter" }];
 db.tables.telefones_alerta = [{ telefone: "5584999990000" }];
 db.tables.criterios_rubrica = [{ rubrica: "sdr", chave: "conducao", nome: "Condução", descricao: "", peso: 100, ativo: true, posicao: 1 }];
 for (const t of ["conversas", "mensagens", "auditorias", "notificacoes", "numeros_ignorados"]) db.tables[t] = [];
@@ -34,19 +34,37 @@ await msg(4, false, "Show, pode me inscrever então!");
 const conv = db.tables.conversas[0];
 assert.equal(conv.auditar_rapido, true);
 
-// IA confirma a inscricao com cupom e a reuniao de imersao marcada: um aviso so, o mais urgente (venda)
+// IA confirma a inscricao com cupom e a reuniao de imersao marcada: workshop e reuniao NAO vao para o gestor
+// (workshop entra nos resumos; marcacao desligada), mas ficam registrados para nunca avisar depois
 resposta = { venda: { detectada: true, tipo: "workshop", cupom: true, evidencia: "Show, pode me inscrever então!" }, oportunidade: { detectada: true, tipo: "reuniao_imersao" }, agendou: true, tipo_agendamento: "workshop", reuniao: { tipo: "imersao", cliente_confirmou: true, vendedor_confirmou: true, data: "2026-10-20", hora: "19:00" } };
 assert.equal(await rapida(), 1);
 assert.equal(conv.auditar_rapido, false);
-assert.equal(enviados.length, 1);
-assert.equal(enviados[0].tel, "5584999990000"); assert.equal(enviados[0].inst, "inst-walter");
-{ const t = enviados[0].texto; assert.doesNotMatch(t, /Elon Musk/); assert.match(t, /^Ruan \(SDR\)|^Mais um|^Olha só/); assert.match(t, /Ruan \(SDR\)/); assert.match(t, /Maria Silva/); assert.match(t, /workshop/); assert.match(t, /cupom de convite/); assert.match(t, /"Show, pode me inscrever então!"/); assert.match(t, /E não parou por aí: reunião de imersão marcada também!/); assert.match(t, /\/conversas\//); assert.doesNotMatch(t, /Lead:|💬|➕/); }
+assert.equal(enviados.length, 0, "venda de workshop e reuniao nao avisam na hora");
 assert.deepEqual(db.tables.auditorias[0].alertas_enviados.sort(), ["reuniao_imersao", "venda_workshop"]);
+// texto do aviso de reuniao (se o gestor religar em Configuracoes)
+{ const t = textoAlerta(eventosDe(resposta.oportunidade ? { oportunidade: true, oportunidade_tipo: "reuniao_imersao", oportunidade_evidencia: "quinta 19h", reuniao: resposta.reuniao } : {}, "sdr")[0], { vendedor: "Ruan", funcao: "sdr", lead: "Maria Silva", conversaId: "c1", formato: "detalhado" });
+  assert.match(t, /^📅 \*ALERTA DE REUNIÃO\*/); assert.match(t, /Ruan \(SDR\)/); assert.match(t, /Maria Silva/); assert.doesNotMatch(t, /Elon Musk|Lead:|💬|➕/); }
+
+// imersao fechada (closer): ai sim avisa o gestor na hora
+{
+  const CL = "closer-1", INSTC = { id: "inst-2", vendedor_id: CL, nome: "WA do Walter" };
+  db.tables.profiles.push({ id: CL, nome: "Walter", funcao: "closer", papel: "admin", ativo: true });
+  await saveMessage(db, INSTC, { key: { remoteJid: "5584977776666@s.whatsapp.net", id: "c1", fromMe: true }, messageTimestamp: t0 + 10, message: { conversation: "Fechamos a imersão então?" } });
+  await saveMessage(db, INSTC, { key: { remoteJid: "5584977776666@s.whatsapp.net", id: "c2", fromMe: false }, messageTimestamp: t0 + 40, pushName: "João", message: { conversation: "Fechado, mandei o pix" } });
+  resposta = { venda: { detectada: true, tipo: "imersao", valor: 4800, evidencia: "mandei o pix" } };
+  await rapida();
+  assert.equal(enviados.length, 1, "imersao fechada avisa");
+  assert.match(enviados[0].texto, /IMERSÃO FECHADA/); assert.match(enviados[0].texto, /WALTER/);
+  enviados.length = 0;
+  resposta = { venda: { detectada: true, tipo: "workshop", cupom: true, evidencia: "Show, pode me inscrever então!" }, oportunidade: { detectada: true, tipo: "reuniao_imersao" }, agendou: true, tipo_agendamento: "workshop", reuniao: { tipo: "imersao", cliente_confirmou: true, vendedor_confirmou: true, data: "2026-10-20", hora: "19:00" } };
+  db.tables.conversas = db.tables.conversas.filter(c => c.vendedor_id !== CL);
+  db.tables.auditorias = db.tables.auditorias.filter(a => a.vendedor_id !== CL);
+}
 
 // mesma conversa reauditada com os mesmos eventos: nao repete
 await msg(5, true, "Fechado! Te mando o link. Nos vemos quinta 19h");
 assert.equal(await rapida(), 1);
-assert.equal(enviados.length, 1, "nao repete aviso do mesmo evento");
+assert.equal(enviados.length, 0, "nao avisa depois o que ja foi registrado");
 
 // formato resumido e o closer
 { const r = textoAlerta(eventosDe({ agendou: true, tipo_agendamento: "imersao", reuniao: { cliente_confirmou: true, vendedor_confirmou: true } }, "closer")[0], { vendedor: "Carla", funcao: "closer", lead: "João", conversaId: "x", formato: "resumido" }); assert.doesNotMatch(r, /Elon Musk/); assert.match(r, /^📅 \*ALERTA DE REUNIÃO\*: /); assert.match(r, /Carla \(Closer\)/); assert.match(r, /reunião de implementação/i); assert.match(r, /João/); assert.ok(!r.includes("\n"), r); }
@@ -68,10 +86,9 @@ db.tables.audit_settings[0].alerta_marcacao = false;
 db.tables.auditorias[0].alertas_enviados = ["venda_workshop"];
 await msg(6, false, "combinado, quinta 19h");
 assert.equal(await rapida(), 1);
-assert.equal(enviados.length, 1, "marcacao desligada nao avisa");
+assert.equal(enviados.length, 0, "marcacao desligada nao avisa");
 assert.ok(db.tables.auditorias[0].alertas_enviados.includes("reuniao_imersao"));
-console.log("OK: aviso de venda e marcacao na hora (sinal, IA confirma, uma vez por evento, mais urgente primeiro)");
-console.log("\n--- exemplo do aviso ---\n" + enviados[0].texto);
+console.log("OK: na hora so vai imersao fechada; workshop e reuniao ficam registrados sem aviso");
 
 // reuniao proposta sem aceite: a conversa fica "em negociacao" e o "da certo" (sem palavra-chave) ja reaudita na hora
 {

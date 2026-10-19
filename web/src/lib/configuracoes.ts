@@ -30,7 +30,10 @@ export type Settings = {
   resumo_ativo: boolean;
   resumo_hora: string;
   auditoria_parada_min: number | null; // null = so na rodada final
-  rodada_final_hora: string;
+  rodada_final_hora: string; // resumo da tarde e do dia (padrao 19:00)
+  resumo_manha_hora: string; // resumo do turno da manha (padrao 13:00)
+  alerta_followup: boolean;
+  followup_alerta_d: number;
   historico_dias: number;
   agenda_ativa: boolean;
   agenda_duracao_min: number;
@@ -142,7 +145,9 @@ export function validar(e: Estado): string[] {
   if (!["resumido", "detalhado"].includes(s.alerta_formato)) erros.push("Formato do alerta inválido.");
   if (!(HORAS_RESUMO as readonly string[]).includes(s.resumo_hora)) erros.push("Horário do resumo inválido.");
   if (s.auditoria_parada_min !== null && !inteiro(s.auditoria_parada_min, 10, 1440)) erros.push("Auditar durante o dia: use de 10 minutos a 24 horas parada.");
-  if (!hora(s.rodada_final_hora)) erros.push("Rodada final: escolha um horário válido.");
+  if (!hora(s.rodada_final_hora) || !hora(s.resumo_manha_hora)) erros.push("Resumos: escolha horários válidos.");
+  else if (s.resumo_manha_hora >= s.rodada_final_hora) erros.push("Resumos: o da manhã tem que sair antes do da tarde e do dia.");
+  if (!inteiro(s.followup_alerta_d, 1, 60)) erros.push("Alerta de follow-up: use de 1 a 60 dias sem contato.");
   if (!inteiro(s.historico_dias, 0, 30)) erros.push("Histórico do lead: use de 0 a 30 dias.");
   if (!inteiro(s.agenda_duracao_min, 15, 480)) erros.push("Agenda Google: a reunião precisa durar de 15 minutos a 8 horas.");
   if (s.resumo_ativo && !s.resumo_dias.length) erros.push("Resumo diário: escolha pelo menos um dia.");

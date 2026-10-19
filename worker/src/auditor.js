@@ -35,13 +35,14 @@ export async function carregarRegras(db) {
       parada_min: "auditoria_parada_min" in s ? s.auditoria_parada_min : cfg.idleMin, historico_dias: s.historico_dias ?? 7,
       venda_conta: s.venda_conta || [], venda_nao_conta: s.venda_nao_conta || [], oportunidade_conta: s.oportunidade_conta || [], oportunidade_nao_conta: s.oportunidade_nao_conta || [],
     },
+    bruto: s, // linha inteira de Configuracoes (follow-up, resumos)
     rubricas: { sdr: rub("sdr"), closer: rub("closer"), personalizada: rub("personalizada") },
     ignorados: new Set(ign.map(i => chaveTelefone(i.telefone))),
     funcao: new Map(perfis.map(p => [p.id, p.funcao === "closer" ? "closer" : "sdr"])),
     nomes: new Map(perfis.map(p => [p.id, p.nome])),
     roteiro: roteiroRow?.roteiro || "",
-    // avisos de venda, marcacao e oportunidade no WhatsApp do gestor
-    alertas: { venda: s.alerta_venda ?? true, marcacao: s.alerta_marcacao ?? true, oportunidade: s.alerta_oportunidade ?? false, formato: s.alerta_formato || "detalhado", instancia: s.instancia_envio_id || null, telefones: tels.map(t => t.telefone) },
+    // avisos no WhatsApp do gestor: venda = so imersao fechada; marcacao e oportunidade ficam desligadas por padrao
+    alertas: { venda: s.alerta_venda ?? true, marcacao: s.alerta_marcacao ?? false, oportunidade: s.alerta_oportunidade ?? false, formato: s.alerta_formato || "detalhado", instancia: s.instancia_envio_id || null, telefones: tels.map(t => t.telefone) },
   };
 }
 export const rubricaDe = (R, vendedorId) => {

@@ -178,22 +178,15 @@ const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", curren
 const ELON = "🚀 *Aviso do Elon Musk*";
 const LINK = "Quer ver como foi? A conversa tá aqui 👉 <link>";
 function previewAlerta(s: Settings) {
-  const det = s.alerta_formato === "detalhado";
   const blocos: string[] = [];
-  if (s.alerta_venda) blocos.push(det
-    ? `Ruan (SDR) acabou de colocar Maria Silva pra dentro do workshop! 🎟️\nVeio com cupom de convite, então entrou de cortesia 🎟️\nO lead soltou essa: "Show, pode me inscrever então!"\n\n${LINK}`
-    : `Ruan (SDR) acabou de colocar Maria Silva pra dentro do workshop! 🎟️ (com cupom de convite)`);
   if (s.alerta_venda) blocos.push(`🚨🚨🚨 HEIIIIIIIIIIIIIIIII 🚨🚨🚨\n💸💸 PINGOU UMA VENDA DE WALTER!!! 💸💸\n\n🔥 IMERSÃO FECHADA · ${brl(4800)} 🔥\nQuem comprou: João Souza 🙌\nE olha o que o lead mandou: "mandei o pix"\n\n🍾🎉 BORA, TIME! QUEM É O PRÓXIMO? 🎉🍾\nCorre ver a conversa completa 👉 <link>`);
-  if (s.alerta_marcacao) blocos.push(det
-    ? `📅 *ALERTA DE REUNIÃO*\n\nTem reunião de imersão vindo aí: João Souza topou com Nick (SDR) 📅\nPalavras do próprio lead: "Combinado, quinta às 19h"\n\n${LINK}`
-    : `📅 *ALERTA DE REUNIÃO*: Tem reunião de imersão vindo aí: João Souza topou com Nick (SDR) 📅`);
-  if (s.alerta_oportunidade) blocos.push(det
-    ? `Paula Lima tá de olho na imersão e foi conversar com Nick (SDR). Esse tá esquentando! 🔥\nPalavras do próprio lead: "Quero entender melhor a imersão"\nUm empurrãozinho agora e vira marcação 😉\n\n${LINK}`
-    : `Paula Lima tá de olho na imersão e foi conversar com Nick (SDR). Esse tá esquentando! 🔥`);
-  return blocos.length ? ["As frases variam de uma conversa para outra, para não ficar repetitivo. Exemplos:", ...blocos].join("\n\n─────────\n\n") : "Nenhum aviso marcado: os telefones recebem só o relatório do dia.";
+  if (s.alerta_followup) blocos.push(`⏰ *ALERTA DE FOLLOW-UP*\n\nEsses 2 leads em negociação estão há ${s.followup_alerta_d} dias ou mais sem contato:\n\n*Nick (SDR)*\n• Carla Dias · (84) 91111-2222 · ${s.followup_alerta_d + 2} dias sem contato · interesse na imersão\n  <link da conversa>\n• Pedro Lima · (84) 98888-0000 · ${s.followup_alerta_d} dias sem contato · vaga no workshop\n  <link da conversa>\n\nBora retomar esses contatos antes que esfriem! 💪`);
+  return blocos.length ? blocos.join("\n\n─────────\n\n") : "Nenhum aviso ligado: os telefones recebem só os resumos.";
 }
-function previewResumo() {
-  return `${ELON}\n\nBoa noite, gestão! 😄 Passando pra fechar o dia com o resumo do dia 17/10. Bora ver como o time foi:\n\n✅ Auditorias: 12 · ⭐ Nota média: 7,8\n⏱️ 1ª resposta: 4min · tempo médio de resposta: 12min\n📞 Ligações atendidas: 9 de 15\n🎟️ Workshop por convite (cupom 100%): 3\n💰 Workshop vendido: 2 · ${brl(394)}\n💎 Imersão: 1 fechada · ${brl(4800)}\n🎯 Oportunidades: 7\n\n🏆 *Como cada um foi*\n1. Ruan (SDR): ⭐ 8,4 · 22/25 conversas trocadas · 5/6 marcações · 🎟️ 2 convites · 💰 1 vendido (${brl(197)}) · 📞 5 atendidas\n2. Nick (SDR): ⭐ 7,6 · 26/25 conversas trocadas · 4/6 marcações · 🎟️ 1 convite · 💰 1 vendido (${brl(197)}) · 📞 4 atendidas\n\n👑 Destaque do dia: *Ruan*, com nota 8,4. Manda aquele parabéns! 👏\n\nHoje o caixa cantou! 💸 Parabéns, time. Bom descanso e amanhã tem mais 🚀\nQuer ver tudo com calma? Tá no painel 👉 <link do sistema>`;
+function previewResumo(s: Settings) {
+  const h = (x: string) => `${Number(x.slice(0, 2))}h`;
+  const numeros = (a: string) => `✅ Auditorias: ${a}\n💬 Conversas trocadas: 22 · 📅 Marcações: 5\n📞 Ligações atendidas: 9 de 15\n🎟️ Workshop por convite (cupom 100%): 3\n💰 Workshop vendido: 2 · ${brl(394)}\n💎 Imersão: 1 fechada · ${brl(4800)}\n🎯 Oportunidades: 7`;
+  return `── ${s.resumo_manha_hora} · turno da manhã ──\n\n${ELON}\n\nBoa tarde, gestão! ☀️ Fechou o turno da manhã de hoje (17/10). Olha como o time foi:\n\n${numeros("7 · ⭐ Nota média: 7,6")}\n\n🏆 *Como cada um foi na manhã*\n1. Ruan (SDR): ⭐ 8,1 · 12/25 conversas trocadas · 3/6 marcações · 🎟️ 2 convites · 📞 4 atendidas\n\nBora pra tarde que ainda dá pra bater a meta! 🚀\n\n── ${s.rodada_final_hora} · tarde e dia ──\n\n${ELON}\n\nBoa noite, gestão! 🌙 Fechando o dia 17/10 com o resumo da tarde e do dia completo:\n\n🌇 *Tarde (${h(s.resumo_manha_hora)} às ${h(s.rodada_final_hora)})*\n💬 Conversas trocadas: 10 · 📅 Marcações: 2\n🎟️ Convites: 1 · 💰 Workshop vendido: 1 (${brl(197)}) · 💎 Imersão: 1 (${brl(4800)})\n📞 Ligações atendidas: 4 de 6\n• Ruan: 10 conversas · 2 marcações · 🎟️ 1 convite\n\n📊 *Dia completo*\n${numeros("12 · ⭐ Nota média: 7,8")}\n\n🏆 *Como cada um foi no dia*\n1. Ruan (SDR): ⭐ 8,4 · 22/25 conversas trocadas · 5/6 marcações · 🎟️ 3 convites · 💰 2 vendidos (${brl(394)}) · 📞 9 atendidas\n\n👑 Destaque do dia: *Ruan*, com nota 8,4. Manda aquele parabéns! 👏\n\nHoje o caixa cantou! 💸 Parabéns, time. Bom descanso e amanhã tem mais 🚀\nQuer ver tudo com calma? Tá no painel 👉 <link do sistema>`;
 }
 
 // ---------- card em acordeao ----------
@@ -325,20 +318,17 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
       {/* ---------- Essencial ---------- */}
       <h2 className="pt-2 text-lg font-bold">Configuração essencial</h2>
       <Card {...cardProps("auto")} titulo="Auditoria automática" recomendado
-        resumo={s.auditoria_automatica ? `Ligada · ${s.auditoria_parada_min === null ? "só na rodada final" : `parada ${s.auditoria_parada_min % 60 === 0 ? `${s.auditoria_parada_min / 60}h` : `${s.auditoria_parada_min} min`}`} · rodada final às ${s.rodada_final_hora}` : "Desligada: só audita quando você pede"}>
+        resumo={s.auditoria_automatica ? `Ligada · ${s.auditoria_parada_min === null ? "só na rodada final" : `parada ${s.auditoria_parada_min % 60 === 0 ? `${s.auditoria_parada_min / 60}h` : `${s.auditoria_parada_min} min`}`} · rodadas às ${s.resumo_manha_hora} e ${s.rodada_final_hora}` : "Desligada: só audita quando você pede"}>
         <div className="divide-y divide-line">
           <Linha titulo="Auditar sozinho" sub="O Auditor dá a nota sozinho e avisa o que precisa de atenção. Desligado, só audita pelo botão Auditar agora na conversa.">
             <Toggle on={s.auditoria_automatica} onChange={(v) => set({ auditoria_automatica: v })} rotulo="Auditoria automática" />
           </Linha>
           {s.auditoria_automatica && <>
-            <Linha titulo="Auditar durante o dia" sub={s.auditoria_parada_min === null ? "Desligado: só audita na rodada final do dia" : "Só audita a conversa que ficou parada esse tempo, para não dar nota no meio do papo"}>
+            <Linha titulo="Auditar durante o dia" sub={s.auditoria_parada_min === null ? "Desligado: só audita nas rodadas dos resumos" : "Só audita a conversa que ficou parada esse tempo, para não dar nota no meio do papo"}>
               <span className="flex items-center gap-3">
                 {s.auditoria_parada_min !== null && <Numero valor={Math.round(s.auditoria_parada_min / 60 * 10) / 10} onChange={(v) => set({ auditoria_parada_min: Math.min(1440, Math.max(10, Math.round((v ?? 2) * 60))) })} min={1} max={24} sufixo="h parada" largura="w-20" />}
                 <Toggle on={s.auditoria_parada_min !== null} onChange={(v) => set({ auditoria_parada_min: v ? 120 : null })} rotulo="Auditar durante o dia" />
               </span>
-            </Linha>
-            <Linha titulo="Rodada final do dia" sub="Audita o dia fechado de toda conversa que mudou e, logo depois, manda o relatório do dia ao gestor">
-              <input type="time" value={s.rodada_final_hora} onChange={(ev) => set({ rodada_final_hora: ev.target.value })} className="input !w-auto !py-1.5 [color-scheme:dark]" />
             </Linha>
             <Linha titulo="Histórico do lead" sub="A IA lê as conversas dos dias anteriores com o mesmo lead como contexto (follow-up, o que foi prometido). A nota é só do dia.">
               <Numero valor={s.historico_dias} onChange={(v) => set({ historico_dias: v ?? 0 })} max={30} sufixo="dias" largura="w-20" />
@@ -374,7 +364,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
       </Card>
 
       <Card {...cardProps("alertas")} titulo="Alertas ao gestor" recomendado
-        resumo={`${e.alertas.length} de 3 telefones · ${[s.alerta_venda && "vendas", s.alerta_marcacao && "marcações", s.alerta_oportunidade && "oportunidades"].filter(Boolean).join(", ") || "só relatório do dia"} · ${s.alerta_formato}${envio ? "" : " · falta o número que envia"}`}>
+        resumo={`${e.alertas.length} de 3 telefones · ${[s.alerta_venda && "vendas de imersão", s.alerta_followup && `follow-up após ${s.followup_alerta_d} dias`].filter(Boolean).join(", ") || "só os resumos"}${envio ? "" : " · falta o número que envia"}`}>
         <div className="grid gap-5 lg:grid-cols-2">
           <div className="space-y-5">
             <div><div className="label mb-2">Quem recebe (até 3 WhatsApp)</div>
@@ -387,17 +377,18 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
               {!conectados.length && <p className="mt-1 text-xs text-warn">Nenhum WhatsApp conectado agora.</p>}
               <p className="mt-1 text-xs text-mute">De preferência um número só do sistema, para não misturar com conversa de vendedor.</p></div>
             <div><div className="label mb-2">Quando avisar no WhatsApp</div>
-              <Linha titulo="Vendas" sub="Inscrição no workshop (inclusive cupom R$ 0) e imersão fechada"><Toggle on={s.alerta_venda} onChange={(v) => set({ alerta_venda: v })} rotulo="Avisar vendas" /></Linha>
-              <Linha titulo="Marcações de reunião" sub="Reunião de imersão (SDR) e reunião de implementação (Closer)"><Toggle on={s.alerta_marcacao} onChange={(v) => set({ alerta_marcacao: v })} rotulo="Avisar marcações" /></Linha>
-              <Linha titulo="Outras oportunidades" sub="Interesse claro no workshop ou na imersão, sem marcar nada ainda"><Toggle on={s.alerta_oportunidade} onChange={(v) => set({ alerta_oportunidade: v })} rotulo="Avisar oportunidades" /></Linha>
-              <p className="mt-1 text-xs text-mute">O aviso sai na hora: quando a conversa tem sinal de venda ou marcação ("pode me inscrever", "cupom", "comprovante", "quinta às 19h"...), o Auditor audita na hora e, se confirmar, avisa em cerca de 2 minutos.</p></div>
-            <div><div className="label mb-2">Formato</div>
-              <Opcoes valor={s.alerta_formato} onChange={(v) => set({ alerta_formato: v })} opcoes={[["resumido", "Resumido", "Direto ao ponto"], ["detalhado", "Detalhado", "Com contexto e link"]]} /></div>
+              <Linha titulo="Vendas de imersão" sub="Imersão fechada, na hora. Inscrição no workshop (convite ou vendida) não é avisada: entra nos resumos."><Toggle on={s.alerta_venda} onChange={(v) => set({ alerta_venda: v })} rotulo="Avisar vendas de imersão" /></Linha>
+              <Linha titulo="Follow-up atrasado" sub="Leads em negociação (interesse, reunião ou vaga reservada, sem venda) sem contato há esse tempo. Sai junto com o resumo da manhã, um aviso por lead parado.">
+                <span className="flex items-center gap-3">
+                  {s.alerta_followup && <Numero valor={s.followup_alerta_d} onChange={(v) => set({ followup_alerta_d: v ?? 6 })} min={1} max={60} sufixo="dias" largura="w-20" />}
+                  <Toggle on={s.alerta_followup} onChange={(v) => set({ alerta_followup: v })} rotulo="Alerta de follow-up" />
+                </span>
+              </Linha>
+              <p className="mt-1 text-xs text-mute">A venda de imersão é avisada em cerca de 1 minuto: o Auditor vigia as conversas em negociação e audita na hora quando aparece pagamento, comprovante ou fechamento. Reuniões continuam indo para a Agenda Google, sem mensagem.</p></div>
           </div>
           <div><div className="label mb-2">Prévia</div><pre className={pre}>{previewAlerta(s)}</pre>
             <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-mute">
-              <li>Cada conversa gera no máximo uma mensagem, a do evento mais importante.</li>
-              <li>Só avisa conversas do dia, uma vez por evento. Se a mesma conversa tiver venda e marcação juntas, a mensagem cita as duas.</li>
+              <li>Cada venda é avisada uma vez só. Workshop, reuniões e oportunidades aparecem nos resumos das {s.resumo_manha_hora} e das {s.rodada_final_hora}.</li>
               <li>Alerta crítico nunca vai pelo WhatsApp: chega como notificação aqui no sistema, para o gestor e para o vendedor da conversa.</li>
             </ul></div>
         </div>
@@ -470,20 +461,26 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
         )}
       </Card>
 
-      <Card {...cardProps("resumo")} titulo="Relatório do dia no WhatsApp"
-        resumo={s.resumo_ativo ? `Ligado · após a rodada das ${s.rodada_final_hora} · ${s.resumo_dias.map((d) => DIAS_SEMANA[d]).join(", ")}${e.alertas.length ? "" : " · falta telefone"}` : "Desligado"}>
+      <Card {...cardProps("resumo")} titulo="Resumos do dia no WhatsApp"
+        resumo={s.resumo_ativo ? `Ligado · manhã às ${s.resumo_manha_hora} · tarde e dia às ${s.rodada_final_hora} · ${s.resumo_dias.map((d) => DIAS_SEMANA[d]).join(", ")}${e.alertas.length ? "" : " · falta telefone"}` : "Desligado"}>
         <div className="grid gap-5 lg:grid-cols-2">
           <div className="space-y-4">
-            <Linha titulo="Enviar relatório do dia" sub={`Sai logo depois da rodada final das ${s.rodada_final_hora} (horário de Brasília), pelo WhatsApp escolhido em Alertas ao gestor, para os mesmos telefones dos alertas`}><Toggle on={s.resumo_ativo} onChange={(v) => set({ resumo_ativo: v })} rotulo="Relatório do dia" /></Linha>
+            <Linha titulo="Enviar os resumos" sub="Antes de cada resumo o Auditor audita tudo o que mudou no dia, sem esperar a conversa parar. Sai pelo WhatsApp escolhido em Alertas ao gestor, para os mesmos telefones."><Toggle on={s.resumo_ativo} onChange={(v) => set({ resumo_ativo: v })} rotulo="Resumos do dia" /></Linha>
+            <Linha titulo="Resumo do turno da manhã" sub="Como foi a manhã, com a meta do dia de cada vendedor (horário de Brasília)">
+              <input type="time" value={s.resumo_manha_hora} onChange={(ev) => set({ resumo_manha_hora: ev.target.value })} className="input !w-auto !py-1.5 [color-scheme:dark]" />
+            </Linha>
+            <Linha titulo="Resumo da tarde e do dia" sub="A tarde separada (depois do resumo da manhã) e o dia completo. É também a rodada final de auditoria.">
+              <input type="time" value={s.rodada_final_hora} onChange={(ev) => set({ rodada_final_hora: ev.target.value })} className="input !w-auto !py-1.5 [color-scheme:dark]" />
+            </Linha>
             <div><div className="label mb-2">Dias</div>
               <div className="flex flex-wrap gap-1">{DIAS_SEMANA.map((d, i) => {
                 const on = s.resumo_dias.includes(i);
                 return <button key={d} type="button" aria-pressed={on} onClick={() => set({ resumo_dias: on ? s.resumo_dias.filter((x) => x !== i) : [...s.resumo_dias, i].sort() })} className={`w-12 rounded-lg border py-1.5 text-xs font-semibold ${on ? "border-brand bg-brand text-bg" : "border-line text-mute"}`}>{d}</button>;
               })}</div>
-              <p className="mt-1 text-xs text-mute">Dias sem envio acumulam no próximo relatório.</p></div>
+              <p className="mt-1 text-xs text-mute">Em dia desmarcado nenhum resumo é enviado.</p></div>
             {!e.alertas.length && <p className="text-xs text-warn">Cadastre pelo menos um telefone em Alertas ao gestor.</p>}
           </div>
-          <div><div className="label mb-2">Prévia</div><pre className={pre}>{previewResumo()}</pre></div>
+          <div><div className="label mb-2">Prévia</div><pre className={pre}>{previewResumo(s)}</pre></div>
         </div>
       </Card>
 
