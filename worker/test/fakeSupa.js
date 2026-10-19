@@ -17,6 +17,11 @@ function match(row, filters) {
     const [op, ...rest] = f.split("."); const arg = rest.join(".");
     if (op === "eq") return String(v) === arg;
     if (op === "neq") return String(v) !== arg;
+    if (op === "like" || (op === "not" && arg.startsWith("like."))) {
+      const pat = op === "like" ? arg : arg.slice(5);
+      const re = new RegExp("^" + pat.split("*").map(x => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$");
+      return op === "like" ? re.test(String(v ?? "")) : !re.test(String(v ?? ""));
+    }
     if (op === "in") return arg.slice(1, -1).split(",").includes(String(v));
     const a = val(v), b = val(arg);
     return op === "lt" ? a < b : op === "lte" ? a <= b : op === "gt" ? a > b : op === "gte" ? a >= b : false;

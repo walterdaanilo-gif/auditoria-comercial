@@ -9,6 +9,7 @@ import { runAudits } from "./auditor.js";
 import { provedor } from "./ia.js";
 import { processAnalyses } from "./analysis.js";
 import { mirrorAll, mirrorEnabled } from "./mirror.js";
+import { importarHistoricoCrm } from "./crm.js";
 
 // Avisa no log quais variaveis faltam. Sem as do Supabase nao da para rodar nada.
 const faltam = Object.entries({ SUPABASE_URL: cfg.supabaseUrl, SUPABASE_SERVICE_ROLE_KEY: cfg.serviceKey }).filter(([, v]) => !v).map(([k]) => k);
@@ -37,6 +38,8 @@ loop("transcricao", 20_000, () => transcribePending(supa));
 loop("auditoria-rapida", 60_000, async () => { const n = await runAudits(supa, { soSinais: true }); if (n) console.log(`[auditoria] ${n} na fila rapida (venda, marcacao ou auditar agora)`); });
 loop("auditoria", cfg.auditEveryMin * 60_000, async () => { const n = await cicloDeAuditoria(supa); if (n) console.log(`[auditoria] ${n} auditorias novas`); });
 loop("analise", 30_000, () => processAnalyses(supa));
+// CRM Q5: historico de antes do WhatsApp conectado + revisao dos clientes potenciais (daqui pra frente vale o WhatsApp)
+loop("crm", 15 * 60_000, () => importarHistoricoCrm(supa));
 if (mirrorEnabled()) loop("planilha", 30_000, () => mirrorAll(supa)); else console.log("[planilha] espelho desligado (sem SHEET_ID ou chave do Google)");
 
 // Servidor HTTP: saude para a hospedagem e webhook da Uazapi (POST /webhook/uazapi?k=<WEBHOOK_SECRET>)

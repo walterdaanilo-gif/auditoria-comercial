@@ -30,6 +30,10 @@ globalThis.fetch = ia;
 const velho = addDays(hoje, -8);
 db.tables.conversas.push({ id: "parado", vendedor_id: SDR, instancia_id: INST, contato: "5584911112222", telefone: "5584911112222", contato_nome: "Carla Dias", canal: "whatsapp", data: velho, ultima_msg_em: `${velho}T10:00:00-03:00`, auditar_agora: false });
 db.tables.auditorias.push({ id: "a-parado", conversa_id: "parado", vendedor_id: SDR, oportunidade: true, oportunidade_tipo: "interesse_imersao", venda: false });
+db.tables.mensagens.push({ id: "p1", conversa_id: "parado", vendedor_id: SDR, remetente: "cliente", texto: "quero saber da imersão", tipo: "texto", enviada_em: `${velho}T09:50:00-03:00` },
+  { id: "p2", conversa_id: "parado", vendedor_id: SDR, remetente: "vendedor", texto: "te mando os detalhes", tipo: "texto", enviada_em: `${velho}T10:00:00-03:00` });
+db.tables.instancias_whatsapp = [{ id: INST, vendedor_id: SDR, numero: "5584986483304" }, { id: "inst-walter", vendedor_id: "walter", numero: "5584936180882" }];
+db.tables.crm_conversas = [];
 
 // 12h: a de ontem (parada ha horas) e auditada; a de hoje, parada so 30 min (regra de 2h), espera. Sem resumo.
 const enviados = [];
@@ -46,32 +50,37 @@ assert.equal(aHoje.venda, true); assert.equal(aHoje.venda_cupom, true);
 const pHoje = prompts.find(p => p.includes("Falou com o sócio"));
 assert.ok(pHoje.includes("HISTÓRICO DOS DIAS ANTERIORES") && pHoje.includes("vou ver com meu sócio") && pHoje.includes("CONVERSA DO DIA"), "leva o historico de ontem como contexto");
 assert.equal(db.tables.audit_settings[0].resumo_manha_ultima, hoje);
-assert.equal(enviados.length, 2, "resumo da manha + follow-up");
+assert.equal(enviados.length, 3, "resumo da manha + follow-up para o vendedor + erro de follow-up para a gestao");
 assert.equal(enviados[0].tel, "5584999990000"); assert.equal(enviados[0].inst, "inst-walter");
 const manha = enviados[0].texto;
 assert.ok(manha.startsWith("🚀 *Aviso do Elon Musk*") && /turno da manhã|resumo da manhã|Resumo do turno da manhã/.test(manha) && manha.includes("Ligações atendidas: 2 de 3") && manha.includes("Workshop por convite (cupom 100%): 1") && manha.includes("Como cada um foi na manhã") && manha.includes("1/6 marcações") && manha.includes("🎟️ 1 convite"), manha);
-const fu = enviados[1].texto;
-assert.ok(fu.startsWith("⏰ *ALERTA DE FOLLOW-UP*") && fu.includes("Carla Dias") && fu.includes("8 dias sem contato") && fu.includes("interesse na imersão") && fu.includes("*Ruan (SDR)*") && fu.includes("/conversas/parado"), fu);
-assert.ok(!fu.includes("5584988887777"), "lead que comprou nao entra no follow-up");
+const fuV = enviados[1];
+assert.equal(fuV.tel, "5584986483304", "vai para o WhatsApp do proprio vendedor");
+assert.ok(fuV.texto.startsWith("⏰ *FOLLOW-UP ATRASADO*") && fuV.texto.includes("Oi, Ruan!") && fuV.texto.includes("Carla Dias") && fuV.texto.includes("8 dias sem follow-up") && fuV.texto.includes("interesse na imersão") && fuV.texto.includes("/conversas/parado"), fuV.texto);
+const fu = enviados[2].texto;
+assert.equal(enviados[2].tel, "5584999990000");
+assert.ok(fu.startsWith("⚠️ *ERRO DE FOLLOW-UP*") && fu.includes("*Ruan (SDR)*: 1 lead sem follow-up") && fu.includes("Carla Dias"), fu);
+assert.ok(!fu.includes("5584988887777") && !fuV.texto.includes("(84) 98888-7777"), "lead que comprou nao entra no follow-up");
+assert.ok(db.tables.notificacoes.some(n => n.para === SDR && n.titulo.startsWith("Follow-up atrasado")), "notificacao no sistema para o vendedor");
 assert.equal(db.tables.resumos_turno.length, 1);
 
 // 13h30: ja mandou a manha, nao repete
 await cicloDeAuditoria(db, { hora: "13:30", envio });
-assert.equal(enviados.length, 2);
+assert.equal(enviados.length, 3);
 
 // 19h: a tarde = dia menos a manha (2 conversas e 1 marcacao a mais) + dia completo
 db.rpcs.resumo_sdr2 = () => [{ dia: hoje, vendedor_id: SDR, contatadas: 3, enviadas: 3, respostas: 3, ligacoes: 4, ligacoes_atendidas: 3, ligacoes_seg: 300, marcacoes: 2, auditadas: 1, nota_soma: 10 }];
 await cicloDeAuditoria(db, { hora: "19:01", envio });
-assert.equal(enviados.length, 3);
-const txt = enviados[2].texto;
+assert.equal(enviados.length, 4);
+const txt = enviados[3].texto;
 assert.ok(txt.startsWith("🚀 *Aviso do Elon Musk*") && txt.includes("🌇 *Tarde (13h às 19h)*") && txt.includes("💬 Conversas trocadas: 2 · 📅 Marcações: 1") && txt.includes("📞 Ligações atendidas: 1 de 1") && txt.includes("• Ruan: 2 conversas · 1 marcação")
   && txt.includes("📊 *Dia completo*") && txt.includes("Ligações atendidas: 3 de 4") && txt.includes("Como cada um foi no dia") && txt.includes("👑 Destaque do dia: *Ruan*") && txt.includes("2/6 marcações"), txt);
 assert.equal(db.tables.audit_settings[0].rodada_final_ultima, hoje);
 
 // 19h10: ja rodou hoje, nao repete; follow-up do mesmo lead parado nao repete
 await cicloDeAuditoria(db, { hora: "19:10", envio });
-assert.equal(enviados.length, 3);
+assert.equal(enviados.length, 4);
 const { avisarFollowups } = await import("../src/followup.js");
 assert.equal(await avisarFollowups(db, { envio }), "nenhum lead parado novo");
 console.log("OK: resumo da manha (13h) + follow-up, resumo da tarde e do dia (19h), sem repetir");
-console.log("\n--- resumo da manha ---\n" + manha + "\n\n--- follow-up ---\n" + fu + "\n\n--- resumo das 19h ---\n" + txt);
+console.log("\n--- resumo da manha ---\n" + manha + "\n\n--- follow-up (vendedor) ---\n" + fuV.texto + "\n\n--- follow-up (gestao) ---\n" + fu + "\n\n--- resumo das 19h ---\n" + txt);

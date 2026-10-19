@@ -931,3 +931,10 @@ alter table public.followups_avisados enable row level security;
 
 -- Conflito da reuniao com outro compromisso da agenda: avisado uma vez por horario
 alter table public.reunioes_agenda add column if not exists conflito_avisado text;
+
+-- CRM Q5: inicio da captura do WhatsApp de cada vendedor (o historico do CRM so e copiado antes disso)
+create table if not exists public.crm_corte (
+  vendedor_id uuid primary key references public.profiles(id) on delete cascade,
+  corte timestamptz not null,
+  criado_em timestamptz not null default now());
+alter table public.crm_corte enable row level security;
