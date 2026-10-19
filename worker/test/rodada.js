@@ -53,7 +53,7 @@ assert.equal(db.tables.audit_settings[0].resumo_manha_ultima, hoje);
 assert.equal(enviados.length, 3, "resumo da manha + follow-up para o vendedor + erro de follow-up para a gestao");
 assert.equal(enviados[0].tel, "5584999990000"); assert.equal(enviados[0].inst, "inst-walter");
 const manha = enviados[0].texto;
-assert.ok(manha.startsWith("🚀 *Aviso do Elon Musk*") && /turno da manhã|resumo da manhã|Resumo do turno da manhã/.test(manha) && manha.includes("Ligações atendidas: 2 de 3") && manha.includes("Workshop por convite (cupom 100% ou Carbone): 1") && manha.includes("Como cada um foi na manhã") && manha.includes("1/6 marcações") && manha.includes("🎟️ 1 convite"), manha);
+assert.ok(manha.startsWith("🚀 *Aviso do Cabueta*") && /turno da manhã|resumo da manhã|Resumo do turno da manhã/.test(manha) && manha.includes("Ligações atendidas: 2 de 3") && manha.includes("Workshop por convite (cupom 100% ou Carbone): 1") && manha.includes("Como cada um foi na manhã") && manha.includes("1/6 marcações") && manha.includes("🎟️ 1 convite"), manha);
 const fuV = enviados[1];
 assert.equal(fuV.tel, "5584986483304", "vai para o WhatsApp do proprio vendedor");
 assert.ok(fuV.texto.startsWith("⏰ *FOLLOW-UP ATRASADO*") && fuV.texto.includes("Oi, Ruan!") && fuV.texto.includes("Carla Dias") && fuV.texto.includes("8 dias sem follow-up") && fuV.texto.includes("interesse na imersão") && fuV.texto.includes("/conversas/parado"), fuV.texto);
@@ -73,7 +73,7 @@ db.rpcs.resumo_sdr2 = () => [{ dia: hoje, vendedor_id: SDR, contatadas: 3, envia
 await cicloDeAuditoria(db, { hora: "19:01", envio });
 assert.equal(enviados.length, 4);
 const txt = enviados[3].texto;
-assert.ok(txt.startsWith("🚀 *Aviso do Elon Musk*") && txt.includes("🌇 *Tarde (13h às 19h)*") && txt.includes("💬 Conversas trocadas: 2 · 📅 Marcações: 1") && txt.includes("📞 Ligações atendidas: 1 de 1") && txt.includes("• Ruan: 2 conversas · 1 marcação")
+assert.ok(txt.startsWith("🚀 *Aviso do Cabueta*") && txt.includes("🌇 *Tarde (13h às 19h)*") && txt.includes("💬 Conversas trocadas: 2 · 📅 Marcações: 1") && txt.includes("📞 Ligações atendidas: 1 de 1") && txt.includes("• Ruan: 2 conversas · 1 marcação")
   && txt.includes("📊 *Dia completo*") && txt.includes("Ligações atendidas: 3 de 4") && txt.includes("Como cada um foi no dia") && txt.includes("👑 Destaque do dia: *Ruan*") && txt.includes("2/6 marcações"), txt);
 assert.equal(db.tables.audit_settings[0].rodada_final_ultima, hoje);
 

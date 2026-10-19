@@ -15,7 +15,7 @@ export default function PrivacidadePage() {
       <section className="mt-8 space-y-3">
         <h2 className="text-xl font-semibold">1. Quem somos</h2>
         <p>
-          A Cabueta do Elon Musk é o sistema interno de auditoria comercial da Weevo. Ele é usado apenas pela equipe
+          O Cabueta do Elon Musk é o sistema interno de auditoria comercial da Weevo. Ele é usado apenas pela equipe
           comercial da Weevo para revisar a qualidade das conversas de WhatsApp e das ligações com leads e clientes,
           e para organizar as reuniões agendadas com eles. O acesso é restrito a usuários cadastrados pelo
           administrador.

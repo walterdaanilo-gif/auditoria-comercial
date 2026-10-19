@@ -38,8 +38,8 @@ export function eventosDe(a, funcao) {
   return ev;
 }
 
-// Assinatura do Elon Musk, o robo do Auditor (so no relatorio do dia; os avisos vao direto ao ponto)
-export const ASSINATURA = "🚀 *Aviso do Elon Musk*";
+// Assinatura do Cabueta (Cabueta do Elon Musk), o robo do Auditor (so no relatorio do dia; os avisos vao direto ao ponto)
+export const ASSINATURA = "🚀 *Aviso do Cabueta*";
 
 // Sorteio fixo por conversa: a mesma conversa sempre gera o mesmo texto, conversas diferentes variam
 export const sorteio = (id, l) => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return l[h % l.length]; };

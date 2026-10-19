@@ -202,7 +202,7 @@ function FotoVendedor({ v }: { v: { id: string; nome: string; foto_url?: string 
 
 // ---------- previews ----------
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const ELON = "🚀 *Aviso do Elon Musk*";
+const ELON = "🚀 *Aviso do Cabueta*";
 const LINK = "Quer ver como foi? A conversa tá aqui 👉 <link>";
 function previewAlerta(s: Settings) {
   const blocos: string[] = [];
@@ -296,12 +296,12 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
   return (
     <div className="space-y-6">
       <div><h1 className="page-title">Configurações</h1>
-        <p className="page-sub">Equipe, quais conversas a Cabueta revisa, como ela dá nota, o que conta como venda e quem recebe os avisos. Tudo aqui muda a auditoria de verdade.</p></div>
+        <p className="page-sub">Equipe, quais conversas o Cabueta revisa, como ele dá nota, o que conta como venda e quem recebe os avisos. Tudo aqui muda a auditoria de verdade.</p></div>
 
       {/* Progresso */}
       <div className="card">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="font-bold">Configuração da Cabueta · <span className="tabular-nums text-brand">{pct}%</span> <span className="font-normal text-mute">· Nível {nivel} · {feitos} de {passos.length} passos</span></div>
+          <div className="font-bold">Configuração do Cabueta · <span className="tabular-nums text-brand">{pct}%</span> <span className="font-normal text-mute">· Nível {nivel} · {feitos} de {passos.length} passos</span></div>
           {proximo ? <button type="button" onClick={() => irPara(proximo.id)} className="text-sm font-semibold text-brand hover:underline">Próximo passo: {proximo.titulo} →</button> : <span className="flex items-center gap-1 text-sm text-ok"><CheckCircle2 size={15} />Tudo configurado</span>}
         </div>
         <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-track"><div className="h-full rounded-full bg-brand transition-all" style={{ width: `${pct}%` }} /></div>
@@ -348,7 +348,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
       <Card {...cardProps("auto")} titulo="Auditoria automática" recomendado
         resumo={s.auditoria_automatica ? `Ligada · ${s.auditoria_parada_min === null ? "só na rodada final" : `parada ${s.auditoria_parada_min % 60 === 0 ? `${s.auditoria_parada_min / 60}h` : `${s.auditoria_parada_min} min`}`} · rodadas às ${s.resumo_manha_hora} e ${s.rodada_final_hora}` : "Desligada: só audita quando você pede"}>
         <div className="divide-y divide-line">
-          <Linha titulo="Auditar sozinho" sub="A Cabueta dá a nota sozinho e avisa o que precisa de atenção. Desligado, só audita pelo botão Auditar agora na conversa.">
+          <Linha titulo="Auditar sozinho" sub="O Cabueta dá a nota sozinho e avisa o que precisa de atenção. Desligado, só audita pelo botão Auditar agora na conversa.">
             <Toggle on={s.auditoria_automatica} onChange={(v) => set({ auditoria_automatica: v })} rotulo="Auditoria automática" />
           </Linha>
           {s.auditoria_automatica && <>
@@ -383,7 +383,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
             <Toggle on={s.so_com_proposta} onChange={(v) => set({ so_com_proposta: v })} rotulo="Só conversas em proposta" />
           </Linha>
         </div>
-        <p className="mt-3 rounded-xl bg-track p-3 text-xs text-mute">Sempre vale: só entra conversa em que o lead respondeu. Mensagens automáticas, chatbot e menus não contam na nota; conversa 100% bot é sinalizada em vez de pontuada. A cada rodada a Cabueta revisa {amostra}% das conversas com {minMsgs}+ mensagens. Menos amostra e mais mensagens = menos crédito gasto.</p>
+        <p className="mt-3 rounded-xl bg-track p-3 text-xs text-mute">Sempre vale: só entra conversa em que o lead respondeu. Mensagens automáticas, chatbot e menus não contam na nota; conversa 100% bot é sinalizada em vez de pontuada. A cada rodada o Cabueta revisa {amostra}% das conversas com {minMsgs}+ mensagens. Menos amostra e mais mensagens = menos crédito gasto.</p>
       </Card>
 
       <Card {...cardProps("ignorados")} titulo="Números ignorados" resumo={e.ignorados.length ? `${e.ignorados.length} número${e.ignorados.length > 1 ? "s" : ""} fora da auditoria automática` : "Nenhum número ignorado"}>
@@ -412,7 +412,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
                   <Toggle on={s.alerta_followup} onChange={(v) => set({ alerta_followup: v })} rotulo="Alerta de follow-up" />
                 </span>
               </Linha>
-              <p className="mt-1 text-xs text-mute">A venda de imersão é avisada em cerca de 1 minuto: a Cabueta vigia as conversas em negociação e audita na hora quando aparece pagamento, comprovante ou fechamento. Reuniões continuam indo para a Agenda Google, sem mensagem.</p></div>
+              <p className="mt-1 text-xs text-mute">A venda de imersão é avisada em cerca de 1 minuto: o Cabueta vigia as conversas em negociação e audita na hora quando aparece pagamento, comprovante ou fechamento. Reuniões continuam indo para a Agenda Google, sem mensagem.</p></div>
           </div>
           <div><div className="label mb-2">Prévia</div><pre className={pre}>{previewAlerta(s)}</pre>
             <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-mute">
@@ -425,7 +425,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
       <Card {...cardProps("agenda")} titulo="Agenda Google" recomendado
         resumo={agenda?.conectada ? `Conectada${agenda.email ? ` (${agenda.email})` : ""} · ${s.agenda_ativa ? "reuniões de implementação e de imersão entram sozinhas, em amarelo" : "envio desligado"}` : "Não conectada"}>
         {retornoAgenda && RETORNO_AGENDA[retornoAgenda] && <p className={`mb-3 text-sm ${RETORNO_AGENDA[retornoAgenda][0] ? "text-ok" : "text-bad"}`}>{RETORNO_AGENDA[retornoAgenda][1]}</p>}
-        <p className="mb-3 text-sm text-mute">Quando o cliente confirma o horário de uma <b className="text-ink">reunião de implementação ou de imersão</b>, em qualquer WhatsApp conectado, a Cabueta cria o evento na sua Agenda Google, em <b className="text-warn">amarelo</b>, com nome do cliente e da empresa, e-mail, local (se for presencial) e o link da conversa. Se o horário mudar, o evento é atualizado.</p>
+        <p className="mb-3 text-sm text-mute">Quando o cliente confirma o horário de uma <b className="text-ink">reunião de implementação ou de imersão</b>, em qualquer WhatsApp conectado, o Cabueta cria o evento na sua Agenda Google, em <b className="text-warn">amarelo</b>, com nome do cliente e da empresa, e-mail, local (se for presencial) e o link da conversa. Se o horário mudar, o evento é atualizado.</p>
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line p-4">
           <div className="min-w-0 flex-1">
             <div className="font-semibold">{agenda?.conectada ? <span className="text-ok">Conectada</span> : "Não conectada"}{agenda?.email && <span className="ml-2 font-normal text-mute">{agenda.email}</span>}</div>
@@ -446,7 +446,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
         resumo={`${linhas(s.regras_criticas)} regra${linhas(s.regras_criticas) === 1 ? "" : "s"} crítica${linhas(s.regras_criticas) === 1 ? "" : "s"} · 1ª resposta em até ${slaHoras ? `${s.sla_primeira_resposta_min / 60} h` : `${s.sla_primeira_resposta_min} min`}`}>
         <div className="label mb-2">O que é crítico na Weevo (uma situação por linha)</div>
         <Regras linhas={s.regras_criticas} onChange={(l) => set({ regras_criticas: l })} sugestoes={SUGESTOES.critico} placeholder="Ex.: Lead ameaçou reclamar no Procon" />
-        <p className="mt-2 text-xs text-mute">Essas regras somam com a régua padrão da Cabueta (lead furioso prestes a desistir, conduta grave, risco jurídico), nunca substituem.</p>
+        <p className="mt-2 text-xs text-mute">Essas regras somam com a régua padrão do Cabueta (lead furioso prestes a desistir, conduta grave, risco jurídico), nunca substituem.</p>
         <div className="mt-5 border-t border-line pt-4">
           <Linha titulo="SLA de primeira resposta" sub="Alimenta o % no SLA do painel e o critério de agilidade da nota">
             <span className="flex items-center gap-2">
@@ -493,7 +493,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
         resumo={s.resumo_ativo ? `Ligado · manhã às ${s.resumo_manha_hora} · tarde e dia às ${s.rodada_final_hora} · ${s.resumo_dias.map((d) => DIAS_SEMANA[d]).join(", ")}${e.alertas.length ? "" : " · falta telefone"}` : "Desligado"}>
         <div className="grid gap-5 lg:grid-cols-2">
           <div className="space-y-4">
-            <Linha titulo="Enviar os resumos" sub="Antes de cada resumo a Cabueta audita tudo o que mudou no dia, sem esperar a conversa parar. Sai pelo WhatsApp escolhido em Alertas ao gestor, para os mesmos telefones."><Toggle on={s.resumo_ativo} onChange={(v) => set({ resumo_ativo: v })} rotulo="Resumos do dia" /></Linha>
+            <Linha titulo="Enviar os resumos" sub="Antes de cada resumo o Cabueta audita tudo o que mudou no dia, sem esperar a conversa parar. Sai pelo WhatsApp escolhido em Alertas ao gestor, para os mesmos telefones."><Toggle on={s.resumo_ativo} onChange={(v) => set({ resumo_ativo: v })} rotulo="Resumos do dia" /></Linha>
             <Linha titulo="Resumo do turno da manhã" sub="Como foi a manhã, com a meta do dia de cada vendedor (horário de Brasília)">
               <input type="time" value={s.resumo_manha_hora} onChange={(ev) => set({ resumo_manha_hora: ev.target.value })} className="input !w-auto !py-1.5 [color-scheme:dark]" />
             </Linha>
@@ -549,7 +549,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
       <div className="sticky bottom-0 z-30 -mx-4 border-t border-line bg-bg/95 backdrop-blur md:-mx-12">
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 md:px-12">
           <div className="min-w-0 flex-1 text-sm">
-            {msg?.ok ? <span className="flex items-center gap-1.5 text-ok"><CheckCircle2 size={16} />Configurações salvas. A próxima rodada da Cabueta já usa estes valores.</span>
+            {msg?.ok ? <span className="flex items-center gap-1.5 text-ok"><CheckCircle2 size={16} />Configurações salvas. A próxima rodada do Cabueta já usa estes valores.</span>
               : msg?.erros ? <span className="text-bad">{msg.erros[0]}{msg.erros.length > 1 && ` (+${msg.erros.length - 1})`}</span>
               : sujo && erros.length ? <span className="text-warn">{erros[0]}</span>
               : sujo ? <span className="text-mute">Você tem alterações não salvas.</span>
