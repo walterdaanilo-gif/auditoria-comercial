@@ -1,6 +1,7 @@
 import { cfg, today } from "./config.js";
 import { enviarWhatsApp } from "./envio.js";
 import { ASSINATURA, sorteio } from "./alertas.js";
+import { gestores, notificar } from "./notificar.js";
 
 const SITE = (process.env.SITE_URL || "https://auditoria-comercial-omega.vercel.app").replace(/\/$/, "");
 const brl = n => Number(n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -172,6 +173,7 @@ export async function enviarRelatorio(db, { turno = "dia", envio = enviarWhatsAp
   if (!dest.tels) return dest.motivo;
   const manha = turno === "dia" ? (await db.select("resumos_turno", { select: "dados", filters: { data: `eq.${hoje}`, turno: "eq.manha" } }))[0]?.dados : null;
   const texto = turno === "manha" ? textoManha(d, hoje) : textoTarde(d, hoje, manha);
+  await notificar(db, await gestores(db), { categoria: "resumo", titulo: turno === "manha" ? `☀️ Resumo do turno da manhã · ${hoje.split("-").reverse().slice(0, 2).join("/")}` : `🌙 Resumo da tarde e do dia · ${hoje.split("-").reverse().slice(0, 2).join("/")}`, texto: texto.replace(/^.*\n\n/, ""), link: "/" });
   const ok = await mandar(db, dest, texto, envio, "relatorio");
   if (ok) await db.update("audit_settings", { id: "eq.1" }, { resumo_ultimo_envio: new Date().toISOString() });
   return `${turno === "manha" ? "resumo da manha" : "resumo da tarde e do dia"} enviado para ${ok} de ${dest.tels.length}`;

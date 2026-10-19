@@ -112,7 +112,7 @@ export async function avisarFollowups(db, { envio = enviarWhatsApp, agora = Date
   // 1) cada vendedor: notificacao no sistema + WhatsApp no proprio numero
   for (const [v, ls] of porVendedor) {
     const nome = R.nomes.get(v) || "vendedor";
-    await db.insert("notificacoes", [{ para: v, tipo: "aviso", titulo: `Follow-up atrasado: ${ls.length} ${ls.length === 1 ? "cliente" : "clientes"} há ${dias}+ dias sem mensagem sua`, texto: ls.slice(0, MAX_LISTA).map(l => `${nomeLead(l)} · ${l.dias} dias`).join("\n"), link: `/conversas?v=${v}&aba=todas&p=30` }], { returning: false });
+    await db.insert("notificacoes", [{ para: v, tipo: "aviso", categoria: "followup", titulo: `Follow-up atrasado: ${ls.length} ${ls.length === 1 ? "cliente" : "clientes"} há ${dias}+ dias sem mensagem sua`, texto: ls.slice(0, MAX_LISTA).map(l => `${nomeLead(l)} · ${l.dias} dias`).join("\n"), link: `/conversas?v=${v}&aba=todas&p=30` }], { returning: false });
     if (s.instancia_envio_id && numeroDe.get(v)) {
       try { await envio(db, s.instancia_envio_id, numeroDe.get(v), textoVendedor(nome, ls, dias)); res.push(`${nome}: WhatsApp ok`); }
       catch (e) { console.error(`[followup] WhatsApp de ${nome}:`, e.message); res.push(`${nome}: WhatsApp falhou`); }
@@ -120,7 +120,7 @@ export async function avisarFollowups(db, { envio = enviarWhatsApp, agora = Date
   }
   // 2) gestao: WhatsApp de alerta + notificacao no sistema
   const textoG = textoGestao(porVendedor, R.nomes, R.funcao, dias);
-  await db.insert("notificacoes", gestores.map(g => ({ para: g.id, tipo: "aviso", titulo: `Erro de follow-up: ${novos.length} clientes potenciais sem follow-up há ${dias}+ dias`, texto: [...porVendedor].map(([v, ls]) => `${R.nomes.get(v) || "Vendedor"}: ${ls.length}`).join(" · "), link: "/conversas?aba=todas&p=30" })), { returning: false });
+  await db.insert("notificacoes", gestores.map(g => ({ para: g.id, tipo: "aviso", categoria: "followup", titulo: `Erro de follow-up: ${novos.length} clientes potenciais sem follow-up há ${dias}+ dias`, texto: [...porVendedor].map(([v, ls]) => `${R.nomes.get(v) || "Vendedor"}: ${ls.length}`).join(" · "), link: "/conversas?aba=todas&p=30" })), { returning: false });
   const dest = await destinoResumo(db, { ...s, resumo_ativo: true });
   const ok = dest.tels ? await mandar(db, dest, textoG, envio, "followup") : 0;
   await db.insert("followups_avisados", novos.map(l => ({ vendedor_id: l.vendedor_id, lead: l.lead, ultima_msg_em: l.desdeQuando })), { onConflict: "vendedor_id,lead,ultima_msg_em", ignoreDuplicates: true, returning: false });

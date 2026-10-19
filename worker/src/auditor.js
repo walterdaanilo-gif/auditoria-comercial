@@ -251,7 +251,7 @@ async function avisarCritico(db, R, vendedorId, a, link, contato) {
   const gestores = await db.select("profiles", { select: "id", filters: { papel: "in.(admin,gestor)", ativo: "eq.true" } });
   const para = [...new Set([...gestores.map(g => g.id), vendedorId])];
   const titulo = `Alerta crítico: ${R.nomes.get(vendedorId) || "vendedor"} com ${contato}`;
-  await db.insert("notificacoes", para.map(p => ({ para: p, tipo: "critico", titulo, texto: a.critico_motivo || a.resumo, link })), { returning: false });
+  await db.insert("notificacoes", para.map(p => ({ para: p, tipo: "critico", categoria: "critico", titulo, texto: a.critico_motivo || a.resumo, link })), { returning: false });
 }
 
 // =====================================================================

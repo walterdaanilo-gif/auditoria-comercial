@@ -53,7 +53,10 @@ assert.equal(a1.tipo_agendamento, "workshop", "tipo invalido vira workshop");
 const a3 = aud("c3");
 assert.equal(a3.rubrica, "closer"); assert.equal(a3.nota_geral, 10); assert.equal(a3.venda_tipo, "imersao"); assert.equal(a3.venda_valor, 4800);
 assert.equal(a3.critico, true);
-assert.deepEqual(db.tables.notificacoes.map(n => n.para).sort(), [CLOSER, GESTOR].sort());
+assert.deepEqual(db.tables.notificacoes.filter(n => n.categoria === "critico").map(n => n.para).sort(), [CLOSER, GESTOR].sort());
+// sino: venda de imersao vai para a gestao e o closer; inscricao no workshop so para o SDR
+assert.deepEqual(db.tables.notificacoes.filter(n => n.categoria === "venda" && n.titulo.includes("imersão")).map(n => n.para).sort(), [CLOSER, GESTOR].sort());
+assert.deepEqual(db.tables.notificacoes.filter(n => n.categoria === "venda" && n.titulo.includes("workshop")).map(n => n.para), ["sdr-1"]);
 // prompt leva as regras do gestor e a rubrica certa
 const pSdr = pedidos.find(p => p.messages[0].content.includes("Este vendedor é SDR")).messages[0].content;
 assert.ok(pSdr.includes("Lead usou cupom de convite") && pSdr.includes("Lead ameaçou reclamar no Procon") && pSdr.includes("- conducao: Condução") && pSdr.includes("SLA de primeira resposta: 15 min"));

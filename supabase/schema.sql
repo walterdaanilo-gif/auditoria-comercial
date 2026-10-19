@@ -944,3 +944,11 @@ alter table public.profiles add column if not exists foto_url text;
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('fotos', 'fotos', true, 2097152, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do update set public = true, file_size_limit = 2097152, allowed_mime_types = array['image/jpeg','image/png','image/webp'];
+
+-- Sino de notificacoes: categoria (venda, reuniao, followup, agenda, critico, resumo) e tempo real
+alter table public.notificacoes add column if not exists categoria text;
+do $do$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notificacoes') then
+    execute 'alter publication supabase_realtime add table public.notificacoes';
+  end if;
+end $do$;

@@ -1,5 +1,6 @@
 import { today } from "./config.js";
 import { enviarWhatsApp } from "./envio.js";
+import { gestores, notificar } from "./notificar.js";
 
 const SITE = (process.env.SITE_URL || "https://auditoria-comercial-omega.vercel.app").replace(/\/$/, "");
 
@@ -128,6 +129,14 @@ export async function avisarEventos(db, R, c, a, jaEnviados = [], { envio = envi
   const funcao = R.funcao.get(c.vendedor_id) || "sdr";
   const novos = eventosDe(a, funcao).filter(e => !jaEnviados.includes(e.chave));
   if (!novos.length) return null;
+  // sino: venda de imersao para a gestao e o vendedor; workshop e reuniao para o vendedor
+  const vendedor = R.nomes.get(c.vendedor_id) || "Vendedor", lead = c.contato_nome || `+${c.telefone || c.contato}`, link = `/conversas/${c.id}`;
+  const gest = novos.some(e => e.chave === "venda_imersao") ? await gestores(db) : [];
+  for (const e of novos) {
+    if (e.chave === "venda_imersao") await notificar(db, [...gest, c.vendedor_id], { categoria: "venda", titulo: `💎 ${vendedor} fechou uma imersão com ${lead}${e.extra ? ` · ${e.extra}` : ""}`, texto: e.evidencia || null, link });
+    else if (e.chave === "venda_workshop") await notificar(db, [c.vendedor_id], { categoria: "venda", titulo: `🎟️ Inscrição no workshop: ${lead}${e.extra ? ` · ${e.extra}` : ""}`, texto: e.evidencia || null, link });
+    else if (e.tipo === "marcacao") await notificar(db, [c.vendedor_id], { categoria: "reuniao", titulo: `📅 ${e.chave === "reuniao_implementacao" ? "Reunião de implementação" : "Reunião de imersão"} marcada com ${lead}`, texto: e.evidencia || null, link });
+  }
   const s = R.alertas;
   // venda avisada na hora = so imersao fechada (workshop vai nos resumos); marcacao e oportunidade so se ligadas em Configuracoes
   const permitidos = novos.filter(e => (e.chave === "venda_imersao" && s.venda) || (e.tipo === "marcacao" && s.marcacao) || (e.tipo === "oportunidade" && s.oportunidade));

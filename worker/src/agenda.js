@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { cfg } from "./config.js";
 import { enviarWhatsApp } from "./envio.js";
+import { gestores, notificar } from "./notificar.js";
 
 // Reuniao (de implementacao ou de imersao) confirmada pelo cliente, de qualquer WhatsApp conectado -> evento amarelo na Agenda Google do gestor.
 // O gestor conecta a agenda em Configuracoes (login Google); o refresh_token fica em google_agenda (so o servidor le).
@@ -118,6 +119,8 @@ export async function sincronizarReuniao(db, R, c, r, { fetchImpl = fetch, envio
   let avisado = atual?.conflito_avisado || null;
   if (conflitos.length && avisado !== chave) {
     const texto = textoConflito(r, ev, conflitos, { vendedor: R.nomes.get(c.vendedor_id) || "vendedor", cliente: r.cliente_nome || `+${c.telefone || c.contato}`, conversaId: c.id, link: j.htmlLink });
+    await notificar(db, [...await gestores(db), c.vendedor_id], { categoria: "agenda", titulo: `⚠️ Conflito na agenda: ${ev.summary} em ${dm(r.data)} às ${r.hora}`, texto: conflitos.map(e => `${hm(e.start.dateTime)} às ${hm(e.end?.dateTime || e.start.dateTime)} · ${e.summary || "(sem título)"}`).join("\n"), link: `/conversas/${c.id}` });
+    avisado = chave;
     try { if (await avisarConflito(db, texto, envio)) { avisado = chave; console.log(`[agenda] conflito avisado: ${ev.summary} x ${conflitos.map(e => e.summary).join(", ")}`); } }
     catch (e) { console.error("[agenda] aviso de conflito:", e.message); }
   }
