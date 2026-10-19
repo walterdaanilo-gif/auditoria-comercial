@@ -185,8 +185,8 @@ function previewAlerta(s: Settings) {
     : `Ruan (SDR) acabou de colocar Maria Silva pra dentro do workshop! 🎟️ (com cupom de convite)`);
   if (s.alerta_venda) blocos.push(`🚨🚨🚨 HEIIIIIIIIIIIIIIIII 🚨🚨🚨\n💸💸 PINGOU UMA VENDA DE WALTER!!! 💸💸\n\n🔥 IMERSÃO FECHADA · ${brl(4800)} 🔥\nQuem comprou: João Souza 🙌\nE olha o que o lead mandou: "mandei o pix"\n\n🍾🎉 BORA, TIME! QUEM É O PRÓXIMO? 🎉🍾\nCorre ver a conversa completa 👉 <link>`);
   if (s.alerta_marcacao) blocos.push(det
-    ? `Tem reunião de imersão vindo aí: João Souza topou com Nick (SDR) 📅\nPalavras do próprio lead: "Combinado, quinta às 19h"\n\n${LINK}`
-    : `Tem reunião de imersão vindo aí: João Souza topou com Nick (SDR) 📅`);
+    ? `📅 *ALERTA DE REUNIÃO*\n\nTem reunião de imersão vindo aí: João Souza topou com Nick (SDR) 📅\nPalavras do próprio lead: "Combinado, quinta às 19h"\n\n${LINK}`
+    : `📅 *ALERTA DE REUNIÃO*: Tem reunião de imersão vindo aí: João Souza topou com Nick (SDR) 📅`);
   if (s.alerta_oportunidade) blocos.push(det
     ? `Paula Lima tá de olho na imersão e foi conversar com Nick (SDR). Esse tá esquentando! 🔥\nPalavras do próprio lead: "Quero entender melhor a imersão"\nUm empurrãozinho agora e vira marcação 😉\n\n${LINK}`
     : `Paula Lima tá de olho na imersão e foi conversar com Nick (SDR). Esse tá esquentando! 🔥`);

@@ -49,7 +49,7 @@ assert.equal(await rapida(), 1);
 assert.equal(enviados.length, 1, "nao repete aviso do mesmo evento");
 
 // formato resumido e o closer
-{ const r = textoAlerta(eventosDe({ agendou: true, tipo_agendamento: "imersao" }, "closer")[0], { vendedor: "Carla", funcao: "closer", lead: "João", conversaId: "x", formato: "resumido" }); assert.doesNotMatch(r, /Elon Musk/); assert.match(r, /Carla \(Closer\)/); assert.match(r, /reunião de implementação/i); assert.match(r, /João/); assert.ok(!r.includes("\n"), r); }
+{ const r = textoAlerta(eventosDe({ agendou: true, tipo_agendamento: "imersao" }, "closer")[0], { vendedor: "Carla", funcao: "closer", lead: "João", conversaId: "x", formato: "resumido" }); assert.doesNotMatch(r, /Elon Musk/); assert.match(r, /^📅 \*ALERTA DE REUNIÃO\*: /); assert.match(r, /Carla \(Closer\)/); assert.match(r, /reunião de implementação/i); assert.match(r, /João/); assert.ok(!r.includes("\n"), r); }
 assert.equal(eventosDe({ agendou: true, tipo_agendamento: "imersao" }, "closer")[0].chave, "reuniao_implementacao");
 
 // venda com dinheiro (imersao fechada / workshop pago): aviso animado; cupom R$ 0 continua no formato normal

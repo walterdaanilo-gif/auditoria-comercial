@@ -102,10 +102,11 @@ export function textoAlerta(e, { vendedor, funcao, lead, conversaId, formato, ou
   const quem = `${vendedor}${funcao ? ` (${funcao === "closer" ? "Closer" : "SDR"})` : ""}`;
   const principal = frase(e, quem, lead, conversaId);
   const cupom = e.chave === "venda_workshop" && /cupom/.test(e.extra || "");
-  if (formato === "resumido") return `${principal}${cupom ? " (com cupom de convite)" : e.extra ? ` (${e.extra})` : ""}${outros.length ? `\n${tambemDe(outros)}` : ""}`;
+  const topo = e.tipo === "marcacao" ? "📅 *ALERTA DE REUNIÃO*" : null;
+  if (formato === "resumido") return `${topo ? `${topo}: ` : ""}${principal}${cupom ? " (com cupom de convite)" : e.extra ? ` (${e.extra})` : ""}${outros.length ? `\n${tambemDe(outros)}` : ""}`;
   const op = e.tipo === "oportunidade";
   return [
-    principal,
+    ...(topo ? [topo, ``] : []), principal,
     ...(cupom ? [`Veio com cupom de convite, então entrou de cortesia 🎟️`] : e.extra ? [`Valor: ${e.extra} 💰`] : []),
     ...(e.evidencia ? [fala(conversaId, e.evidencia, 220)] : []),
     ...(outros.length ? [tambemDe(outros)] : []),
