@@ -8,7 +8,7 @@ const nota = n => (n == null ? "—" : n.toFixed(1).replace(".", ","));
 const dur = s => (s == null ? "—" : s < 60 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)}min` : `${Math.floor(s / 3600)}h${String(Math.round((s % 3600) / 60)).padStart(2, "0")}`);
 const ddmm = d => d.split("-").reverse().slice(0, 2).join("/");
 const diasUteis = (de, ate) => { let n = 0; for (let d = de; d <= ate; d = addDays(d, 1)) { const w = new Date(d + "T12:00:00Z").getUTCDay(); if (w > 0 && w < 6) n++; } return Math.max(1, n); };
-const insc = n => `${n} inscriç${n === 1 ? "ão" : "ões"}`;
+
 const somar = (l, k) => l.reduce((s, x) => s + Number(x[k] || 0), 0);
 
 // Relatorio do periodo (normalmente o dia; acumula os dias em que nao houve envio)
@@ -54,7 +54,8 @@ export async function montarRelatorio(db, de, ate) {
     } else {
       partes.push(`${somar(ls, "respostas")}/${(s.meta_sdr_conversas ?? 25) * uteis} conversas trocadas`);
       partes.push(`${marc}/${(s.meta_sdr_marcacoes ?? 6) * uteis} marcações`);
-      if (vendas) partes.push(`${insc(vendas)} no workshop`);
+      if (r.wCupom) partes.push(`🎟️ ${r.wCupom} convite${r.wCupom === 1 ? "" : "s"}`);
+      if (r.wPagos) partes.push(`💰 ${r.wPagos} vendido${r.wPagos === 1 ? "" : "s"} (${brl(r.wValor)})`);
     }
     partes.push(`📞 ${somar(ls, "ligacoes_atendidas")} atendidas`);
     return { nome: p.nome, funcao: closer ? "Closer" : "SDR", nota: r.nota, vendas, linha: partes.join(" · ") };
@@ -81,7 +82,8 @@ export async function montarRelatorio(db, de, ate) {
     `✅ Auditorias: ${t.n} · ⭐ Nota média: ${nota(t.nota)}`,
     `⏱️ 1ª resposta: ${dur(t.primeira)} · tempo médio de resposta: ${dur(t.medio)}`,
     `📞 Ligações atendidas: ${ligAt} de ${lig}`,
-    `💰 Workshop: ${insc(t.wCupom + t.wPagos)} (${t.wCupom} com cupom R$ 0 · ${t.wPagos} paga${t.wPagos === 1 ? "" : "s"} ${brl(t.wValor)})`,
+    `🎟️ Workshop por convite (cupom 100%): ${t.wCupom}`,
+    `💰 Workshop vendido: ${t.wPagos}${t.wValor ? ` · ${brl(t.wValor)}` : ""}`,
     `💎 Imersão: ${t.imersao} fechada${t.imersao === 1 ? "" : "s"}${t.imValor ? ` · ${brl(t.imValor)}` : ""}`,
     `🎯 Oportunidades: ${t.oport}`,
     ...(t.criticos ? [`⚠️ Alertas críticos: ${t.criticos} (veja no sistema)`] : []),

@@ -46,7 +46,8 @@ assert.equal(aud("c2"), undefined);
 const a1 = aud("c1");
 assert.equal(a1.rubrica, "sdr"); assert.equal(a1.nota_geral, notaFinal([{ chave: "abordagem", peso: 40 }, { chave: "conducao", peso: 60 }], [{ criterio: "abordagem", nota: 3 }, { criterio: "conducao", nota: 5 }]));
 assert.equal(a1.nota_geral, 8); // (3*0.4 + 5*0.6 = 4.2) -> (3.2/4)*10
-assert.equal(a1.venda, true); assert.equal(a1.venda_tipo, "workshop"); assert.equal(a1.venda_valor, 0); assert.equal(a1.venda_cupom, true);
+// cupom com R$ 50 pago = desconto parcial: e workshop VENDIDO, nao convite
+assert.equal(a1.venda, true); assert.equal(a1.venda_tipo, "workshop"); assert.equal(a1.venda_valor, 50); assert.equal(a1.venda_cupom, false);
 assert.equal(a1.tipo_agendamento, "workshop", "tipo invalido vira workshop");
 // Closer: venda e sempre imersao, com valor; critico gera notificacao no app (gestor + vendedor), nunca WhatsApp
 const a3 = aud("c3");

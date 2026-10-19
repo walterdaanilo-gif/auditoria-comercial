@@ -43,7 +43,7 @@ assert.ok(pHoje.includes("HISTÓRICO DOS DIAS ANTERIORES") && pHoje.includes("vo
 assert.equal(db.tables.audit_settings[0].rodada_final_ultima, hoje);
 assert.equal(enviados.length, 1); assert.equal(enviados[0].tel, "5584999990000"); assert.equal(enviados[0].inst, "inst-walter");
 const txt = enviados[0].texto;
-assert.ok(txt.startsWith("🚀 *Aviso do Elon Musk*") && txt.includes("resumo do dia") && txt.includes("Ligações atendidas: 2 de 3") && txt.includes("1 com cupom R$ 0") && txt.includes("Como cada um foi") && txt.includes("👑 Destaque do dia: *Ruan*") && txt.includes("1. Ruan (SDR)") && txt.includes("1/6 marcações"), txt);
+assert.ok(txt.startsWith("🚀 *Aviso do Elon Musk*") && txt.includes("resumo do dia") && txt.includes("Ligações atendidas: 2 de 3") && txt.includes("Workshop por convite (cupom 100%): 1") && txt.includes("🎟️ 1 convite") && txt.includes("Como cada um foi") && txt.includes("👑 Destaque do dia: *Ruan*") && txt.includes("1. Ruan (SDR)") && txt.includes("1/6 marcações"), txt);
 assert.ok(db.tables.audit_settings[0].resumo_ultimo_envio);
 
 // 18h10: ja rodou hoje, nao repete o relatorio
