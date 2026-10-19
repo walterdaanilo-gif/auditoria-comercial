@@ -50,9 +50,9 @@ export function montarEvento(r, { vendedor, contato, conversaId, duracao = 60, c
   return ev;
 }
 
-// Cria ou atualiza o evento da reuniao desta conversa. Implementacao ou imersao, confirmada, no futuro.
+// Cria ou atualiza o evento da reuniao desta conversa. Implementacao ou imersao, confirmada pelo lead e pelo vendedor, no futuro.
 export async function sincronizarReuniao(db, R, c, r, { fetchImpl = fetch } = {}) {
-  if (!r || !["implementacao", "imersao"].includes(r.tipo) || !r.cliente_confirmou || !r.data || !r.hora) return null;
+  if (!r || !["implementacao", "imersao"].includes(r.tipo) || !r.cliente_confirmou || !r.vendedor_confirmou || !r.data || !r.hora) return null;
   const [s] = await db.select("audit_settings", { select: "agenda_ativa,agenda_duracao_min,agenda_convidar,agenda_meet", filters: { id: "eq.1" } });
   if (s && s.agenda_ativa === false) return null;
   const inicio = inicioIso(r);

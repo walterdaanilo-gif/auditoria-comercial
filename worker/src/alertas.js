@@ -11,6 +11,7 @@ const SINAL = new RegExp([
   "comprovante|\\bpix\\b|paguei|pagamento (feito|realizado|aprovado|confirmado)|boleto pago|transferi",
   "fechad[oa]|fechamos|vamos fechar|bora fechar|contrato assinado|assinei",
   "pode (marcar|agendar|confirmar|inscrever)|agendad[oa]|marcad[oa]|confirmad[oa]|combinad[oa]",
+  "meet\\.google|zoom\\.us|teams\\.microsoft|link da (reuni[aã]o|chamada|videochamada)|te espero|nos vemos",
   "(segunda|ter[cç]a|quarta|quinta|sexta|s[aá]bado|domingo|amanh[aã]|hoje)[^.?!\\n]{0,25}\\b\\d{1,2}(h|:\\d{2})",
 ].join("|"), "i");
 export const temSinal = t => !!t && SINAL.test(String(t));
@@ -23,11 +24,15 @@ export function eventosDe(a, funcao) {
   // dinheiro = entrou dinheiro de verdade (imersao fechada ou workshop pago; cupom de R$ 0 nao conta)
   if (a.venda && a.venda_tipo === "imersao") ev.push({ chave: "venda_imersao", tipo: "venda", dinheiro: true, produto: "IMERSÃO FECHADA", titulo: "💎 *Imersão fechada*", extra: a.venda_valor ? brl(a.venda_valor) : "valor não informado", evidencia: a.venda_evidencia });
   if (a.venda && a.venda_tipo !== "imersao") ev.push({ chave: "venda_workshop", tipo: "venda", dinheiro: !a.venda_cupom && Number(a.venda_valor ?? 1) > 0, produto: "WORKSHOP PAGO", titulo: "💰 *Inscrição no workshop*", extra: a.venda_cupom ? "cupom de convite · R$ 0" : a.venda_valor != null ? brl(a.venda_valor) : "valor não informado", evidencia: a.venda_evidencia });
-  const reuniao = a.oportunidade_tipo === "reuniao_implementacao" || a.oportunidade_tipo === "reuniao_imersao" ? a.oportunidade_tipo
+  let reuniao = a.oportunidade_tipo === "reuniao_implementacao" || a.oportunidade_tipo === "reuniao_imersao" ? a.oportunidade_tipo
     : a.agendou && a.tipo_agendamento === "imersao" ? (funcao === "closer" ? "reuniao_implementacao" : "reuniao_imersao") : null;
+  // Aviso de reuniao so quando o lead aceitou E o vendedor confirmou (pergunta "posso confirmar?" ainda nao vale).
+  // Enquanto nao confirma, a chave nao entra em alertas_enviados e o aviso sai na auditoria seguinte, ja confirmado.
+  const confirmada = !!(a.reuniao?.cliente_confirmou && a.reuniao?.vendedor_confirmou);
+  if (!confirmada) reuniao = null;
   if (reuniao === "reuniao_implementacao") ev.push({ chave: reuniao, tipo: "marcacao", titulo: "🤝 *Reunião de implementação marcada*", evidencia: a.oportunidade_evidencia });
   if (reuniao === "reuniao_imersao") ev.push({ chave: reuniao, tipo: "marcacao", titulo: "📅 *Reunião de imersão marcada*", evidencia: a.oportunidade_evidencia });
-  if (a.oportunidade && !reuniao && a.oportunidade_tipo) ev.push({ chave: a.oportunidade_tipo, tipo: "oportunidade", titulo: `🎯 *Oportunidade*: ${a.oportunidade_tipo === "interesse_imersao" ? "interesse na imersão" : "interesse no workshop"}`, evidencia: a.oportunidade_evidencia });
+  if (a.oportunidade && !reuniao && a.oportunidade_tipo && !a.oportunidade_tipo.startsWith("reuniao_")) ev.push({ chave: a.oportunidade_tipo, tipo: "oportunidade", titulo: `🎯 *Oportunidade*: ${a.oportunidade_tipo === "interesse_imersao" ? "interesse na imersão" : "interesse no workshop"}`, evidencia: a.oportunidade_evidencia });
   return ev;
 }
 

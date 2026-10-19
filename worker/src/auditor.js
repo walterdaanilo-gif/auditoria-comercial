@@ -123,7 +123,7 @@ ${criterios.map(c => `- ${c.chave}: ${c.nome}. ${c.descricao || ""}`.trim()).joi
 - Nos exemplos de frase, use o nome real do vendedor e do lead (vêm no início do texto). Os nomes do roteiro são só exemplos.
 - Se vier um HISTÓRICO DOS DIAS ANTERIORES, use só como contexto (o que já foi falado, prometido, follow-up). A nota, a venda e a oportunidade são sobre a CONVERSA DO DIA.
 - Não invente fatos que não estão no texto. Na dúvida, venda e oportunidade ficam false.
-- Reunião: preencha "reuniao" quando uma reunião (de implementação ou de imersão) teve data e hora combinadas. "cliente_confirmou" = o lead aceitou explicitamente aquele horário. Hoje é ${hojeExtenso()}; cada mensagem traz [dia/mês hora], use isso para transformar "amanhã", "quinta às 19h" em data AAAA-MM-DD e hora HH:MM. "modalidade": "online" (videochamada, Meet, Zoom) ou "presencial"; "local" só o endereço ou lugar quando presencial. "cliente_nome", "empresa" e "email" só se aparecerem na conversa ou no nome do contato. Se não houver reunião com horário, "reuniao": null.
+- Reunião: preencha "reuniao" quando uma reunião (de implementação ou de imersão) teve data e hora combinadas. "cliente_confirmou" = o lead aceitou explicitamente aquele horário. "vendedor_confirmou" = o VENDEDOR fechou a reunião de forma afirmativa depois do aceite (ex.: "confirmado", "fechado, te espero quinta às 19h", mandou o convite ou o link da videochamada com data e hora). Pergunta do vendedor ("posso confirmar?", "pode ser às 11h?") ou proposta ainda sem resposta NÃO é confirmação: nesse caso false. Hoje é ${hojeExtenso()}; cada mensagem traz [dia/mês hora], use isso para transformar "amanhã", "quinta às 19h" em data AAAA-MM-DD e hora HH:MM. "modalidade": "online" (videochamada, Meet, Zoom) ou "presencial"; "local" só o endereço ou lugar quando presencial. "cliente_nome", "empresa" e "email" só se aparecerem na conversa ou no nome do contato. Se não houver reunião com horário, "reuniao": null.
 
 Responda APENAS com um JSON neste formato:
 {"notas": [${criterios.map(c => `{"criterio": "${c.chave}", "nota": 1 a 5, "justificativa": "curta"}`).join(", ")}],
@@ -133,7 +133,7 @@ Responda APENAS com um JSON neste formato:
 "oportunidade": {"detectada": true|false, "tipo": "interesse_workshop"|"interesse_imersao"|"reuniao_imersao"|"reuniao_implementacao"|null, "evidencia": "curta"},
 "critico": {"detectado": true|false, "motivo": "curto ou vazio"},
 "conversa_so_bot": true|false,
-"reuniao": null ou {"tipo": "implementacao"|"imersao", "cliente_confirmou": true|false, "data": "AAAA-MM-DD", "hora": "HH:MM", "duracao_min": número ou null, "modalidade": "online"|"presencial"|null, "local": "endereço ou vazio", "cliente_nome": "nome ou vazio", "empresa": "empresa ou vazio", "email": "email ou vazio"},
+"reuniao": null ou {"tipo": "implementacao"|"imersao", "cliente_confirmou": true|false, "vendedor_confirmou": true|false, "data": "AAAA-MM-DD", "hora": "HH:MM", "duracao_min": número ou null, "modalidade": "online"|"presencial"|null, "local": "endereço ou vazio", "cliente_nome": "nome ou vazio", "empresa": "empresa ou vazio", "email": "email ou vazio"},
 "gatilhos": {"personalizacao": bool, "pergunta_aberta": bool, "beneficio_claro": bool, "prova_social": bool, "autoridade": bool, "escassez_urgencia": bool, "reciprocidade": bool, "tratamento_objecao": bool, "chamada_para_acao": bool, "followup": bool},
 "resumo": "até 2 frases", "pontos_fortes": "até 2 pontos curtos", "pontos_melhoria": "até 2 ações práticas, cada uma com exemplo de frase", "objecoes": "objeções do lead ou vazio"}`;
 }
@@ -156,7 +156,7 @@ const Resposta = z.object({
   critico: z.object({ detectado: bool.default(false), motivo: txt.default("") }).default({}),
   conversa_so_bot: bool.default(false),
   reuniao: z.preprocess(v => (v && typeof v === "object" ? v : null), z.object({
-    tipo: opc(["implementacao", "imersao"]).default(null), cliente_confirmou: bool.default(false),
+    tipo: opc(["implementacao", "imersao"]).default(null), cliente_confirmou: bool.default(false), vendedor_confirmou: bool.default(false),
     data: z.preprocess(v => (/^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? v : null), z.string().nullable()).default(null),
     hora: z.preprocess(v => (/^([01]?\d|2[0-3]):[0-5]\d$/.test(String(v)) ? String(v).padStart(5, "0") : null), z.string().nullable()).default(null),
     duracao_min: z.preprocess(v => (Number(v) > 0 && Number(v) <= 480 ? Number(v) : null), z.number().nullable()).default(null),

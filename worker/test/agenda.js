@@ -27,7 +27,9 @@ assert.equal(await sincronizarReuniao(db, R, c, { tipo: "implementacao", cliente
 assert.equal(pedidos.length, 0);
 
 // confirmada, online, com email: cria evento amarelo, com convite e Meet
-const r = { tipo: "implementacao", cliente_confirmou: true, data: amanha, hora: "15:00", duracao_min: null, modalidade: "online", local: "", cliente_nome: "João Souza", empresa: "Oficina Souza", email: "joao@souza.com" };
+// lead aceitou mas o vendedor ainda nao confirmou: espera
+assert.equal(await sincronizarReuniao(db, R, c, { tipo: "implementacao", cliente_confirmou: true, vendedor_confirmou: false, data: amanha, hora: "15:00" }, { fetchImpl: google }), null);
+const r = { tipo: "implementacao", cliente_confirmou: true, vendedor_confirmou: true, data: amanha, hora: "15:00", duracao_min: null, modalidade: "online", local: "", cliente_nome: "João Souza", empresa: "Oficina Souza", email: "joao@souza.com" };
 assert.equal(await sincronizarReuniao(db, R, c, r, { fetchImpl: google }), "criada");
 const criar = pedidos.find(p => p.metodo === "POST" && p.url.includes("/events"));
 assert.match(criar.url, /conferenceDataVersion=1&sendUpdates=all/);

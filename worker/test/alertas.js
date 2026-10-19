@@ -35,7 +35,7 @@ const conv = db.tables.conversas[0];
 assert.equal(conv.auditar_rapido, true);
 
 // IA confirma a inscricao com cupom e a reuniao de imersao marcada: um aviso so, o mais urgente (venda)
-resposta = { venda: { detectada: true, tipo: "workshop", cupom: true, evidencia: "Show, pode me inscrever então!" }, oportunidade: { detectada: true, tipo: "reuniao_imersao" }, agendou: true, tipo_agendamento: "workshop" };
+resposta = { venda: { detectada: true, tipo: "workshop", cupom: true, evidencia: "Show, pode me inscrever então!" }, oportunidade: { detectada: true, tipo: "reuniao_imersao" }, agendou: true, tipo_agendamento: "workshop", reuniao: { tipo: "imersao", cliente_confirmou: true, vendedor_confirmou: true, data: "2026-10-20", hora: "19:00" } };
 assert.equal(await rapida(), 1);
 assert.equal(conv.auditar_rapido, false);
 assert.equal(enviados.length, 1);
@@ -49,8 +49,12 @@ assert.equal(await rapida(), 1);
 assert.equal(enviados.length, 1, "nao repete aviso do mesmo evento");
 
 // formato resumido e o closer
-{ const r = textoAlerta(eventosDe({ agendou: true, tipo_agendamento: "imersao" }, "closer")[0], { vendedor: "Carla", funcao: "closer", lead: "João", conversaId: "x", formato: "resumido" }); assert.doesNotMatch(r, /Elon Musk/); assert.match(r, /^📅 \*ALERTA DE REUNIÃO\*: /); assert.match(r, /Carla \(Closer\)/); assert.match(r, /reunião de implementação/i); assert.match(r, /João/); assert.ok(!r.includes("\n"), r); }
-assert.equal(eventosDe({ agendou: true, tipo_agendamento: "imersao" }, "closer")[0].chave, "reuniao_implementacao");
+{ const r = textoAlerta(eventosDe({ agendou: true, tipo_agendamento: "imersao", reuniao: { cliente_confirmou: true, vendedor_confirmou: true } }, "closer")[0], { vendedor: "Carla", funcao: "closer", lead: "João", conversaId: "x", formato: "resumido" }); assert.doesNotMatch(r, /Elon Musk/); assert.match(r, /^📅 \*ALERTA DE REUNIÃO\*: /); assert.match(r, /Carla \(Closer\)/); assert.match(r, /reunião de implementação/i); assert.match(r, /João/); assert.ok(!r.includes("\n"), r); }
+assert.equal(eventosDe({ agendou: true, tipo_agendamento: "imersao", reuniao: { cliente_confirmou: true, vendedor_confirmou: true } }, "closer")[0].chave, "reuniao_implementacao");
+// lead aceitou mas o vendedor so perguntou "posso confirmar?": ainda nao avisa (nem como oportunidade)
+assert.equal(eventosDe({ oportunidade: true, oportunidade_tipo: "reuniao_imersao", reuniao: { cliente_confirmou: true, vendedor_confirmou: false } }, "sdr").length, 0);
+assert.equal(eventosDe({ agendou: true, tipo_agendamento: "imersao" }, "closer").length, 0);
+assert.ok(temSinal("Link da videochamada: https://meet.google.com/abc-defg-hij"));
 
 // venda com dinheiro (imersao fechada / workshop pago): aviso animado; cupom R$ 0 continua no formato normal
 const festa = textoAlerta(eventosDe({ venda: true, venda_tipo: "imersao", venda_valor: 4800, venda_evidencia: "mandei o pix" }, "closer")[0], { vendedor: "Walter Danilo", funcao: "closer", lead: "João", conversaId: "abc", formato: "resumido" });
