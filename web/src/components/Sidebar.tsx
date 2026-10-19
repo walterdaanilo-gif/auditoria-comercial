@@ -29,9 +29,9 @@ export default function Sidebar({ papel }: { papel: Papel }) {
 
   return (
     <aside className={`sticky top-0 hidden h-screen shrink-0 flex-col bg-gradient-to-b from-side-top via-side-mid to-side-bottom px-2.5 py-6 transition-all md:flex ${recolhido ? "w-[76px]" : "w-72"}`}>
-      <div className={`flex items-center gap-4 px-3 ${recolhido ? "justify-center px-0" : ""}`}>
+      <div className={`flex items-center gap-3 px-3 ${recolhido ? "justify-center px-0" : ""}`}>
         <img src="/weevo-icone.png" alt="Weevo" className="h-7 w-auto" />
-        {!recolhido && <span className="text-[13px] font-semibold tracking-[0.35em] text-side-text/80">AUDITORIA</span>}
+        {!recolhido && <span className="whitespace-nowrap text-[12px] font-semibold tracking-[0.12em] text-side-text/80">AUDITORIA - ELON MUSK</span>}
       </div>
       <div className="mx-3.5 my-6 h-0.5 rounded bg-side-edge/70" />
       <nav className="flex flex-col gap-3">
