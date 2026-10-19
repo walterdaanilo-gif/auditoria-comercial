@@ -77,7 +77,7 @@ export async function syncUazapi(db) {
     try {
       let token = tokens.get(inst.id);
       if (!token) {
-        const r = await api("POST", "/instance/create", { admin: true, body: { name: PREFIXO + inst.id, systemName: "Auditoria Comercial", adminField01: inst.vendedor_id } });
+        const r = await api("POST", "/instance/create", { admin: true, body: { name: PREFIXO + inst.id, systemName: "Cabueta do Elon Musk", adminField01: inst.vendedor_id } });
         token = r?.token || r?.instance?.token;
         if (!token) throw new Error("a Uazapi nao devolveu o token da instancia");
         await db.insert("instancias_uazapi", [{ instancia_id: inst.id, nome: PREFIXO + inst.id, token }], { onConflict: "instancia_id", returning: false });

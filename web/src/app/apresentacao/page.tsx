@@ -5,7 +5,7 @@ import { lerPeriodo } from "@/lib/periodo";
 import { Tela, type DadosTela, type Linha, type Vendas, type WorkshopPor } from "./Tela";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Apresentação · Auditoria Comercial" };
+export const metadata = { title: "Apresentação · Cabueta do Elon Musk" };
 
 export default async function Apresentacao({ searchParams: spP }: { searchParams: Promise<{ p?: string; de?: string; ate?: string }> }) {
   const sp = await spP;

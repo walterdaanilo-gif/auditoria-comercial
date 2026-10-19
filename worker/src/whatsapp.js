@@ -68,7 +68,7 @@ async function startInstance(db, inst) {
     const { state, saveCreds } = await B.useMultiFileAuthState(dir);
     let version; try { ({ version } = await B.fetchLatestBaileysVersion()); } catch {}
     const sock = makeWASocket({
-      auth: { creds: state.creds, keys: B.makeCacheableSignalKeyStore(state.keys, quiet) }, version, logger: quiet, printQRInTerminal: false, syncFullHistory: false, markOnlineOnConnect: false, browser: ["Auditoria Comercial", "Chrome", "1.0"],
+      auth: { creds: state.creds, keys: B.makeCacheableSignalKeyStore(state.keys, quiet) }, version, logger: quiet, printQRInTerminal: false, syncFullHistory: false, markOnlineOnConnect: false, browser: ["Cabueta do Elon Musk", "Chrome", "1.0"],
       msgRetryCounterCache: handle.retry ??= cacheSimples(),
       getMessage: async key => enviadas.get(key.id)?.message,
     });

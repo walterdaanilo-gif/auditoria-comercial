@@ -67,7 +67,7 @@ export default async function ConversaDetalhe({ params: paramsP }: { params: Pro
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="label">Auditoria{a?.manual && <span className="ml-2 normal-case tracking-normal">· feita pelo Auditar agora</span>}</div>
             {perfil.papel !== "vendedor" && (conversa.auditar_agora
-              ? <span className="text-xs text-warn">Na fila: o Auditor roda em até 1 minuto</span>
+              ? <span className="text-xs text-warn">Na fila: a Cabueta roda em até 1 minuto</span>
               : <span className="flex gap-2">
                   <form action={auditarAgora}><input type="hidden" name="id" value={conversa.id} /><button className="btn-ghost !py-1 text-xs">{a ? "Auditar de novo" : "Auditar agora"}</button></form>
                   {a && <form action={removerAuditoria}><input type="hidden" name="id" value={conversa.id} /><button className="btn-ghost !py-1 text-xs text-bad" title="Tira a nota desta conversa das médias; a conversa continua guardada">Remover auditoria</button></form>}

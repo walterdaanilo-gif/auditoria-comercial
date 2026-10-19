@@ -13,7 +13,7 @@ export function itensMenu(papel: Papel): Item[] {
     { href: "/conversas", texto: "Conversas", icone: MessagesSquare },
     { href: "/ligacoes", texto: "Ligações", icone: Phone },
     ...(papel !== "vendedor" ? [{ href: "/instancias", texto: "WhatsApp", icone: Smartphone }] : []),
-    ...(papel === "admin" ? [{ href: "/admin/usuarios", texto: "Usuários", icone: Users }, { href: "/admin/roteiro", texto: "Roteiro", icone: FileText }, { href: "/admin/testar-auditor", texto: "Testar auditor", icone: FlaskConical }] : []),
+    ...(papel === "admin" ? [{ href: "/admin/usuarios", texto: "Usuários", icone: Users }, { href: "/admin/roteiro", texto: "Roteiro", icone: FileText }, { href: "/admin/testar-auditor", texto: "Testar Cabueta", icone: FlaskConical }] : []),
     ...(papel !== "vendedor" ? [{ href: "/configuracoes", texto: "Configurações", icone: Settings }] : []),
   ];
 }
@@ -31,7 +31,7 @@ export default function Sidebar({ papel }: { papel: Papel }) {
     <aside className={`sticky top-0 hidden h-screen shrink-0 flex-col bg-gradient-to-b from-side-top via-side-mid to-side-bottom px-2.5 py-6 transition-all md:flex ${recolhido ? "w-[76px]" : "w-72"}`}>
       <div className={`flex items-center gap-3 px-3 ${recolhido ? "justify-center px-0" : ""}`}>
         <img src="/weevo-icone.png" alt="Weevo" className="h-7 w-auto" />
-        {!recolhido && <span className="whitespace-nowrap text-[12px] font-semibold tracking-[0.12em] text-side-text/80">AUDITORIA - ELON MUSK</span>}
+        {!recolhido && <span className="whitespace-nowrap text-[12px] font-semibold tracking-[0.12em] text-side-text/80">CABUETA - ELON MUSK</span>}
       </div>
       <div className="mx-3.5 my-6 h-0.5 rounded bg-side-edge/70" />
       <nav className="flex flex-col gap-3">

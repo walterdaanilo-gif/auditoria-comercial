@@ -10,7 +10,7 @@ export default async function TestarAuditor() {
   const vendedores = (data ?? []).map((p: any) => ({ id: p.id, nome: p.nome }));
   return (
     <div className="space-y-5">
-      <div><h1 className="page-title">Testar auditor</h1>
+      <div><h1 className="page-title">Testar Cabueta</h1>
         <p className="page-sub">Importe uma conversa real do WhatsApp e veja a nota da IA, sem conectar nenhum número.</p></div>
       <div className="aviso space-y-1">
         <b className="text-base text-warn">Como exportar no celular</b>

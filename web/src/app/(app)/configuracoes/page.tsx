@@ -4,7 +4,7 @@ import type { Criterio, Estado, Numero, Settings, Vendedor } from "@/lib/configu
 import FormConfig, { type StatusAgenda } from "./FormConfig";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Configurações · Auditoria Comercial" };
+export const metadata = { title: "Configurações · Cabueta do Elon Musk" };
 
 // Configuracoes do Auditor: so gestor e admin entram (a RLS das tabelas tambem exige gestor)
 export default async function Configuracoes({ searchParams: spP }: { searchParams: Promise<{ agenda?: string }> }) {

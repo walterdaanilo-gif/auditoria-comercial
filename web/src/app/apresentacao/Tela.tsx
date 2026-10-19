@@ -230,7 +230,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
         <div className="flex min-w-0 items-center gap-[1.1em]">
           <Link href="/" className="flex items-center" title="Voltar ao painel"><img src="/weevo-logo.png" alt="Weevo" className="h-[1.5em] w-auto" /></Link>
           <i className="h-[1.6em] w-px bg-line" />
-          <h1 className="whitespace-nowrap text-[0.72em] font-semibold uppercase tracking-[0.3em] text-brand">Auditoria comercial</h1>
+          <h1 className="whitespace-nowrap text-[0.72em] font-semibold uppercase tracking-[0.3em] text-brand">Cabueta do Elon Musk</h1>
           <Suspense><AbasPainel atual="apresentacao" /></Suspense>
         </div>
         <Controles p={periodo.p} de={de} ate={ate} atualizadoEm={atualizadoEm} />
@@ -257,7 +257,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
             ))}
           </div>
         </div>
-        {kpi("Convites", vendas.convites, <>{vendas.carbone ? `${vendas.carbone} Carbone · ` : ""}cupom 100% ou Carbone · R$ 0</>)}
+        {kpi("Convites", vendas.convites, <>{vendas.carbone ? `${vendas.carbone} Carbone · ${vendas.convites - vendas.carbone} cupom · R$ 0` : "cupom 100% ou Carbone · R$ 0"}</>)}
         {kpi("Marcações", <>{time.marcacoes} <span className="text-[0.55em] font-normal text-mute">/ {metaMarc * nSdr}</span></>, <><Pill e={eMarc}>{fmtPct(time.marcacoes, metaMarc * nSdr)}</Pill> {time.workshop} workshop · {time.imersao} reunião de impl.</>)}
         {kpi("Conversas trocadas", <>{time.respostas} <span className="text-[0.55em] font-normal text-mute">/ {metaConversas * nSdr}</span></>, <>{fmtPct(time.respostas, time.contatadas)} das conversas</>)}
         {kpi("Contatos", contatos(time), <>{time.contatadas} msg · {time.ligacoes_atendidas}/{time.ligacoes} lig. atendidas</>)}

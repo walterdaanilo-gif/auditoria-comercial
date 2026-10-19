@@ -3,7 +3,7 @@ export default function AuthShell({ titulo, subtitulo, children }: { titulo: str
   return (
     <div className="min-h-screen bg-[radial-gradient(900px_500px_at_100%_0%,rgba(28,71,70,0.55),transparent_60%)]">
       <header className="border-b border-white/10">
-        <div className="mx-auto flex h-[84px] max-w-6xl items-center px-6"><img src="/weevo-logo.png" alt="Weevo" className="h-7 w-auto" /></div>
+        <div className="mx-auto flex h-[84px] max-w-6xl items-center gap-4 px-6"><img src="/weevo-logo.png" alt="Weevo" className="h-7 w-auto" /><span className="border-l border-white/15 pl-4 text-[13px] font-semibold tracking-[0.2em] text-[#c3cdcc]">CABUETA DO ELON MUSK</span></div>
       </header>
       <main className="flex justify-center px-4 py-10 md:py-16">
         <div className="w-full max-w-[560px] rounded-[28px] border border-white/15 bg-gradient-to-b from-[#4b5c5c]/80 via-[#262f33]/90 to-[#162224]/95 p-6 shadow-[0_30px_80px_rgba(0,0,0,0.45)] backdrop-blur md:p-10">
