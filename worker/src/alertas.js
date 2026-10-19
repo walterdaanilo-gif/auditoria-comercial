@@ -9,6 +9,7 @@ const SINAL = new RegExp([
   "inscri[cç][aã]o|inscrev[ie]|me inscrevi|inscrit[oa]",
   "cupom",
   "comprovante|\\bpix\\b|paguei|pagamento (feito|realizado|aprovado|confirmado)|boleto pago|transferi",
+  "link de pagamento|payment-link|checkout|pagar\\.me|mercadopago|r\\$\\s?\\d",
   "fechad[oa]|fechamos|vamos fechar|bora fechar|contrato assinado|assinei",
   "pode (marcar|agendar|confirmar|inscrever)|agendad[oa]|marcad[oa]|confirmad[oa]|combinad[oa]",
   "meet\\.google|zoom\\.us|teams\\.microsoft|link da (reuni[aã]o|chamada|videochamada)|te espero|nos vemos",

@@ -276,8 +276,11 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: msgs.length, ...a, ...tempos, manual, ...(c.canal === "importada" ? { sheet_ok: true } : {}) }], { onConflict: "conversa_id", returning: false });
     if (a.critico && !antes?.critico && c.canal !== "importada") await avisarCritico(db, R, c.vendedor_id, a, `/conversas/${c.id}`, c.contato_nome || c.contato);
     try { await avisarEventos(db, R, c, a, antes?.alertas_enviados || [], envio ? { envio } : {}); } catch (e) { console.error(`[alerta] conversa ${c.id}:`, e.message); }
-    // reuniao com horario proposto mas sem acordo dos dois lados: a proxima mensagem ("da certo", "pode ser") ja reaudita na hora
-    const pendente = c.canal !== "importada" && !!(a.reuniao || String(a.oportunidade_tipo || "").startsWith("reuniao_")) && !(a.reuniao?.cliente_confirmou && a.reuniao?.vendedor_confirmou);
+    // Conversa em negociacao: reuniao proposta sem acordo dos dois lados, ou interesse/link de pagamento sem venda fechada.
+    // Nela, qualquer mensagem nova ("da certo", "feito", foto do comprovante) reaudita na hora: venda e reuniao nunca esperam.
+    const reuniaoAberta = !!(a.reuniao || String(a.oportunidade_tipo || "").startsWith("reuniao_")) && !(a.reuniao?.cliente_confirmou && a.reuniao?.vendedor_confirmou);
+    const vendaAberta = !a.venda && (String(a.oportunidade_tipo || "").startsWith("interesse_") || (a.agendou && a.tipo_agendamento === "workshop"));
+    const pendente = c.canal !== "importada" && (reuniaoAberta || vendaAberta);
     if (pendente !== !!c.reuniao_pendente) await db.update("conversas", { id: `eq.${c.id}` }, { reuniao_pendente: pendente });
     if (a.reuniao && c.canal !== "importada") try { await sincronizarReuniao(db, R, c, a.reuniao, { fetchImpl: agendaFetch }); } catch (e) { console.error(`[agenda] conversa ${c.id}:`, e.message); }
     feitos++;

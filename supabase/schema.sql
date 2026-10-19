@@ -911,5 +911,5 @@ revoke all on public.contatos_lid from anon, authenticated;
 -- conversa em que o gestor removeu a auditoria: a automatica nao refaz (Auditar de novo libera)
 alter table public.conversas add column if not exists nao_auditar boolean not null default false;
 
--- Reuniao em negociacao (horario proposto, sem acordo dos dois lados): qualquer mensagem nova reaudita na hora
+-- Conversa em negociacao (reuniao proposta sem acordo, ou interesse/vaga reservada sem venda): qualquer mensagem nova reaudita na hora
 alter table public.conversas add column if not exists reuniao_pendente boolean not null default false;

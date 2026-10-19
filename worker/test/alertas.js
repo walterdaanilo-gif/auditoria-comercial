@@ -87,3 +87,19 @@ console.log("\n--- exemplo do aviso ---\n" + enviados[0].texto);
   assert.equal(db.tables.conversas[0].reuniao_pendente, false);
   console.log("OK: reuniao em negociacao reaudita na proxima mensagem");
 }
+
+// venda: link de pagamento dispara; com interesse aberto, a foto do comprovante (sem texto) ja reaudita
+assert.ok(temSinal("Aqui está o link de pagamento no valor de R$ 197,00 para pagamento."));
+assert.ok(temSinal("fica R$ 197"));
+{
+  resposta = { oportunidade: { detectada: true, tipo: "interesse_workshop" } };
+  await db.update("conversas", { id: `eq.${db.tables.conversas[0].id}` }, { auditar_agora: true });
+  await rapida();
+  assert.equal(db.tables.conversas[0].reuniao_pendente, true, "interesse sem venda fica em negociacao");
+  await saveMessage(db, INST, { key: { remoteJid: "5584988887777@s.whatsapp.net", id: "foto1", fromMe: false }, messageTimestamp: t0 + 900, message: { imageMessage: { caption: "" } } });
+  assert.equal(db.tables.conversas[0].auditar_rapido, true, "foto do comprovante reaudita");
+  resposta = { venda: { detectada: true, tipo: "workshop", valor: 197, cupom: false, evidencia: "comprovante" } };
+  await rapida();
+  assert.equal(db.tables.conversas[0].reuniao_pendente, false, "venda fechada sai da negociacao");
+  console.log("OK: venda em negociacao reaudita com qualquer mensagem (inclusive foto)");
+}
