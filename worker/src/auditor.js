@@ -283,7 +283,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     const vendaAberta = !a.venda && (String(a.oportunidade_tipo || "").startsWith("interesse_") || (a.agendou && a.tipo_agendamento === "workshop"));
     const pendente = c.canal !== "importada" && (reuniaoAberta || vendaAberta);
     if (pendente !== !!c.reuniao_pendente) await db.update("conversas", { id: `eq.${c.id}` }, { reuniao_pendente: pendente });
-    if (a.reuniao && c.canal !== "importada") try { await sincronizarReuniao(db, R, c, a.reuniao, { fetchImpl: agendaFetch }); } catch (e) { console.error(`[agenda] conversa ${c.id}:`, e.message); }
+    if (a.reuniao && c.canal !== "importada") try { await sincronizarReuniao(db, R, c, a.reuniao, { fetchImpl: agendaFetch, ...(envio ? { envio } : {}) }); } catch (e) { console.error(`[agenda] conversa ${c.id}:`, e.message); }
     feitos++;
   };
   const mensagensDe = id => db.select("mensagens", { select: "remetente,texto,tipo,transcricao,enviada_em", filters: { conversa_id: `eq.${id}` }, order: "enviada_em" });

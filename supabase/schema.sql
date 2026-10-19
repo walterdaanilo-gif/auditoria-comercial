@@ -928,3 +928,6 @@ create table if not exists public.followups_avisados (
   vendedor_id uuid not null, lead text not null, ultima_msg_em timestamptz not null,
   avisado_em timestamptz not null default now(), primary key (vendedor_id, lead, ultima_msg_em));
 alter table public.followups_avisados enable row level security;
+
+-- Conflito da reuniao com outro compromisso da agenda: avisado uma vez por horario
+alter table public.reunioes_agenda add column if not exists conflito_avisado text;

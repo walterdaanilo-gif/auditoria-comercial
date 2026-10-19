@@ -62,3 +62,35 @@ assert.equal(JSON.parse(pedidos.at(-1).corpo).summary, "Reunião de imersão · 
 const ev3 = montarEvento({ ...r, email: "" }, { vendedor: "Walter", contato: "5584988887777", conversaId: "x", meet: false });
 assert.equal(ev3.attendees, undefined); assert.equal(ev3.conferenceData, undefined);
 console.log("OK: agenda Google (reuniao de implementacao e de imersao confirmadas, amarelo, convite, Meet, local, sem duplicar)");
+
+// conflito: outro compromisso no mesmo horario -> aviso no WhatsApp do proprio gestor (uma vez por horario)
+{
+  db.tables.audit_settings[0].instancia_envio_id = "inst-walter";
+  db.tables.instancias_whatsapp = [{ id: "inst-walter", numero: "5584936180882" }];
+  const avisos = [];
+  const envio = async (_db, inst, tel, texto) => avisos.push({ inst, tel, texto });
+  const dia = addDays(today(), 2);
+  const ocupado = async (url, o) => {
+    if (String(url).includes("oauth2")) return { ok: true, json: async () => ({ access_token: "at", expires_in: 3600 }) };
+    if (o.method === "GET") return { ok: true, json: async () => ({ items: [
+      { id: "outro", summary: "Almoço com fornecedor", start: { dateTime: `${dia}T13:30:00-03:00` }, end: { dateTime: `${dia}T14:30:00-03:00` } },
+      { id: "livre", summary: "Bloco livre", transparency: "transparent", start: { dateTime: `${dia}T14:00:00-03:00` }, end: { dateTime: `${dia}T15:00:00-03:00` } },
+      { id: "recusado", summary: "Convite recusado", attendees: [{ self: true, responseStatus: "declined" }], start: { dateTime: `${dia}T14:00:00-03:00` }, end: { dateTime: `${dia}T15:00:00-03:00` } },
+      { id: "feriado", summary: "Feriado", start: { date: dia }, end: { date: dia } },
+    ] }) };
+    return { ok: true, json: async () => ({ id: "ev9", htmlLink: "https://calendar.google.com/ev9" }) };
+  };
+  const c9 = { id: "conv9", vendedor_id: "v1", contato: "5584900001111" };
+  const r9 = { tipo: "imersao", cliente_confirmou: true, vendedor_confirmou: true, data: dia, hora: "14:00", duracao_min: 40, modalidade: "presencial", local: "Sede", cliente_nome: "Ricardo", empresa: "", email: "" };
+  assert.equal(await sincronizarReuniao(db, R, c9, r9, { fetchImpl: ocupado, envio }), "criada");
+  assert.equal(avisos.length, 1); assert.equal(avisos[0].tel, "5584936180882"); assert.equal(avisos[0].inst, "inst-walter");
+  assert.match(avisos[0].texto, /^⚠️ \*CONFLITO NA AGENDA\*/); assert.match(avisos[0].texto, /Ricardo/); assert.match(avisos[0].texto, /13:30 às 14:30 · Almoço com fornecedor/);
+  assert.doesNotMatch(avisos[0].texto, /Bloco livre|Convite recusado|Feriado/);
+  // mesma reuniao com outro detalhe (mesmo horario): nao avisa de novo
+  assert.equal(await sincronizarReuniao(db, R, c9, { ...r9, local: "Sede, sala 2" }, { fetchImpl: ocupado, envio }), "atualizada");
+  assert.equal(avisos.length, 1);
+  // remarcou para outro horario que tambem bate: avisa de novo
+  assert.equal(await sincronizarReuniao(db, R, c9, { ...r9, hora: "13:45" }, { fetchImpl: ocupado, envio }), "atualizada");
+  assert.equal(avisos.length, 2);
+  console.log("OK: conflito com a agenda avisado no WhatsApp do gestor\n\n" + avisos[0].texto);
+}
