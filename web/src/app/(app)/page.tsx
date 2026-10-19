@@ -4,6 +4,7 @@ import AbasPainel from "@/components/AbasPainel";
 import { revalidatePath } from "next/cache";
 import { AlertTriangle, ArrowDownLeft, ArrowUpRight, CheckCircle2, CircleDot, Clock, MessageCircleWarning, Phone, ThumbsDown } from "lucide-react";
 import AutoRefresh from "@/components/AutoRefresh";
+import BarraMeta from "@/components/BarraMeta";
 import EvolucaoChart, { type Ponto, type Serie } from "@/components/EvolucaoChart";
 import FiltroPeriodo from "@/components/FiltroPeriodo";
 import Markdown from "@/components/Markdown";
@@ -212,7 +213,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
                           <span className="tabular-nums"><b className="text-base">{feito}</b><span className="text-mute"> / {alvo}</span>
                             {ok ? <span className="ml-2 inline-flex items-center gap-1 text-ok"><CheckCircle2 size={14} />meta batida</span> : <span className="ml-2 text-mute">{pct(feito, alvo)}</span>}</span>
                         </div>
-                        <div className="h-2.5 overflow-hidden rounded-full bg-track"><div className={`h-full rounded-full ${ok ? "bg-ok" : "bg-brand"}`} style={{ width: `${Math.min(100, alvo ? (feito / alvo) * 100 : 0)}%` }} /></div>
+                        <BarraMeta feito={feito} alvo={alvo} />
                       </div>
                     );
                   })}

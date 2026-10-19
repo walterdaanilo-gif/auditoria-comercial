@@ -21,3 +21,12 @@ body { @apply bg-bg font-sans text-ink antialiased; background-image: radial-gra
 .auth-label { @apply mb-2 block text-[17px] font-semibold text-ink; }
 .auth-input { @apply w-full rounded-2xl border border-white/15 bg-[#323c52]/80 px-4 py-4 text-[17px] text-ink outline-none transition placeholder:text-mute focus:border-brand; }
 .auth-btn { @apply w-full cursor-pointer rounded-2xl bg-gradient-to-b from-[#86dccd] to-[#5fbcae] py-4 text-lg font-bold text-[#0c1a1a] shadow-[0_6px_20px_rgba(109,207,192,0.25)] transition hover:brightness-110 disabled:opacity-50; }
+
+/* Barra de meta enchendo: listras diagonais correndo enquanto a meta nao foi batida */
+@keyframes barra-listras { from { background-position: 0 0; } to { background-position: 2.4em 0; } }
+.barra-carregando {
+  background-image: linear-gradient(135deg, rgba(255,255,255,.22) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.22) 50%, rgba(255,255,255,.22) 75%, transparent 75%, transparent);
+  background-size: 2.4em 2.4em;
+  animation: barra-listras 1.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .barra-carregando { animation: none; } }

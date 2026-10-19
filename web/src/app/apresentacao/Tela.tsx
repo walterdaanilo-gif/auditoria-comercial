@@ -5,6 +5,7 @@ import AutoRefresh from "@/components/AutoRefresh";
 import { corNota, nota } from "@/lib/format";
 import { corSdr, diasUteis } from "@/lib/metas";
 import { diasEntre, type Periodo } from "@/lib/periodo";
+import BarraMeta from "@/components/BarraMeta";
 import Carrossel from "./Carrossel";
 import Controles from "./Controles";
 
@@ -83,18 +84,6 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
   const ultimo = serie[serie.length - 1] ?? { real: 0, meta: 0 };
   const passos = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(topo * f));
 
-  // ---- calendario de conversas trocadas (ultimos 31 dias do periodo) ----
-  const diasCal = dias.slice(-31);
-  const conversasDia = (id: string, d: string) => linhas.filter((l) => l.vendedor_id === id && l.dia === d).reduce((n, l) => n + Number(l.respostas), 0);
-  const celula = (id: string, d: string) => {
-    const n = conversasDia(id, d);
-    if (n >= META_CONVERSAS) return { cls: "bg-brand", n };
-    if (n > 0) return { cls: "bg-[linear-gradient(135deg,#6dcfc0_0_50%,#2b3433_50%_100%)]", n };
-    if (!util(d)) return { cls: "border border-dashed border-line", n };
-    if (d === hoje) return { cls: "border-[1.5px] border-dashed border-brand", n };
-    return { cls: "border-2 border-bad", n };
-  };
-
   const kpi = (l: string, v: React.ReactNode, m: React.ReactNode) => (
     <div className="min-w-0 rounded-[14px] border border-line bg-card px-[1.05em] py-[0.75em]">
       <div className="whitespace-nowrap text-[0.68em] font-semibold uppercase tracking-[0.26em] text-brand">{l}</div>
@@ -135,32 +124,29 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
           </div>
         </Painel>
   );
+  const tituloMetas = de === ate ? "Metas do dia" : "Metas do período";
   const pConv = (
-        <Painel titulo="Conversas trocadas por dia" nota={`meta ${META_CONVERSAS} por dia útil`}>
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full border-separate border-spacing-[2px] tabular-nums">
-              <thead><tr><th />{diasCal.map((d) => <th key={d} className={`text-center text-[0.68em] font-medium leading-tight ${d === hoje ? "text-brand" : "text-mute"}`}>{d.slice(8, 10)}</th>)}<th /></tr></thead>
-              <tbody>
-                {sdrs.map((s) => {
-                  const passados = diasCal.filter((d) => util(d) && d <= hoje);
-                  const batidos = passados.filter((d) => conversasDia(s.id, d) >= META_CONVERSAS).length;
-                  return (
-                    <tr key={s.id}>
-                      <th className="whitespace-nowrap pr-1 text-left text-[0.95em] font-bold"><span className="flex items-center gap-[0.4em]"><Bola id={s.id} />{s.nome}</span></th>
-                      {diasCal.map((d) => { const c = celula(s.id, d); return <td key={d}><span className={`block h-[1.6em] min-w-[0.8em] rounded-[5px] ${c.cls}`} title={`${s.nome} · ${ddmm(d)}: ${c.n} conversas trocadas`} /></td>; })}
-                      <td className="whitespace-nowrap pl-1 text-right"><Pill e={estado(batidos, passados.length)}>{batidos}/{passados.length}</Pill></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <Painel titulo={tituloMetas} nota={`${META_CONVERSAS} conversas trocadas e ${META_MARCACOES} marcações por dia útil${uteis > 1 ? ` · ${uteis} dias úteis` : ""}`}>
+          <div className="flex min-h-0 flex-1 flex-col justify-around gap-[0.9em] overflow-auto">
+            {sdrs.map((s) => {
+              const t = porSdr.get(s.id) ?? ZERO;
+              const barra = (rot: string, feito: number, alvo: number) => (
+                <div className="min-w-0">
+                  <div className="mb-[0.3em] flex items-baseline justify-between text-[0.85em] text-mute"><span>{rot}</span><span className="tabular-nums"><b className="text-[1.25em] text-ink">{feito}</b> / {alvo}</span></div>
+                  <BarraMeta feito={feito} alvo={alvo} grande />
+                </div>
+              );
+              return (
+                <div key={s.id}>
+                  <div className="mb-[0.35em] flex items-center gap-[0.45em] text-[1.1em] font-bold"><Bola id={s.id} />{s.nome}</div>
+                  <div className="grid grid-cols-2 gap-[1.2em]">
+                    {barra("Conversas trocadas", Number(t.respostas), metaConversas)}
+                    {barra("Marcações", Number(t.marcacoes), metaMarc)}
+                  </div>
+                </div>
+              );
+            })}
             {!sdrs.length && <p className="text-[0.85em] text-mute">Nenhum vendedor ainda. Cadastre na aba WhatsApp (nome, função e conexão).</p>}
-          </div>
-          <div className="mt-[0.55em] flex flex-wrap gap-x-[1em] gap-y-1 text-[0.75em] text-mute">
-            <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm bg-brand" />bateu a meta</span>
-            <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm bg-[linear-gradient(135deg,#6dcfc0_0_50%,#2b3433_50%_100%)]" />abaixo da meta</span>
-            <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm border-2 border-bad" />dia útil sem conversa</span>
-            <span className="flex items-center gap-[0.35em]"><i className="inline-block h-[0.9em] w-[1.1em] rounded-sm border border-dashed border-line" />fim de semana</span>
           </div>
         </Painel>
   );
@@ -278,7 +264,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
       <Suspense>
         <Carrossel
           geral={<main className="grid min-h-0 flex-1 gap-[clamp(8px,0.9vh,16px)] lg:grid-cols-[1.35fr_1fr] lg:grid-rows-[minmax(0,1fr)_minmax(0,1.1fr)]">{pMarc}{pConv}{pFunil}{pPessoa}</main>}
-          slides={[{ titulo: "Marcações acumuladas", no: pMarc }, { titulo: "Conversas trocadas por dia", no: pConv }, { titulo: "Funil por SDR", no: pFunil }, { titulo: "Por pessoa", no: pPessoa }]}
+          slides={[{ titulo: "Marcações acumuladas", no: pMarc }, { titulo: tituloMetas, no: pConv }, { titulo: "Funil por SDR", no: pFunil }, { titulo: "Por pessoa", no: pPessoa }]}
         />
       </Suspense>
     </div>
