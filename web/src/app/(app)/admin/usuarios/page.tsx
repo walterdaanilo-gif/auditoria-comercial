@@ -13,7 +13,7 @@ export default async function Usuarios({ searchParams: searchParamsP }: { search
 
   return (
     <div className="space-y-5">
-      <div><h1 className="page-title">Usuários</h1><p className="page-sub">Só o admin cria usuários. Não existe cadastro público.</p></div>
+      <div><h1 className="page-title">Usuários</h1><p className="page-sub">Só o admin cria usuários. Não existe cadastro público. Trocar o e-mail muda o login da pessoa na hora; a senha continua a mesma.</p></div>
       {searchParams.erro && <p className="card border-bad text-sm text-bad">{searchParams.erro}</p>}
       {searchParams.ok && <p className="card border-ok text-sm text-ok">{searchParams.ok}</p>}
       <NovoUsuarioForm />
@@ -27,7 +27,7 @@ export default async function Usuarios({ searchParams: searchParamsP }: { search
                   <form action={atualizarUsuario} className="grid items-center gap-2 md:grid-cols-[1.2fr_1.4fr_0.8fr_0.5fr_0.8fr_auto]">
                     <input type="hidden" name="id" value={u.id} />
                     <input name="nome" defaultValue={u.nome} className="input" required />
-                    <span className="truncate text-mute">{u.email}</span>
+                    <input name="email" type="email" defaultValue={u.email?.endsWith("@sem-login.invalid") ? "" : u.email} placeholder="E-mail de login" autoComplete="off" className="input" />
                     <select name="papel" defaultValue={u.papel} className="input">
                       <option value="vendedor">Vendedor</option><option value="gestor">Gestor</option><option value="admin">Admin</option>
                     </select>

@@ -33,16 +33,25 @@ export async function atualizarUsuario(fd: FormData): Promise<void> {
   const nome = String(fd.get("nome") || "").trim();
   const papel = String(fd.get("papel") || "");
   const ativo = fd.get("ativo") === "on";
+  const email = String(fd.get("email") || "").trim().toLowerCase();
   if (!id || !nome || !PAPEIS.includes(papel)) redirect("/admin/usuarios?erro=Dados inválidos");
   if (id === eu.id && (papel !== "admin" || !ativo)) redirect("/admin/usuarios?erro=Você não pode tirar o próprio acesso de admin");
 
   const admin = createAdminClient();
-  const { error } = await admin.from("profiles").update({ nome, papel, ativo }).eq("id", id);
+  // E-mail novo: troca primeiro o login (ja confirmado, sem e-mail de confirmacao); campo vazio mantem o atual
+  const { data: atual } = await admin.from("profiles").select("email").eq("id", id).maybeSingle();
+  const novoEmail = email && email !== atual?.email ? email : null;
+  if (novoEmail) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(novoEmail)) redirect("/admin/usuarios?erro=E-mail inválido");
+    const { error: eAuth } = await admin.auth.admin.updateUserById(id, { email: novoEmail, email_confirm: true });
+    if (eAuth) redirect("/admin/usuarios?erro=" + encodeURIComponent(erroAdmin(eAuth, "Não foi possível trocar o e-mail.")));
+  }
+  const { error } = await admin.from("profiles").update({ nome, papel, ativo, ...(novoEmail ? { email: novoEmail } : {}) }).eq("id", id);
   if (error) redirect("/admin/usuarios?erro=" + encodeURIComponent(error.message));
   // Desativar tambem bloqueia o login no Supabase Auth
   await admin.auth.admin.updateUserById(id, { ban_duration: ativo ? "none" : "876000h", user_metadata: { nome, papel } });
   revalidatePath("/admin/usuarios");
-  redirect("/admin/usuarios?ok=Usuário atualizado");
+  redirect("/admin/usuarios?ok=" + encodeURIComponent(novoEmail ? `Usuário atualizado. Novo login: ${novoEmail}` : "Usuário atualizado"));
 }
 
 export async function redefinirSenha(fd: FormData): Promise<void> {
