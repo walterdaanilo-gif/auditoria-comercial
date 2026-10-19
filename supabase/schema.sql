@@ -913,3 +913,18 @@ alter table public.conversas add column if not exists nao_auditar boolean not nu
 
 -- Conversa em negociacao (reuniao proposta sem acordo, ou interesse/vaga reservada sem venda): qualquer mensagem nova reaudita na hora
 alter table public.conversas add column if not exists reuniao_pendente boolean not null default false;
+
+-- Resumos em dois turnos (13h manha, 19h tarde e dia) e alerta de follow-up atrasado
+alter table public.audit_settings
+  add column if not exists resumo_manha_hora text not null default '13:00',
+  add column if not exists resumo_manha_ultima date,
+  add column if not exists alerta_followup boolean not null default true,
+  add column if not exists followup_alerta_d integer not null default 6 check (followup_alerta_d between 1 and 60);
+create table if not exists public.resumos_turno (
+  data date not null, turno text not null check (turno in ('manha')), dados jsonb not null,
+  criado_em timestamptz not null default now(), primary key (data, turno));
+alter table public.resumos_turno enable row level security;
+create table if not exists public.followups_avisados (
+  vendedor_id uuid not null, lead text not null, ultima_msg_em timestamptz not null,
+  avisado_em timestamptz not null default now(), primary key (vendedor_id, lead, ultima_msg_em));
+alter table public.followups_avisados enable row level security;
