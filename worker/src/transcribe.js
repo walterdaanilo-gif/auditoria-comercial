@@ -27,7 +27,11 @@ export async function transcribePending(db) {
         const buf = await db.download(r.audio_url);
         const texto = buf.length > 25 * 1024 * 1024 ? "[audio grande demais para transcrever]" : (await whisper(buf, r.audio_url.split("/").pop())) || "[sem fala detectada]";
         await db.update(tabela, { id: `eq.${r.id}` }, { transcricao: texto });
-        if (r.conversa_id && temSinal(texto)) await db.update("conversas", { id: `eq.${r.conversa_id}` }, { auditar_rapido: true }); // audio com sinal de venda
+        // audio com sinal de venda, ou qualquer audio numa conversa com reuniao em negociacao: reaudita com o texto ja transcrito
+        if (r.conversa_id) {
+          const pend = !temSinal(texto) && (await db.select("conversas", { select: "reuniao_pendente", filters: { id: `eq.${r.conversa_id}` } }))[0]?.reuniao_pendente;
+          if (temSinal(texto) || pend) await db.update("conversas", { id: `eq.${r.conversa_id}` }, { auditar_rapido: true });
+        }
         feitos++;
       } catch (e) {
         const n = (fails.get(key) || 0) + 1; fails.set(key, n);

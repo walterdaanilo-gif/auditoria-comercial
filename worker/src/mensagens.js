@@ -47,6 +47,7 @@ export async function gravarMensagem(db, inst, m) {
   }], { onConflict: "conversa_id,wa_id", ignoreDuplicates: true, returning: false });
   // mantem a ultima mensagem da conversa sempre a mais recente
   await db.update("conversas", { id: `eq.${conv.id}`, ultima_msg_em: `lt.${iso}` }, { ultima_msg_em: iso });
-  // sinal de venda ou marcacao em mensagem recente: a conversa vai para a fila rapida de auditoria
-  if (temSinal(m.texto) && Date.now() - sec * 1000 < 6 * 3600_000) await db.update("conversas", { id: `eq.${conv.id}` }, { auditar_rapido: true });
+  // sinal de venda ou marcacao em mensagem recente, ou qualquer mensagem numa conversa com reuniao em negociacao
+  // (ex.: "da certo" depois de "hoje as 14h?"): a conversa vai para a fila rapida de auditoria
+  if ((temSinal(m.texto) || conv.reuniao_pendente) && Date.now() - sec * 1000 < 6 * 3600_000) await db.update("conversas", { id: `eq.${conv.id}` }, { auditar_rapido: true });
 }

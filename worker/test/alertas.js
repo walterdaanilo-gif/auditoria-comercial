@@ -72,3 +72,18 @@ assert.equal(enviados.length, 1, "marcacao desligada nao avisa");
 assert.ok(db.tables.auditorias[0].alertas_enviados.includes("reuniao_imersao"));
 console.log("OK: aviso de venda e marcacao na hora (sinal, IA confirma, uma vez por evento, mais urgente primeiro)");
 console.log("\n--- exemplo do aviso ---\n" + enviados[0].texto);
+
+// reuniao proposta sem aceite: a conversa fica "em negociacao" e o "da certo" (sem palavra-chave) ja reaudita na hora
+{
+  const conv = db.tables.conversas[0];
+  resposta = { oportunidade: { detectada: true, tipo: "reuniao_imersao" }, reuniao: { tipo: "imersao", cliente_confirmou: false, vendedor_confirmou: false, data: "2026-10-20", hora: "14:00" } };
+  await db.update("conversas", { id: `eq.${conv.id}` }, { auditar_agora: true });
+  await rapida();
+  assert.equal(db.tables.conversas[0].reuniao_pendente, true);
+  await msg(20, false, "Da certo");
+  assert.equal(db.tables.conversas[0].auditar_rapido, true, "mensagem sem palavra-chave reaudita quando ha reuniao em negociacao");
+  resposta = { oportunidade: { detectada: true, tipo: "reuniao_imersao" }, reuniao: { tipo: "imersao", cliente_confirmou: true, vendedor_confirmou: true, data: "2026-10-20", hora: "14:00" } };
+  await rapida();
+  assert.equal(db.tables.conversas[0].reuniao_pendente, false);
+  console.log("OK: reuniao em negociacao reaudita na proxima mensagem");
+}
