@@ -6,11 +6,10 @@ import { gravarMensagem } from "./mensagens.js";
 // - Cada linha de instancias_whatsapp vira uma instancia na Uazapi chamada "auditoria-<id>".
 // - O token de cada instancia fica em instancias_uazapi (tabela que so o worker le).
 // - QR Code e status vem de GET /instance/status (consultado a cada ciclo).
-// - Mensagens chegam pelo webhook POST /webhook/uazapi?k=<WEBHOOK_SECRET> no servidor do worker.
+// - Mensagens chegam pelo webhook POST <WEBHOOK_URL>/webhook/uazapi?k=<WEBHOOK_SECRET> (Edge Function "worker" do Supabase).
+// - O que precisa durar entre execucoes (ultimo QR pedido, webhook configurado) fica em instancias_uazapi, nao na memoria.
 
 const PREFIXO = "auditoria-";
-const ultimoConnect = new Map(); // instancia_id -> ms do ultimo /instance/connect (o QR vale ~2 min)
-const webhookOk = new Set();     // instancias com webhook ja configurado nesta execucao
 let ativas = 0;
 
 export const uazapiAtivo = () => !!cfg.uazapiUrl;
@@ -29,11 +28,11 @@ async function api(metodo, caminho, { token, admin = false, body } = {}) {
 
 const urlWebhook = () => `${cfg.webhookUrl}/webhook/uazapi?k=${encodeURIComponent(cfg.webhookSecret)}`;
 
-async function configurarWebhook(id, token) {
-  if (webhookOk.has(id) || !cfg.webhookUrl || !cfg.webhookSecret) return;
-  // modo simples: um webhook por instancia, criado ou atualizado. Grupos ficam de fora.
-  await api("POST", "/webhook", { token, body: { enabled: true, url: urlWebhook(), events: ["messages", "connection"], excludeMessages: ["isGroupYes"] } });
-  webhookOk.add(id);
+async function configurarWebhook(db, id, token, atual) {
+  if (!cfg.webhookUrl || !cfg.webhookSecret || atual === urlWebhook()) return;
+  // modo simples: um webhook por instancia, criado ou atualizado. Grupos ficam de fora. Chamadas tambem chegam.
+  await api("POST", "/webhook", { token, body: { enabled: true, url: urlWebhook(), events: ["messages", "connection", "call"], excludeMessages: ["isGroupYes"] } });
+  await db.update("instancias_uazapi", { instancia_id: `eq.${id}` }, { webhook_url: urlWebhook() });
 }
 
 async function setStatus(db, id, patch) {
@@ -42,7 +41,7 @@ async function setStatus(db, id, patch) {
 }
 
 async function conectar(db, inst, token) {
-  ultimoConnect.set(inst.id, Date.now());
+  await db.update("instancias_uazapi", { instancia_id: `eq.${inst.id}` }, { conectar_em: new Date().toISOString() });
   try { await api("POST", "/instance/connect", { token, body: {} }); }
   catch (e) {
     console.error(`[${inst.nome}]`, e.message);
@@ -57,7 +56,8 @@ const comoImagem = q => (!q ? null : q.startsWith("data:") ? q : `data:image/png
 export async function syncUazapi(db) {
   if (!cfg.uazapiAdminToken) { console.error("[uazapi] falta UAZAPI_ADMIN_TOKEN"); return; }
   const linhas = await db.select("instancias_whatsapp", { select: "id,vendedor_id,nome,comando,status,qr,numero" });
-  const tokens = new Map((await db.select("instancias_uazapi", { select: "instancia_id,token" })).map(t => [t.instancia_id, t.token]));
+  const extras = new Map((await db.select("instancias_uazapi", { select: "instancia_id,token,conectar_em,webhook_url" })).map(t => [t.instancia_id, t]));
+  const tokens = new Map([...extras].map(([k, t]) => [k, t.token]));
   const ids = new Set(linhas.map(l => l.id));
 
   // conexoes removidas no painel: apaga a instancia na Uazapi tambem
@@ -83,7 +83,7 @@ export async function syncUazapi(db) {
         await db.insert("instancias_uazapi", [{ instancia_id: inst.id, nome: PREFIXO + inst.id, token }], { onConflict: "instancia_id", returning: false });
         console.log(`[${inst.nome}] instancia criada na Uazapi`);
       }
-      await configurarWebhook(inst.id, token);
+      await configurarWebhook(db, inst.id, token, extras.get(inst.id)?.webhook_url);
 
       if (inst.comando === "reset") {
         await api("POST", "/instance/disconnect", { token }).catch(() => {});
@@ -108,11 +108,11 @@ export async function syncUazapi(db) {
       } else {
         // desconectada (nova, QR expirado ou saiu pelo celular): pede um QR novo, no maximo a cada ~2 min
         if (inst.status === "conectado") await setStatus(db, inst.id, { status: "desconectado", qr: null });
-        if (Date.now() - (ultimoConnect.get(inst.id) || 0) > 110_000) await conectar(db, inst, token);
+        if (Date.now() - Date.parse(extras.get(inst.id)?.conectar_em || 0) > 110_000) await conectar(db, inst, token);
       }
     } catch (e) {
       console.error(`[${inst.nome}]`, e.message);
-      if (e.status === 401) { webhookOk.delete(inst.id); }
+      if (e.status === 401) await db.update("instancias_uazapi", { instancia_id: `eq.${inst.id}` }, { webhook_url: null }).catch(() => {});
     }
   }
   ativas = conectadas;

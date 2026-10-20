@@ -271,7 +271,9 @@ async function avisarCritico(db, R, vendedorId, a, link, contato) {
 // as Configuracoes. "Auditar agora" na tela passa por cima dos filtros. Depois, importadas e ligacoes gravadas.
 // soSinais = fila rapida (rodada a cada minuto): "Auditar agora" e conversas com sinal de venda ou marcacao.
 // O resto (conversa parada, rodada final, importadas, ligacoes) fica na rodada normal.
-export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final = false, soSinais = false, envio, agendaFetch = fetch } = {}) {
+// ate: horario limite (ms) para parar sem perder nada (a Edge Function tem tempo maximo); estado.incompleto = parou antes do fim
+export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final = false, soSinais = false, envio, agendaFetch = fetch, ate = null, estado = {} } = {}) {
+  const semTempo = () => { if (ate && Date.now() > ate) { estado.incompleto = true; return true; } return false; };
   if (!provedor() && fetchImpl === fetch) return 0;
   const R = await carregarRegras(db);
   const from = addDays(today(), -cfg.daysBack);
@@ -305,6 +307,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
   if (soSinais) {
     // ----- "Auditar agora" (qualquer data, sem filtros) -----
     for (const c of await db.select("conversas", { select: CAMPOS_CONV, filters: { auditar_agora: "eq.true" }, limit: 20 })) {
+      if (semTempo()) break;
       try {
         const msgs = await mensagensDe(c.id);
         if (msgs.length) await auditarConversa(c, msgs, { manual: true });
@@ -313,6 +316,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     }
     // ----- sinal de venda ou marcacao numa mensagem: audita na hora, sem esperar a conversa parar -----
     for (const c of await db.select("conversas", { select: CAMPOS_CONV, filters: { auditar_rapido: "eq.true" }, limit: 20 })) {
+      if (semTempo()) break;
       try {
         const msgs = await mensagensDe(c.id);
         const pode = R.s.auditoria_automatica && !c.nao_auditar && !R.ignorados.has(chaveTelefone(c.telefone || c.contato)) && msgs.some(m => m.remetente === "vendedor") && msgs.some(m => m.remetente === "cliente");
@@ -337,6 +341,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     }
     const auds = new Map((await db.selectAll("auditorias", { select: "conversa_id,msg_count", filters: { conversa_id: "not.is.null", atualizado_em: `gte.${dayStart(addDays(from, -1))}` } })).map(a => [a.conversa_id, a.msg_count]));
     for (const c of convs) {
+      if (semTempo()) break;
       const r = resumo.get(c.id);
       if (!r || !r.vend || !r.cli) continue; // so audita quando o lead respondeu (mensagem dos dois lados)
       if (c.auditar_rapido || c.auditar_agora) continue; // esta na fila rapida
@@ -361,6 +366,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
   if (imps.length) {
     const ja = new Set((await db.select("auditorias", { select: "conversa_id", filters: { conversa_id: `in.(${imps.map(c => c.id).join(",")})` } })).map(a => a.conversa_id));
     for (const c of imps) {
+      if (semTempo()) break;
       if (ja.has(c.id)) continue;
       try {
         const msgs = await mensagensDe(c.id);
@@ -375,6 +381,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
   if (ligs.length) {
     const ja = new Set((await db.selectAll("auditorias", { select: "ligacao_id", filters: { ligacao_id: "not.is.null" } })).map(a => a.ligacao_id));
     for (const l of ligs) {
+      if (semTempo()) break;
       if (ja.has(l.id) || l.transcricao.startsWith("[") || R.ignorados.has(chaveTelefone(l.contato))) continue;
       try {
         const a = await auditarTexto(R, l.vendedor_id, cortar("TRANSCRICAO DA LIGACAO:\n" + l.transcricao), {}, fetchImpl);

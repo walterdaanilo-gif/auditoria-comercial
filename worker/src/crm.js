@@ -20,7 +20,8 @@ async function corteDe(db, vendedorId, cortes) {
   return m.enviada_em;
 }
 
-export async function importarHistoricoCrm(db, { agora = Date.now() } = {}) {
+// todosRevisar: revisa todos os clientes potenciais (primeira importacao); senao so os que receberam mensagem nova
+export async function importarHistoricoCrm(db, { agora = Date.now(), todosRevisar = false } = {}) {
   const R = await carregarRegras(db);
   const [insts, crmConvs, cortesRows] = await Promise.all([
     db.select("instancias_whatsapp", { select: "id,vendedor_id,numero" }),
@@ -37,10 +38,15 @@ export async function importarHistoricoCrm(db, { agora = Date.now() } = {}) {
   const ja = new Set((await db.selectAll("mensagens", { select: "wa_id", filters: { wa_id: "like.crm:*" } })).map(m => m.wa_id));
   let novas = 0;
   const tocadas = new Set();
+  const porConversa = new Map();
+  for (const m of await db.selectAll("crm_mensagens", { select: "id,conversa_id,direcao,tipo,texto,transcricao,enviada_em,nota_interna,automatica,apagada_em", order: "enviada_em" })) {
+    if (!ja.has(`crm:${m.id}`)) porConversa.set(m.conversa_id, [...(porConversa.get(m.conversa_id) || []), m]);
+  }
   for (const cc of validas) {
+    if (!porConversa.has(cc.id)) continue;
     const corte = await corteDe(db, cc.vendedor_id, cortes);
     const limite = corte ? Date.parse(corte) : agora;
-    const msgs = (await db.selectAll("crm_mensagens", { select: "id,direcao,tipo,texto,transcricao,enviada_em,nota_interna,automatica,apagada_em", filters: { conversa_id: `eq.${cc.id}` }, order: "enviada_em" }))
+    const msgs = porConversa.get(cc.id)
       .filter(m => !ja.has(`crm:${m.id}`) && !m.nota_interna && !m.automatica && !m.apagada_em && ["inbound", "outbound"].includes(m.direcao) && m.tipo !== "system" && Date.parse(m.enviada_em) < limite);
     if (!msgs.length) continue;
     const tel = digitos(cc.telefone);
@@ -61,7 +67,7 @@ export async function importarHistoricoCrm(db, { agora = Date.now() } = {}) {
       tocadas.add(cc.id);
     }
   }
-  const revisar = await marcarRevisao(db, validas.filter(c => crmPotencial(c.status)), instDe);
+  const revisar = await marcarRevisao(db, validas.filter(c => crmPotencial(c.status) && (tocadas.has(c.id) || todosRevisar)), instDe);
   if (novas || revisar) console.log(`[crm] ${novas} mensagens do historico copiadas · ${revisar} clientes potenciais na fila de revisao`);
   return { mensagens: novas, revisar };
 }

@@ -14,7 +14,7 @@ import { cancelarEventos } from "./agenda.js";
 
 // Avisa no log quais variaveis faltam. Sem as do Supabase nao da para rodar nada.
 const faltam = Object.entries({ SUPABASE_URL: cfg.supabaseUrl, SUPABASE_SERVICE_ROLE_KEY: cfg.serviceKey }).filter(([, v]) => !v).map(([k]) => k);
-if (faltam.length) { console.error(`Faltam as variaveis ${faltam.join(", ")} (no Railway: servico worker > Variables). O worker nao inicia sem elas.`); process.exit(1); }
+if (faltam.length) { console.error(`Faltam as variaveis ${faltam.join(", ")}. O worker nao inicia sem elas.`); process.exit(1); }
 const opcionais = { UAZAPI_URL: cfg.uazapiUrl, UAZAPI_ADMIN_TOKEN: cfg.uazapiAdminToken, WEBHOOK_URL: cfg.webhookUrl, WEBHOOK_SECRET: cfg.webhookSecret, TRANSCRIBE_API_KEY: cfg.transcribeKey };
 console.log(provedor() ? `[ia] auditoria com ${provedor() === "anthropic" ? `Anthropic (${cfg.model})` : `OpenAI (${cfg.openaiModel})`}` : "[ia] sem chave de IA (ANTHROPIC_API_KEY ou OPENAI_API_KEY / TRANSCRIBE_API_KEY da OpenAI): nada sera auditado");
 const vazias = Object.entries(opcionais).filter(([, v]) => !v).map(([k]) => k);

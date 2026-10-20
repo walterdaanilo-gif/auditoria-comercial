@@ -79,7 +79,7 @@ export default async function Instancias({ searchParams: searchParamsP }: { sear
   ]);
   // O worker atualiza visto_em a cada 15 s. Mais de 1 minuto sem sinal = desligado ou travado.
   const vistoEm = (ws as { visto_em: string } | null)?.visto_em;
-  const workerLigado = !!vistoEm && Date.now() - new Date(vistoEm).getTime() < 60_000;
+  const workerLigado = !!vistoEm && Date.now() - new Date(vistoEm).getTime() < 180_000; // a rotina do Supabase roda a cada minuto
   const nomes = new Map<string, string>((perfis ?? []).map((x: any) => [x.id, x.nome]));
   const funcoes = new Map<string, string>((perfis ?? []).map((x: any) => [x.id, x.funcao]));
   const insts = (data ?? []) as Instancia[];
@@ -91,14 +91,14 @@ export default async function Instancias({ searchParams: searchParamsP }: { sear
         <p className="page-sub">Cada vendedor lê o QR Code no celular dele: WhatsApp → Aparelhos conectados → Conectar um aparelho. O QR renova sozinho a cada 2 minutos.</p></div>
       {searchParams.erro && <p className="card border-bad text-sm text-bad">{searchParams.erro}</p>}
       {workerLigado ? (
-        <div className="card flex items-center gap-3 !py-3 text-sm"><CheckCircle2 size={18} className="shrink-0 text-ok" /><span><b className="text-ok">Worker ligado.</b> <span className="text-mute">Último sinal às {fmtDataHora(vistoEm!)}. Conexões novas ganham QR Code em até 15 segundos.</span></span></div>
+        <div className="card flex items-center gap-3 !py-3 text-sm"><CheckCircle2 size={18} className="shrink-0 text-ok" /><span><b className="text-ok">Worker ligado.</b> <span className="text-mute">Último sinal às {fmtDataHora(vistoEm!)}. Conexões novas ganham QR Code em até 1 minuto.</span></span></div>
       ) : (
         <div className="aviso flex gap-3">
           <AlertTriangle size={20} className="mt-0.5 shrink-0 text-warn" />
           <div>
             <b className="text-base text-warn">Worker desligado: o QR Code não vai aparecer</b>
-            <p className="mt-1 text-ink/90">Quem pede o QR à Uazapi e recebe as mensagens é o worker, um programa que fica ligado 24h no Railway.
-              {vistoEm ? ` O último sinal dele foi em ${fmtDataHora(vistoEm)}. Veja se ele caiu na hospedagem.` : " Ele ainda não foi publicado. Depois de publicar, esta tela mostra o QR sozinha."}</p>
+            <p className="mt-1 text-ink/90">Quem pede o QR à Uazapi e recebe as mensagens é o worker, uma rotina automática do Supabase que roda a cada minuto.
+              {vistoEm ? ` O último sinal dele foi em ${fmtDataHora(vistoEm)}. Veja em Supabase → Edge Functions → worker → Logs.` : " Ele ainda não foi ligado. Depois de ligar, esta tela mostra o QR sozinha."}</p>
           </div>
         </div>
       )}

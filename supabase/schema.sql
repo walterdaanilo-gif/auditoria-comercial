@@ -961,3 +961,49 @@ alter table public.auditorias add column if not exists remarcacao boolean not nu
 
 -- Evento duplicado/desfeito: marcar cancelar = true e o worker apaga o evento no Google
 alter table public.reunioes_agenda add column if not exists cancelar boolean not null default false, add column if not exists cancelado_em timestamptz;
+
+-- =====================================================================
+-- Worker na Edge Function "worker" do Supabase (sem servidor ligado 24h)
+-- =====================================================================
+-- chave interna que o relogio do banco manda para a Edge Function "worker" (gerada aqui, nunca sai do banco)
+create table if not exists public.worker_token (id int primary key default 1 check (id = 1), token text not null);
+alter table public.worker_token enable row level security;
+insert into public.worker_token (id, token) values (1, md5(random()::text || clock_timestamp()::text) || md5(random()::text || clock_timestamp()::text)) on conflict (id) do nothing;
+
+-- trava: cada tarefa roda uma vez por vez (o relogio pode disparar de novo antes da anterior acabar)
+create table if not exists public.worker_vez (nome text primary key, ate timestamptz not null);
+alter table public.worker_vez enable row level security;
+create or replace function public.pegar_vez(p_nome text, p_segundos int) returns boolean
+language plpgsql security definer set search_path = public as $f$
+declare ok boolean;
+begin
+  insert into public.worker_vez as w (nome, ate) values (p_nome, now() + make_interval(secs => p_segundos))
+  on conflict (nome) do update set ate = excluded.ate where w.ate < now()
+  returning true into ok;
+  return coalesce(ok, false);
+end $f$;
+create or replace function public.soltar_vez(p_nome text) returns void
+language sql security definer set search_path = public as $f$ update public.worker_vez set ate = now() where nome = p_nome $f$;
+revoke all on function public.pegar_vez(text, int) from public, anon, authenticated;
+revoke all on function public.soltar_vez(text) from public, anon, authenticated;
+
+-- dispara uma tarefa do worker (rapido, ciclo, crm)
+create or replace function public.worker_disparar(p_tarefa text) returns bigint
+language sql security definer set search_path = public, extensions as $f$
+  select net.http_post(
+    url := 'https://vgenysegeelseyrvtnxu.supabase.co/functions/v1/worker/tick?t=' || p_tarefa,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-worker-token', (select token from public.worker_token where id = 1)),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 150000
+  );
+$f$;
+revoke all on function public.worker_disparar(text) from public, anon, authenticated;
+
+-- ultima vez que pediu QR a Uazapi (o QR vale ~2 min) e webhook ja configurado em cada instancia
+alter table public.instancias_uazapi add column if not exists conectar_em timestamptz;
+alter table public.instancias_uazapi add column if not exists webhook_url text;
+
+-- relogios (pg_cron)
+-- select cron.schedule('worker-rapido', '* * * * *',   $$select public.worker_disparar('rapido')$$);
+-- select cron.schedule('worker-ciclo',  '*/5 * * * *', $$select public.worker_disparar('ciclo')$$);
+-- select cron.schedule('worker-crm',    '*/15 * * * *', $$select public.worker_disparar('crm')$$);

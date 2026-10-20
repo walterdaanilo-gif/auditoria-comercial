@@ -91,7 +91,7 @@ export default function PrivacidadePage() {
         <h2 className="text-xl font-semibold">5. Com quem compartilhamos</h2>
         <p>
           Os dados não são vendidos. Eles passam apenas pelos fornecedores que fazem o sistema funcionar: Supabase
-          (banco de dados, login e arquivos), Vercel e Railway (hospedagem), OpenAI (transcrição de áudios), Anthropic
+          (banco de dados, login, arquivos e rotinas automáticas), Vercel (hospedagem do site), Uazapi (conexão do WhatsApp), OpenAI (transcrição de áudios e análise), Anthropic
           (análise das conversas por inteligência artificial) e Google (Agenda e planilha de indicadores).
         </p>
       </section>

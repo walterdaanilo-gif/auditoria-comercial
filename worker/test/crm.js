@@ -36,7 +36,7 @@ db.tables.crm_mensagens = [
   m("12", "c5", "inbound", d8, "08:00"), // lead escreveu ha 8 dias e nunca teve resposta
 ];
 
-const r1 = await importarHistoricoCrm(db);
+const r1 = await importarHistoricoCrm(db, { todosRevisar: true });
 assert.equal(db.tables.crm_corte[0].corte, em(hoje, "09:00"), "corte = inicio da captura do WhatsApp");
 const doCrm = db.tables.mensagens.filter(x => String(x.wa_id).startsWith("crm:"));
 assert.deepEqual(doCrm.map(x => x.wa_id).sort(), ["crm:1", "crm:10", "crm:11", "crm:12", "crm:2", "crm:3", "crm:4"].sort(), "sem nota interna, automatica, chat interno, numero do time e nada depois do corte");
@@ -51,7 +51,7 @@ assert.equal(r1.revisar, 1);
 
 // rodar de novo nao duplica nada
 const antes = db.tables.mensagens.length, convsAntes = db.tables.conversas.length;
-await importarHistoricoCrm(db);
+await importarHistoricoCrm(db, { todosRevisar: true });
 assert.equal(db.tables.mensagens.length, antes); assert.equal(db.tables.conversas.length, convsAntes);
 
 // follow-up: a Lia (status ativo no CRM) escreveu ha 8 dias e o Nick nunca respondeu -> entra; a Carla teve mensagem ha 3 dias -> nao

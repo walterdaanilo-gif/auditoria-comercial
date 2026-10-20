@@ -13,9 +13,9 @@ Gravação de ligação ┘        │  transcreve (Whisper) e audita (Claude)
 |---|---|---|
 | `supabase/schema.sql` | Tabelas, RLS, bucket de áudios, funções | SQL Editor do Supabase (uma vez) |
 | `web/` | Site: login, painel, conversas, ligações, WhatsApp, usuários, roteiro | Vercel (grátis) |
-| `worker/` | Conexão do WhatsApp, transcrição, auditoria, análise do time, espelho na planilha | Servidor ligado 24h (Railway, VPS) |
+| `worker/` | Webhook da Uazapi, transcrição, auditoria, resumos, agenda, CRM | Edge Function `worker` do Supabase (grátis) |
 
-**Por que dois lugares:** a Vercel desliga a função depois de cada requisição, e a conexão por QR Code precisa de um processo sempre ligado. Por isso o WhatsApp roda no worker.
+**Sem servidor ligado 24h:** a sessão do WhatsApp fica na Uazapi, que avisa cada mensagem por webhook. O resto roda por relógios do banco (pg_cron), que chamam a Edge Function.
 
 ---
 
@@ -72,13 +72,13 @@ Login, recuperação de senha e logout já estão prontos. Todas as rotas passam
 
 ## 4. Worker (WhatsApp, transcrição e auditoria)
 
-Precisa ficar ligado 24h e ter **disco persistente** em `/app/data`, onde ficam as sessões do WhatsApp. Sem o disco, os vendedores teriam que ler o QR de novo a cada reinício.
+Roda como **Edge Function `worker` do Supabase** (`worker/src/edge.js` é a entrada), com o WhatsApp pela **Uazapi**:
+- `POST /functions/v1/worker/webhook/uazapi?k=<WEBHOOK_SECRET>`: mensagens que a Uazapi manda na hora.
+- `POST /functions/v1/worker/tick?t=rapido|ciclo|crm`: chamado pelo pg_cron (`select public.worker_disparar('rapido')`) a cada 1, 5 e 15 min, com a chave interna da tabela `worker_token`.
 
-**Opção A, Railway (mais simples):** New Project → Deploy from GitHub → Root Directory `worker` → em Variables, cole o `.env` → adicione um **Volume** montado em `/app/data`. O Railway cobra por uso, e um worker pequeno costuma ficar na faixa do plano básico.
+Segredos em Supabase → Edge Functions → Secrets: `UAZAPI_URL`, `UAZAPI_ADMIN_TOKEN`, `WEBHOOK_URL` (`https://<projeto>.supabase.co/functions/v1/worker`), `WEBHOOK_SECRET`, `TRANSCRIBE_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` o Supabase já injeta.
 
-**Opção B, VPS** (Hostinger, DigitalOcean, Contabo, a partir de uns R$ 25 por mês): copie a pasta `worker`, crie o `.env` a partir de `.env.example` e rode `docker compose up -d --build`.
-
-Planos 100% grátis que "dormem" (ex.: Render free) **não servem**, porque derrubam a conexão do WhatsApp.
+O modo antigo (Node com Baileys, `worker/src/index.js`) continua no código como alternativa para servidor próprio.
 
 O que o worker faz:
 - A cada 15 s, lê as conexões criadas no painel, sobe as novas, aplica "gerar novo QR" e derruba as removidas.
