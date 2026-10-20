@@ -94,3 +94,27 @@ console.log("OK: agenda Google (reuniao de implementacao e de imersao confirmada
   assert.equal(avisos.length, 2);
   console.log("OK: conflito com a agenda avisado no WhatsApp do gestor\n\n" + avisos[0].texto);
 }
+
+// remarcacao: a mesma reuniao do lead vinda de outra conversa (outro dia ou outro vendedor) atualiza o MESMO evento
+{
+  const { reuniaoAnterior } = await import("../src/agenda.js");
+  const { marcacao } = await import("../src/auditor.js");
+  const dia = addDays(today(), 3);
+  db.tables.reunioes_agenda = [{ conversa_id: "conv-ontem", vendedor_id: "sdr-x", inicio: new Date(`${dia}T10:00:00-03:00`).toISOString(), google_event_id: "evR", dados: { tipo: "imersao", contato: "5584977776666", telefone: "5584977776666" } }];
+  const cHoje = { id: "conv-hoje", vendedor_id: "closer-y", contato: "84977776666", telefone: "5584977776666" };
+  const RR = { nomes: new Map(), funcao: new Map([["sdr-x", "sdr"], ["sdr-z", "sdr"], ["closer-y", "closer"]]) };
+  const cSdr = { ...cHoje, vendedor_id: "sdr-z" };
+  assert.equal((await reuniaoAnterior(db, cSdr, RR)).google_event_id, "evR", "outro SDR remarcando a reuniao de imersao do mesmo lead");
+  assert.equal(await reuniaoAnterior(db, cHoje, RR), null, "closer marcando reuniao de implementacao e reuniao nova");
+  assert.equal((await reuniaoAnterior(db, cHoje, RR, { inicio: `${dia}T10:00:00-03:00` })).google_event_id, "evR", "mesmo dia e horario e a mesma reuniao, qualquer tipo");
+  assert.equal(await reuniaoAnterior(db, { ...cSdr, id: "conv-ontem" }, RR), null, "a propria conversa nao conta");
+  const pedidosR = [];
+  const g = async (url, o) => { pedidosR.push({ url: String(url), metodo: o.method }); if (String(url).includes("oauth2")) return { ok: true, json: async () => ({ access_token: "at", expires_in: 3600 }) }; return { ok: true, json: async () => ({ id: "evR", htmlLink: "x" }) }; };
+  assert.equal(await sincronizarReuniao(db, { ...R, funcao: RR.funcao }, cSdr, { tipo: "imersao", cliente_confirmou: true, vendedor_confirmou: true, remarcacao: true, data: dia, hora: "15:00", cliente_nome: "Ana" }, { fetchImpl: g, envio: async () => {} }), "atualizada");
+  assert.ok(pedidosR.some(p => p.metodo === "PATCH" && p.url.includes("/events/evR")), "remarcacao muda o horario do mesmo evento");
+  // na contagem: remarcacao de reuniao nao e marcacao; inscricao no workshop continua contando
+  assert.deepEqual(marcacao({ agendou: true, tipo_agendamento: "imersao", reuniao: { remarcacao: true } }, "sdr"), { agendou: false, tipo_agendamento: null, remarcacao: true });
+  assert.deepEqual(marcacao({ agendou: true, tipo_agendamento: "imersao", reuniao: { remarcacao: false } }, "sdr"), { agendou: true, tipo_agendamento: "imersao", remarcacao: false });
+  assert.deepEqual(marcacao({ agendou: true, tipo_agendamento: "workshop", reuniao: { remarcacao: true } }, "sdr").agendou, true);
+  console.log("OK: remarcacao so muda a agenda e nao conta como marcacao");
+}

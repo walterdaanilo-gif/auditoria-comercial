@@ -955,3 +955,6 @@ end $do$;
 
 -- Convite do workshop: de onde veio a cortesia (cupom 100% ou membro da Carbone Educacao)
 alter table public.auditorias add column if not exists venda_convite_origem text check (venda_convite_origem in ('cupom','carbone'));
+
+-- Remarcacao: reuniao ja marcada que so mudou de horario (atualiza a agenda, nao conta como marcacao)
+alter table public.auditorias add column if not exists remarcacao boolean not null default false;

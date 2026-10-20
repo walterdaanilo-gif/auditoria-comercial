@@ -84,6 +84,23 @@ async function avisarConflito(db, texto, envio) {
   return true;
 }
 
+// Reuniao do mesmo tipo e do mesmo lead ja na agenda, vinda de OUTRA conversa (qualquer vendedor), futura ou dos
+// ultimos 15 dias (quem faltou e remarcou): a reuniao desta conversa e remarcacao, nao marcacao nova.
+const chaveLead = t => { const d = String(t || "").replace(/\D/g, ""); return d.length >= 10 ? d.slice(2, 4) + d.slice(-8) : d; };
+export async function reunioesDoLead(db, c) {
+  const k = chaveLead(c.telefone || c.contato);
+  return (await db.select("reunioes_agenda", { order: "atualizado_em.desc", limit: 300 })).filter(x => chaveLead(x.dados?.telefone || x.dados?.contato) === k);
+}
+// Tipo pela funcao de quem marcou (SDR marca imersao, closer marca implementacao), nao pelo rotulo da IA.
+// Mesmo dia e horario do mesmo lead e sempre a mesma reuniao, qualquer que seja o tipo.
+export async function reuniaoAnterior(db, c, R, { tipo, inicio } = {}) {
+  const desde = Date.now() - 15 * 86400_000;
+  const tipoDe = v => (R?.funcao?.get(v) === "closer" ? "implementacao" : "imersao");
+  const meu = tipo || tipoDe(c.vendedor_id);
+  return (await reunioesDoLead(db, c)).find(x => x.conversa_id !== c.id && Date.parse(x.inicio) >= desde
+    && ((inicio && Date.parse(x.inicio) === Date.parse(inicio)) || tipoDe(x.vendedor_id) === meu)) || null;
+}
+
 // Cria ou atualiza o evento da reuniao desta conversa. Implementacao ou imersao, confirmada pelo lead e pelo vendedor, no futuro.
 export async function sincronizarReuniao(db, R, c, r, { fetchImpl = fetch, envio = enviarWhatsApp } = {}) {
   if (!r || !["implementacao", "imersao"].includes(r.tipo) || !r.cliente_confirmou || !r.vendedor_confirmou || !r.data || !r.hora) return null;
@@ -94,10 +111,11 @@ export async function sincronizarReuniao(db, R, c, r, { fetchImpl = fetch, envio
 
   // mesma conversa, ou a mesma reuniao marcada em outra conversa do mesmo lead (outro dia)
   const [daConversa] = await db.select("reunioes_agenda", { filters: { conversa_id: `eq.${c.id}` } });
-  const [doLead] = daConversa ? [] : (await db.select("reunioes_agenda", { filters: { vendedor_id: `eq.${c.vendedor_id}` }, order: "atualizado_em.desc", limit: 20 })).filter(x => x.dados?.contato === c.contato && Date.parse(x.inicio) > Date.now());
+  // remarcacao: o mesmo evento do lead (mesmo tipo, futuro ou dos ultimos 15 dias), mesmo que marcado por outro vendedor
+  const doLead = daConversa ? null : await reuniaoAnterior(db, c, R, { inicio: inicioIso(r) });
   const atual = daConversa || doLead;
   const ev = montarEvento(r, { vendedor: R.nomes.get(c.vendedor_id) || "vendedor", contato: c.telefone || c.contato, conversaId: c.id, duracao: s?.agenda_duracao_min ?? 60, convidar: s?.agenda_convidar ?? true, meet: s?.agenda_meet ?? true });
-  const dados = { ...r, contato: c.contato };
+  const dados = { ...r, contato: c.contato, telefone: c.telefone || null };
   if (atual?.google_event_id && atual.inicio && Date.parse(atual.inicio) === Date.parse(inicio) && JSON.stringify(atual.dados) === JSON.stringify(dados)) return "sem mudanca";
 
   const token = await tokenAcesso(db, fetchImpl);

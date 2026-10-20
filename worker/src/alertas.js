@@ -31,7 +31,7 @@ export function eventosDe(a, funcao) {
   // Aviso de reuniao so quando o lead aceitou E o vendedor confirmou (pergunta "posso confirmar?" ainda nao vale).
   // Enquanto nao confirma, a chave nao entra em alertas_enviados e o aviso sai na auditoria seguinte, ja confirmado.
   const confirmada = !!(a.reuniao?.cliente_confirmou && a.reuniao?.vendedor_confirmou);
-  if (!confirmada) reuniao = null;
+  if (!confirmada || a.remarcacao || a.reuniao?.remarcacao) reuniao = null; // remarcacao so muda a agenda
   if (reuniao === "reuniao_implementacao") ev.push({ chave: reuniao, tipo: "marcacao", titulo: "🤝 *Reunião de implementação marcada*", evidencia: a.oportunidade_evidencia });
   if (reuniao === "reuniao_imersao") ev.push({ chave: reuniao, tipo: "marcacao", titulo: "📅 *Reunião de imersão marcada*", evidencia: a.oportunidade_evidencia });
   if (a.oportunidade && !reuniao && a.oportunidade_tipo && !a.oportunidade_tipo.startsWith("reuniao_")) ev.push({ chave: a.oportunidade_tipo, tipo: "oportunidade", titulo: `🎯 *Oportunidade*: ${a.oportunidade_tipo === "interesse_imersao" ? "interesse na imersão" : "interesse no workshop"}`, evidencia: a.oportunidade_evidencia });

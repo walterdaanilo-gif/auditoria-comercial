@@ -77,7 +77,7 @@ export default async function ConversaDetalhe({ params: paramsP }: { params: Pro
             <div className="space-y-3 text-sm">
               <div className="flex flex-wrap items-center gap-2"><span className={`text-4xl font-bold ${corNota(a.nota_geral)}`}>{nota(a.nota_geral)}</span>
                 {a.qualidade && <span className={`chip ${a.qualidade === "boa" ? "border-ok text-ok" : a.qualidade === "regular" ? "border-warn text-warn" : "border-bad text-bad"}`}>{a.qualidade}</span>}
-                {a.agendou && <span className="chip border-ok text-ok">agendou</span>}{a.efetiva && <span className="chip border-ok text-ok">conversa efetiva</span>}
+                {a.agendou && <span className="chip border-ok text-ok">agendou</span>}{a.remarcacao && <span className="chip border-warn text-warn" title="Reunião que já estava marcada e mudou de horário: só atualiza a agenda, não conta como marcação">remarcação</span>}{a.efetiva && <span className="chip border-ok text-ok">conversa efetiva</span>}
                 {a.so_bot && <span className="chip border-warn text-warn">conversa só de bot (sem nota)</span>}</div>
               {a.venda && <div className="rounded-xl border border-ok/40 bg-ok/10 p-3"><b className="text-ok">💰 Venda de {a.venda_tipo === "imersao" ? "imersão" : "workshop"}</b>
                 <span className="ml-2">{a.venda_cupom ? `cupom de convite · ${brl(0)}` : a.venda_valor != null ? brl(a.venda_valor) : "valor não informado"}</span>

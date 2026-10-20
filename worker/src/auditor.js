@@ -2,6 +2,7 @@ import { z } from "zod";
 import { cfg, today, addDays, dayStart } from "./config.js";
 import { chamarIA, extrairJson, modeloAtual, provedor } from "./ia.js";
 import { avisarEventos } from "./alertas.js";
+import { reuniaoAnterior } from "./agenda.js";
 import { sincronizarReuniao } from "./agenda.js";
 
 // =====================================================================
@@ -124,7 +125,7 @@ ${criterios.map(c => `- ${c.chave}: ${c.nome}. ${c.descricao || ""}`.trim()).joi
 - Nos exemplos de frase, use o nome real do vendedor e do lead (vêm no início do texto). Os nomes do roteiro são só exemplos.
 - Se vier um HISTÓRICO DOS DIAS ANTERIORES, use só como contexto (o que já foi falado, prometido, follow-up). A nota, a venda e a oportunidade são sobre a CONVERSA DO DIA.
 - Não invente fatos que não estão no texto. Na dúvida, venda e oportunidade ficam false.
-- Reunião: preencha "reuniao" quando uma reunião (de implementação ou de imersão) teve data e hora combinadas. Leia a conversa como um todo para saber se a reunião ficou MARCADA (acordo dos dois lados sobre dia e hora), sem exigir palavras exatas. "cliente_confirmou" = o lead topou aquele dia e hora (aceitou a proposta do vendedor, ou foi ele quem propôs e seguiu na conversa). "vendedor_confirmou" = o vendedor fechou do lado dele: aceitou a proposta do lead ("perfeito", "show, te espero"), recebeu o aceite da proposta que ele fez ("pode ser", "fechado", "combinado", "beleza"), já está acertando os detalhes da reunião (online ou presencial, link, endereço) ou mandou o convite/link. Marque false quando a conversa termina com pergunta ainda sem resposta sobre o horário ("posso confirmar?" e o lead não respondeu nada que indique sim), quando ainda estão escolhendo entre opções de horário, ou quando o lead ficou de ver/retornar. Hoje é ${hojeExtenso()}; cada mensagem traz [dia/mês hora], use isso para transformar "amanhã", "quinta às 19h" em data AAAA-MM-DD e hora HH:MM. "modalidade": "online" (videochamada, Meet, Zoom) ou "presencial"; "local" só o endereço ou lugar quando presencial. "cliente_nome", "empresa" e "email" só se aparecerem na conversa ou no nome do contato. Se não houver reunião com horário, "reuniao": null.
+- Reunião: preencha "reuniao" quando uma reunião (de implementação ou de imersão) teve data e hora combinadas. "remarcacao" = true quando é uma reunião que JÁ estava marcada antes (no histórico ou no começo da conversa) e só está mudando de dia ou horário ("vamos remarcar", "não vou conseguir, pode ser quinta?"); remarcação NÃO é marcação nova: nesse caso "agendou" false para a reunião. Leia a conversa como um todo para saber se a reunião ficou MARCADA (acordo dos dois lados sobre dia e hora), sem exigir palavras exatas. "cliente_confirmou" = o lead topou aquele dia e hora (aceitou a proposta do vendedor, ou foi ele quem propôs e seguiu na conversa). "vendedor_confirmou" = o vendedor fechou do lado dele: aceitou a proposta do lead ("perfeito", "show, te espero"), recebeu o aceite da proposta que ele fez ("pode ser", "fechado", "combinado", "beleza"), já está acertando os detalhes da reunião (online ou presencial, link, endereço) ou mandou o convite/link. Marque false quando a conversa termina com pergunta ainda sem resposta sobre o horário ("posso confirmar?" e o lead não respondeu nada que indique sim), quando ainda estão escolhendo entre opções de horário, ou quando o lead ficou de ver/retornar. Hoje é ${hojeExtenso()}; cada mensagem traz [dia/mês hora], use isso para transformar "amanhã", "quinta às 19h" em data AAAA-MM-DD e hora HH:MM. "modalidade": "online" (videochamada, Meet, Zoom) ou "presencial"; "local" só o endereço ou lugar quando presencial. "cliente_nome", "empresa" e "email" só se aparecerem na conversa ou no nome do contato. Se não houver reunião com horário, "reuniao": null.
 
 Responda APENAS com um JSON neste formato:
 {"notas": [${criterios.map(c => `{"criterio": "${c.chave}", "nota": 1 a 5, "justificativa": "curta"}`).join(", ")}],
@@ -134,7 +135,7 @@ Responda APENAS com um JSON neste formato:
 "oportunidade": {"detectada": true|false, "tipo": "interesse_workshop"|"interesse_imersao"|"reuniao_imersao"|"reuniao_implementacao"|null, "evidencia": "curta"},
 "critico": {"detectado": true|false, "motivo": "curto ou vazio"},
 "conversa_so_bot": true|false,
-"reuniao": null ou {"tipo": "implementacao"|"imersao", "cliente_confirmou": true|false, "vendedor_confirmou": true|false, "data": "AAAA-MM-DD", "hora": "HH:MM", "duracao_min": número ou null, "modalidade": "online"|"presencial"|null, "local": "endereço ou vazio", "cliente_nome": "nome ou vazio", "empresa": "empresa ou vazio", "email": "email ou vazio"},
+"reuniao": null ou {"tipo": "implementacao"|"imersao", "cliente_confirmou": true|false, "vendedor_confirmou": true|false, "remarcacao": true|false, "data": "AAAA-MM-DD", "hora": "HH:MM", "duracao_min": número ou null, "modalidade": "online"|"presencial"|null, "local": "endereço ou vazio", "cliente_nome": "nome ou vazio", "empresa": "empresa ou vazio", "email": "email ou vazio"},
 "gatilhos": {"personalizacao": bool, "pergunta_aberta": bool, "beneficio_claro": bool, "prova_social": bool, "autoridade": bool, "escassez_urgencia": bool, "reciprocidade": bool, "tratamento_objecao": bool, "chamada_para_acao": bool, "followup": bool},
 "resumo": "até 2 frases", "pontos_fortes": "até 2 pontos curtos", "pontos_melhoria": "até 2 ações práticas, cada uma com exemplo de frase", "objecoes": "objeções do lead ou vazio"}`;
 }
@@ -157,7 +158,7 @@ const Resposta = z.object({
   critico: z.object({ detectado: bool.default(false), motivo: txt.default("") }).default({}),
   conversa_so_bot: bool.default(false),
   reuniao: z.preprocess(v => (v && typeof v === "object" ? v : null), z.object({
-    tipo: opc(["implementacao", "imersao"]).default(null), cliente_confirmou: bool.default(false), vendedor_confirmou: bool.default(false),
+    tipo: opc(["implementacao", "imersao"]).default(null), cliente_confirmou: bool.default(false), vendedor_confirmou: bool.default(false), remarcacao: bool.default(false),
     data: z.preprocess(v => (/^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? v : null), z.string().nullable()).default(null),
     hora: z.preprocess(v => (/^([01]?\d|2[0-3]):[0-5]\d$/.test(String(v)) ? String(v).padStart(5, "0") : null), z.string().nullable()).default(null),
     duracao_min: z.preprocess(v => (Number(v) > 0 && Number(v) <= 480 ? Number(v) : null), z.number().nullable()).default(null),
@@ -178,6 +179,14 @@ export function notaFinal(criterios, notas) {
   return Math.round(((media - 1) / 4) * 100) / 10;
 }
 
+// Remarcacao (reuniao ja marcada que so mudou de horario) nao conta como marcacao: tira o "agendou" da reuniao
+export function marcacao(a, funcao) {
+  const tipo = a.agendou ? (funcao === "closer" ? "imersao" : a.tipo_agendamento || "workshop") : null;
+  const remarcacao = !!a.reuniao?.remarcacao || !!a.remarcacao;
+  if (remarcacao && tipo === "imersao") return { agendou: false, tipo_agendamento: null, remarcacao: true };
+  return { agendou: !!a.agendou, tipo_agendamento: tipo, remarcacao };
+}
+
 export function interpretar(bruto, { funcao, rubrica, criterios }) {
   const a = Resposta.parse(bruto);
   const nota = a.conversa_so_bot ? 0 : notaFinal(criterios, a.notas);
@@ -193,8 +202,7 @@ export function interpretar(bruto, { funcao, rubrica, criterios }) {
     notas_1a5: criterios.filter(c => por.has(c.chave)).map(c => ({ chave: c.chave, nome: c.nome, peso: Number(c.peso), nota: por.get(c.chave).nota, justificativa: por.get(c.chave).justificativa })),
     notas: Object.fromEntries(criterios.filter(c => por.has(c.chave)).map(c => [c.chave, Math.round(((por.get(c.chave).nota - 1) / 4) * 100) / 10])),
     qualidade: a.qualidade || (nota >= 7 ? "boa" : nota >= 4 ? "regular" : "ruim"),
-    etapa: a.etapa, efetiva: a.efetiva, agendou: a.agendou,
-    tipo_agendamento: a.agendou ? (funcao === "closer" ? "imersao" : a.tipo_agendamento || "workshop") : null,
+    etapa: a.etapa, efetiva: a.efetiva, ...marcacao(a, funcao),
     venda: a.venda.detectada, venda_tipo: vendaTipo, venda_valor: a.venda.detectada ? (convite ? 0 : a.venda.valor) : null,
     venda_cupom: convite, venda_convite_origem: convite ? (carbone ? "carbone" : "cupom") : null, venda_evidencia: a.venda.detectada ? a.venda.evidencia : null,
     oportunidade: a.oportunidade.detectada, oportunidade_tipo: a.oportunidade.detectada ? a.oportunidade.tipo : null, oportunidade_evidencia: a.oportunidade.detectada ? a.oportunidade.evidencia : null,
@@ -274,7 +282,10 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     const hist = await historico(db, c, R.s.historico_dias);
     const quem = `Vendedor: ${R.nomes.get(c.vendedor_id) || "sem nome"} · Lead: ${c.contato_nome || "nome não informado"}\n\n`;
     const texto = quem + (hist ? `${hist}\n\nCONVERSA DO DIA (avalie esta):\n${cortar(msgs.map(linha).join("\n"))}` : cortar(msgs.map(linha).join("\n")));
-    const a = await auditarTexto(R, c.vendedor_id, texto, { primeiraResposta: tempos.primeira_resposta_seg }, fetchImpl);
+    let a = await auditarTexto(R, c.vendedor_id, texto, { primeiraResposta: tempos.primeira_resposta_seg }, fetchImpl);
+    if (!a.remarcacao && (a.reuniao || a.tipo_agendamento === "imersao") && c.canal !== "importada") {
+      if (await reuniaoAnterior(db, c, R, { inicio: a.reuniao?.data && a.reuniao?.hora ? `${a.reuniao.data}T${a.reuniao.hora}:00-03:00` : null })) a = { ...a, ...marcacao({ ...a, remarcacao: true, agendou: a.agendou, tipo_agendamento: a.tipo_agendamento }, "sdr"), reuniao: a.reuniao ? { ...a.reuniao, remarcacao: true } : a.reuniao };
+    }
     const [antes] = await db.select("auditorias", { select: "critico,alertas_enviados", filters: { conversa_id: `eq.${c.id}` } });
     await db.insert("auditorias", [{ conversa_id: c.id, vendedor_id: c.vendedor_id, msg_count: msgs.length, ...a, ...tempos, manual, ...(c.canal === "importada" ? { sheet_ok: true } : {}) }], { onConflict: "conversa_id", returning: false });
     if (a.critico && !antes?.critico && c.canal !== "importada") await avisarCritico(db, R, c.vendedor_id, a, `/conversas/${c.id}`, c.contato_nome || c.contato);

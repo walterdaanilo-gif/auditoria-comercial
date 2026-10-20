@@ -27,7 +27,7 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
   const supabase = await createClient();
 
   let q = supabase.from("conversas")
-    .select("id,vendedor_id,contato,telefone,contato_nome,canal,data,ultima_msg_em,mensagens(remetente,texto,tipo,enviada_em),auditorias(nota_geral,qualidade,agendou,resumo)")
+    .select("id,vendedor_id,contato,telefone,contato_nome,canal,data,ultima_msg_em,mensagens(remetente,texto,tipo,enviada_em),auditorias(nota_geral,qualidade,agendou,remarcacao,resumo)")
     .gte("data", periodo.de).lte("data", periodo.ate).order("ultima_msg_em", { ascending: false }).limit(500);
   if (gestor && sp.v) q = q.eq("vendedor_id", sp.v);
   const [{ data }, { data: perfis }, { data: insts }, { data: porVend }] = await Promise.all([
@@ -122,7 +122,7 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
                     <td className="td"><Link className="text-brand" href={`/conversas/${c.id}`}>{nomeContato(c)}</Link>{c.canal === "importada" && <span className="chip ml-2 border-line text-mute">importada</span>}{c.canal === "crm" && <span className="chip ml-2 border-line text-mute" title="Histórico vindo do CRM Q5 (antes do WhatsApp ser conectado aqui)">CRM</span>}</td>
                     <td className="td">{c.n}</td>
                     <td className={`td font-bold ${corNota(a?.nota_geral)}`}>{c.respondeu ? nota(a?.nota_geral) : "—"}</td>
-                    <td className="td">{a ? <>{qualidade(a)}{a.agendou && <span className="chip ml-1 border-ok text-ok">agendou</span>}</>
+                    <td className="td">{a ? <>{qualidade(a)}{a.agendou && <span className="chip ml-1 border-ok text-ok">agendou</span>}{a.remarcacao && <span className="chip ml-1 border-warn text-warn">remarcação</span>}</>
                       : <span className="text-mute">{c.respondeu ? "aguardando auditoria" : "sem resposta do lead"}</span>}</td>
                     <td className="td text-mute">{a?.resumo}</td>
                   </tr>

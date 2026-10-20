@@ -24,7 +24,7 @@ export async function calcularDia(db, dia) {
   ]);
   const ids = convs.map(c => c.id);
   const auds = [];
-  for (let i = 0; i < ids.length; i += 150) auds.push(...await db.select("auditorias", { select: "vendedor_id,nota_geral,so_bot,venda,venda_tipo,venda_valor,venda_cupom,venda_convite_origem,oportunidade,oportunidade_tipo,critico,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr", filters: { conversa_id: `in.(${ids.slice(i, i + 150).join(",")})` } }));
+  for (let i = 0; i < ids.length; i += 150) auds.push(...await db.select("auditorias", { select: "vendedor_id,nota_geral,so_bot,venda,venda_tipo,venda_valor,venda_cupom,venda_convite_origem,remarcacao,oportunidade,oportunidade_tipo,critico,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr", filters: { conversa_id: `in.(${ids.slice(i, i + 150).join(",")})` } }));
   const vendIds = [...new Set([...linhas.map(l => l.vendedor_id), ...auds.map(a => a.vendedor_id)])];
   const perfis = vendIds.length ? await db.select("profiles", { select: "id,nome,funcao", filters: { id: `in.(${vendIds.join(",")})` } }) : [];
 
@@ -37,7 +37,7 @@ export async function calcularDia(db, dia) {
       n: notas.length, nota: notas.length ? somar(notas, "nota_geral") / notas.length : null,
       wCupom: w.filter(a => a.venda_cupom).length, wCarbone: w.filter(a => a.venda_cupom && a.venda_convite_origem === "carbone").length, wPagos: w.filter(a => !a.venda_cupom).length, wValor: somar(w.filter(a => !a.venda_cupom), "venda_valor"),
       imersao: im.length, imValor: somar(im, "venda_valor"),
-      oport: l.filter(a => a.oportunidade).length, reunioesImpl: l.filter(a => a.oportunidade_tipo === "reuniao_implementacao").length, criticos: l.filter(a => a.critico).length,
+      oport: l.filter(a => a.oportunidade).length, reunioesImpl: l.filter(a => a.oportunidade_tipo === "reuniao_implementacao" && !a.remarcacao).length, criticos: l.filter(a => a.critico).length,
       primeira: pr.length ? somar(pr, "primeira_resposta_seg") / pr.length : null,
       medio: nResp ? md.reduce((x, a) => x + a.tempo_medio_resposta_seg * a.respostas_sdr, 0) / nResp : null,
       respostas: somar(ls, "respostas"), marc: somar(ls, "marcacoes"), ligAt: somar(ls, "ligacoes_atendidas"), lig: somar(ls, "ligacoes"),

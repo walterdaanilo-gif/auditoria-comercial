@@ -120,3 +120,5 @@ assert.ok(temSinal("fica R$ 197"));
   assert.equal(db.tables.conversas[0].reuniao_pendente, false, "venda fechada sai da negociacao");
   console.log("OK: venda em negociacao reaudita com qualquer mensagem (inclusive foto)");
 }
+// remarcacao nao gera aviso de reuniao marcada
+assert.equal(eventosDe({ oportunidade: true, oportunidade_tipo: "reuniao_imersao", remarcacao: true, reuniao: { cliente_confirmou: true, vendedor_confirmou: true, remarcacao: true } }, "sdr").length, 0);

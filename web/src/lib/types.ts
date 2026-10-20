@@ -13,7 +13,7 @@ export interface Auditoria {
   critico?: boolean; critico_motivo?: string | null; so_bot?: boolean; manual?: boolean;
   notas: Record<string, number>; gatilhos: Record<string, boolean>; pontos_fortes: string | null; pontos_melhoria: string | null;
   resumo: string | null; qualidade: "boa" | "regular" | "ruim" | null; etapa: string | null; objecoes: string | null;
-  agendou: boolean; efetiva: boolean; msg_count: number; atualizado_em: string;
+  agendou: boolean; remarcacao?: boolean; efetiva: boolean; msg_count: number; atualizado_em: string;
 }
 
 export const GATILHOS: Record<string, string> = {
