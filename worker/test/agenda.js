@@ -118,3 +118,17 @@ console.log("OK: agenda Google (reuniao de implementacao e de imersao confirmada
   assert.deepEqual(marcacao({ agendou: true, tipo_agendamento: "workshop", reuniao: { remarcacao: true } }, "sdr").agendou, true);
   console.log("OK: remarcacao so muda a agenda e nao conta como marcacao");
 }
+
+// evento duplicado marcado para cancelar: apaga no Google uma vez e registra
+{
+  const { cancelarEventos } = await import("../src/agenda.js");
+  db.tables.reunioes_agenda.push({ conversa_id: "dup", google_event_id: "evDup", cancelar: true, cancelado_em: null, inicio: new Date().toISOString(), dados: {} });
+  const ped = [];
+  const g = async (url, o) => { ped.push({ url: String(url), metodo: o.method }); if (String(url).includes("oauth2")) return { ok: true, json: async () => ({ access_token: "at", expires_in: 3600 }) }; return { ok: true, status: 204, json: async () => ({}) }; };
+  assert.equal(await cancelarEventos(db, { fetchImpl: g }), 1);
+  assert.ok(ped.some(p => p.metodo === "DELETE" && p.url.includes("/events/evDup")));
+  const linha = db.tables.reunioes_agenda.find(x => x.conversa_id === "dup");
+  assert.equal(linha.google_event_id, null); assert.ok(linha.cancelado_em);
+  assert.equal(await cancelarEventos(db, { fetchImpl: g }), 0, "nao apaga de novo");
+  console.log("OK: evento duplicado apagado da agenda");
+}

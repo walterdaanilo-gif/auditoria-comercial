@@ -958,3 +958,6 @@ alter table public.auditorias add column if not exists venda_convite_origem text
 
 -- Remarcacao: reuniao ja marcada que so mudou de horario (atualiza a agenda, nao conta como marcacao)
 alter table public.auditorias add column if not exists remarcacao boolean not null default false;
+
+-- Evento duplicado/desfeito: marcar cancelar = true e o worker apaga o evento no Google
+alter table public.reunioes_agenda add column if not exists cancelar boolean not null default false, add column if not exists cancelado_em timestamptz;

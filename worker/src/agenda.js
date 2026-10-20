@@ -146,3 +146,22 @@ export async function sincronizarReuniao(db, R, c, r, { fetchImpl = fetch, envio
   console.log(`[agenda] reuniao ${novo ? "criada" : "atualizada"}: ${ev.summary} em ${r.data} ${r.hora}${conflitos.length ? ` (conflito com ${conflitos.length})` : ""}`);
   return novo ? "criada" : "atualizada";
 }
+
+// Evento duplicado ou desfeito: reunioes_agenda.cancelar = true -> o worker apaga o evento no Google e registra
+export async function cancelarEventos(db, { fetchImpl = fetch } = {}) {
+  const rows = await db.select("reunioes_agenda", { select: "conversa_id,google_event_id", filters: { cancelar: "eq.true", cancelado_em: "is.null" }, limit: 20 });
+  if (!rows.length) return 0;
+  const token = await tokenAcesso(db, fetchImpl);
+  if (!token) return 0;
+  let n = 0;
+  for (const r of rows) {
+    if (r.google_event_id) {
+      const resp = await fetchImpl(`${API}/${r.google_event_id}?sendUpdates=none`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      if (!resp.ok && resp.status !== 404 && resp.status !== 410) { console.error(`[agenda] apagar evento ${r.google_event_id}: ${resp.status}`); continue; }
+    }
+    await db.update("reunioes_agenda", { conversa_id: `eq.${r.conversa_id}` }, { google_event_id: null, cancelado_em: new Date().toISOString() });
+    console.log(`[agenda] evento duplicado apagado da agenda (conversa ${r.conversa_id})`);
+    n++;
+  }
+  return n;
+}
