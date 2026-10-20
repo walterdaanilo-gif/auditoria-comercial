@@ -84,3 +84,31 @@ export function acompanharChamadas(db, inst, meuJid, detalhes = () => null) {
     }
   };
 }
+
+// Historico de chamadas que o WhatsApp sincroniza com os aparelhos conectados (CallLogRecord), liberado pelo
+// scripts/patch-baileys.mjs. E o unico caminho para as ligacoes FEITAS pelo vendedor no celular.
+// numerosDe: [{ inst, numeros: Set<so digitos> }] (numero e codigo @lid de cada WhatsApp conectado)
+const RES_LOG = { 0: "atendida", 1: "recusada", 2: "cancelada", 3: "atendida", 4: "perdida", 6: "nao_atendida", 8: "falhou", 9: "nao_atendida" };
+const dig = j => String(j || "").split("@")[0].split(":")[0];
+export function ligacoesDoHistorico(registros, numerosDe) {
+  const out = [];
+  for (const r of registros || []) {
+    if (r.groupJid || r.isCallLink) continue;
+    const criador = dig(r.callCreatorJid);
+    const partes = (r.participants || []).map(p => dig(p.userJid)).filter(Boolean);
+    const dono = numerosDe.find(n => n.numeros.has(criador)) || numerosDe.find(n => partes.some(p => n.numeros.has(p)));
+    if (!dono) continue;
+    const saida = dono.numeros.has(criador) && !r.isIncoming;
+    const contato = saida ? partes.find(p => !dono.numeros.has(p)) : criador;
+    if (!contato) continue;
+    const resultado = Number(r.callResult ?? 4);
+    const duracao = Number(r.duration?.low ?? r.duration) || 0;
+    const atendida = resultado === 0 || resultado === 3 || duracao > 0;
+    out.push({ inst: dono.inst, m: {
+      callId: r.callId || null, contato, direcao: saida ? "saida" : "entrada", atendida, duracao,
+      sec: Number(r.startTime?.low ?? r.startTime) || undefined,
+      resultado: atendida ? "atendida" : RES_LOG[resultado] || "nao_atendida",
+    } });
+  }
+  return out;
+}

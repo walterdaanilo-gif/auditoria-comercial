@@ -2,12 +2,22 @@ import path from "node:path";
 import fs from "node:fs";
 import { cfg } from "./config.js";
 import { gravarMensagem } from "./mensagens.js";
-import { acompanharChamadas, gravarLigacao, ligacaoDaMensagem } from "./ligacoes.js";
+import { acompanharChamadas, gravarLigacao, ligacaoDaMensagem, ligacoesDoHistorico } from "./ligacoes.js";
 
 // Logger minimo compativel com o Baileys (sem depender do pino)
 const quiet = { level: "silent", child() { return quiet; }, trace() {}, debug() {}, info() {}, warn() {}, error(...a) { console.error("[baileys]", ...a); }, fatal(...a) { console.error("[baileys]", ...a); } };
 
 const running = new Map(); // instancia_id -> { sock, stop() }
+
+// Historico de chamadas sincronizado pelo celular (ganchos do scripts/patch-baileys.mjs): ligacoes FEITAS pelo vendedor
+let dbAtual = null;
+const numerosConectados = () => [...running.values()].filter(h => h.sock?.user && h.inst).map(h => ({ inst: h.inst, numeros: new Set([h.sock.user.id, h.sock.user.lid].filter(Boolean).map(j => String(j).split("@")[0].split(":")[0])) }));
+globalThis.__cabuetaHistorico = (tipo, n) => { if (n.chamadas || tipo !== 4) console.log(`[whatsapp] sincronizacao de historico (tipo ${tipo}): ${n.conversas} conversas, ${n.chamadas} chamadas`); };
+globalThis.__cabuetaChamadas = registros => {
+  const lista = ligacoesDoHistorico(registros, numerosConectados());
+  console.log(`[whatsapp] historico de chamadas: ${registros.length} registros, ${lista.length} de leads`);
+  for (const { inst, m } of lista) if (dbAtual) gravarLigacao(dbAtual, inst, m).catch(e => console.error(`[${inst.nome}] ligacao do historico:`, e.message));
+};
 
 // Mensagens que o sistema enviou (avisos e relatorio), guardadas por 24h: quando o celular de quem recebe nao consegue
 // decifrar de primeira, ele pede reenvio e o Baileys busca a mensagem aqui (getMessage). Sem isso fica "Aguardando mensagem".
@@ -60,7 +70,8 @@ async function startInstance(db, inst) {
   const makeWASocket = B.default?.default ?? B.default ?? B.makeWASocket;
   const dir = path.join(cfg.dataDir, "auth", inst.id);
   fs.mkdirSync(dir, { recursive: true });
-  const handle = { stopped: false, sock: null, stop() { this.stopped = true; try { this.sock?.end?.(); } catch {} } };
+  dbAtual = db;
+  const handle = { inst, stopped: false, sock: null, stop() { this.stopped = true; try { this.sock?.end?.(); } catch {} } };
   running.set(inst.id, handle);
 
   const connect = async () => {

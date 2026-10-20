@@ -55,3 +55,23 @@ console.log("OK: ligacoes de WhatsApp (registro do chat, eventos de chamada, sem
   assert.ok(TOQUE_MAX_S >= 45);
   console.log("OK: ligacao atendida no celular conta como atendida (duracao do WhatsApp ou tempo da chamada)");
 }
+
+// historico de chamadas do celular: ligacao FEITA pelo vendedor (criador = numero dele) e recebida
+{
+  const { ligacoesDoHistorico } = await import("../src/ligacoes.js");
+  const nick = { id: "i-nick", vendedor_id: "nick", nome: "WA Nick" };
+  const numeros = [{ inst: nick, numeros: new Set(["558494094046", "39771548168374"]) }];
+  const regs = [
+    { callId: "X1", callCreatorJid: "558494094046@s.whatsapp.net", isIncoming: false, callResult: 0, duration: 312, startTime: 1792500000, participants: [{ userJid: "5584911112222@s.whatsapp.net" }] },
+    { callId: "X2", callCreatorJid: "39771548168374@lid", isIncoming: false, callResult: 4, duration: 0, startTime: 1792500600, participants: [{ userJid: "123456789@lid" }] },
+    { callId: "X3", callCreatorJid: "5584977770000@s.whatsapp.net", isIncoming: true, callResult: 0, duration: 60, startTime: 1792501000, participants: [{ userJid: "558494094046@s.whatsapp.net" }] },
+    { callId: "G", groupJid: "1@g.us", callCreatorJid: "558494094046@s.whatsapp.net" },
+  ];
+  const out = ligacoesDoHistorico(regs, numeros);
+  assert.equal(out.length, 3);
+  assert.deepEqual(out[0].m, { callId: "X1", contato: "5584911112222", direcao: "saida", atendida: true, duracao: 312, sec: 1792500000, resultado: "atendida" });
+  assert.equal(out[1].m.direcao, "saida"); assert.equal(out[1].m.atendida, false); assert.equal(out[1].m.contato, "123456789");
+  assert.equal(out[2].m.direcao, "entrada"); assert.equal(out[2].m.contato, "5584977770000");
+  assert.equal(out[0].inst, nick);
+  console.log("OK: historico de chamadas vira ligacao feita/recebida do vendedor certo, com duracao");
+}

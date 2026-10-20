@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node test/smoke.js && node test/mirror.js && node test/uazapi.js && node test/tempos.js && node test/ligacoes.js && node test/regras.js && node test/rodada.js && node test/alertas.js && node test/agenda.js && node test/lid.js"
+    "test": "node test/smoke.js && node test/mirror.js && node test/uazapi.js && node test/tempos.js && node test/ligacoes.js && node test/regras.js && node test/rodada.js && node test/alertas.js && node test/agenda.js && node test/lid.js",
+    "postinstall": "node scripts/patch-baileys.mjs"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.18",
