@@ -105,7 +105,18 @@ async function startInstance(db, inst) {
       }
     });
     sock.ev.on("messaging-history.set", onMsgs("historico"));
-    const onCall = acompanharChamadas(db, inst, () => sock.user?.id);
+    // detalhes brutos da chamada (motivo, duracao) que o Baileys nao repassa no evento "call"
+    const detalhesChamada = new Map();
+    sock.ws.on("CB:call", node => {
+      for (const filho of Array.isArray(node?.content) ? node.content : []) {
+        if (!filho?.tag) continue;
+        const id = filho.attrs?.["call-id"];
+        console.log(`[${inst.nome}] chamada bruta: ${filho.tag} ${JSON.stringify(filho.attrs || {})}`);
+        if (id) detalhesChamada.set(id, { ...(detalhesChamada.get(id) || {}), ...filho.attrs, etapa: filho.tag });
+        if (detalhesChamada.size > 200) detalhesChamada.delete(detalhesChamada.keys().next().value);
+      }
+    });
+    const onCall = acompanharChamadas(db, inst, () => sock.user?.id, id => detalhesChamada.get(id));
     sock.ev.on("call", calls => {
       console.log(`[${inst.nome}] evento de chamada: ${calls.map(c => `${c.status} ${String(c.from || "").split("@")[0].split(":")[0]} -> ${String(c.chatId || "").split("@")[0]}`).join(" | ")}`);
       return onCall(calls);

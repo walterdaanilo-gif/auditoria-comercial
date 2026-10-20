@@ -33,3 +33,25 @@ assert.equal(por("5584911112222").atendida, false); assert.equal(por("5584911112
 assert.equal(por("5584933334444").direcao, "entrada"); assert.equal(por("5584933334444").atendida, true); assert.equal(por("5584933334444").duracao_seg, 60);
 assert.equal(ligs.filter(l => l.atendida).length, 2);
 console.log("OK: ligacoes de WhatsApp (registro do chat, eventos de chamada, sem duplicar)");
+
+// atendida no CELULAR: o aparelho conectado ve tocar e encerrar (sem "accept"); eventos chegando juntos (reconexao)
+{
+  const { acompanharChamadas: acomp, TOQUE_MAX_S } = await import("../src/ligacoes.js");
+  const db2 = fakeSupa(); db2.tables.ligacoes = [];
+  const inst2 = { id: "i2", vendedor_id: "ruan", nome: "WA Ruan" };
+  const T = Date.now() - 3600_000;
+  const ev = (id, status, s) => ({ id, chatId: "111961358495911@lid", from: "111961358495911@lid", date: new Date(T + s * 1000), status });
+  const on = acomp(db2, inst2, () => "558486483304:5@s.whatsapp.net");
+  await on([ev("A", "offer", 0), ev("A", "ringing", 1), ev("A", "terminate", 245)]); // conversou ~4 min
+  await on([ev("B", "offer", 600), ev("B", "ringing", 601), ev("B", "terminate", 630)]); // tocou 30s e parou
+  const det = new Map([["C", { reason: "accepted_elsewhere", duration: "95" }]]);
+  const on3 = acomp(db2, inst2, () => "558486483304:5@s.whatsapp.net", id => det.get(id));
+  await on3([ev("C", "offer", 1200), ev("C", "terminate", 1230)]); // WhatsApp mandou a duracao no encerramento
+  const [a, b, c] = ["A", "B", "C"].map(id => db2.tables.ligacoes.find(l => l.wa_call_id === id));
+  assert.equal(a.atendida, true); assert.equal(a.duracao_seg, 245); assert.equal(a.resultado, "atendida");
+  assert.equal(b.atendida, false); assert.equal(b.resultado, "perdida");
+  assert.equal(c.atendida, true); assert.equal(c.duracao_seg, 95);
+  assert.equal(new Date(a.iniciada_em).getTime(), Math.floor(T / 1000) * 1000, "horario do WhatsApp, nao da chegada");
+  assert.ok(TOQUE_MAX_S >= 45);
+  console.log("OK: ligacao atendida no celular conta como atendida (duracao do WhatsApp ou tempo da chamada)");
+}

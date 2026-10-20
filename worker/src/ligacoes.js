@@ -50,8 +50,12 @@ export function ligacaoDaMensagem(m) {
   };
 }
 
-// Eventos "call" do Baileys: acompanha cada chamada ate o fim e grava uma vez
-export function acompanharChamadas(db, inst, meuJid) {
+// Eventos "call" do Baileys: acompanha cada chamada ate o fim e grava uma vez.
+// Os horarios vem do WhatsApp (c.date), nao da hora de chegada: eventos atrasados (reconexao) continuam certos.
+// Atendida no CELULAR: o aparelho conectado nao recebe "accept"; ve tocar e depois "terminate". Conta como atendida quando
+// o WhatsApp manda a duracao/motivo no terminate (detalhes brutos) ou quando a chamada durou mais que o toque maximo.
+export const TOQUE_MAX_S = 60;
+export function acompanharChamadas(db, inst, meuJid, detalhes = () => null) {
   const abertas = new Map(); // id -> { contato, direcao, inicio, atendidaEm }
   const eu = () => String(meuJid() || "").split(":")[0].split("@")[0];
   return async function onCall(calls) {
@@ -59,15 +63,20 @@ export function acompanharChamadas(db, inst, meuJid) {
       if (c.isGroup) continue;
       const outro = String(c.chatId || c.from || "");
       if (!/@(s\.whatsapp\.net|lid)$/.test(outro)) continue;
-      const dados = abertas.get(c.id) || { contato: outro.split("@")[0], direcao: String(c.from || "").split("@")[0].split(":")[0] === eu() ? "saida" : "entrada", inicio: c.date ? new Date(c.date).getTime() : Date.now(), atendidaEm: null };
+      const quando = c.date ? new Date(c.date).getTime() : Date.now();
+      const dados = abertas.get(c.id) || { contato: outro.split("@")[0], direcao: String(c.from || "").split("@")[0].split(":")[0] === eu() ? "saida" : "entrada", inicio: quando, atendidaEm: null };
       abertas.set(c.id, dados);
-      if (c.status === "accept") dados.atendidaEm = Date.now();
+      if (c.status === "accept") dados.atendidaEm = quando;
       if (["reject", "timeout", "terminate"].includes(c.status)) {
         abertas.delete(c.id);
-        const atendida = !!dados.atendidaEm;
+        const extra = detalhes(c.id) || {};
+        const durWa = Number(extra.duration || extra.duracao) || 0;
+        const total = Math.max(0, Math.round((quando - dados.inicio) / 1000));
+        const atendidaFora = /accept|answer|elsewhere/i.test(String(extra.reason || ""));
+        const atendida = !!dados.atendidaEm || durWa > 0 || atendidaFora || (c.status === "terminate" && total > TOQUE_MAX_S);
+        const duracao = dados.atendidaEm ? Math.round((quando - dados.atendidaEm) / 1000) : durWa || (atendida ? total : 0);
         await gravarLigacao(db, inst, {
-          callId: c.id, contato: dados.contato, direcao: dados.direcao, atendida,
-          duracao: atendida ? Math.round((Date.now() - dados.atendidaEm) / 1000) : 0,
+          callId: c.id, contato: dados.contato, direcao: dados.direcao, atendida, duracao,
           sec: Math.floor(dados.inicio / 1000),
           resultado: atendida ? "atendida" : c.status === "reject" ? "recusada" : "perdida",
         }).catch(e => console.error(`[${inst.nome}] ligacao:`, e.message));
