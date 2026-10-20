@@ -40,7 +40,7 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
   const nomes = new Map<string, string>((perfis ?? []).map((x: any) => [x.id, x.nome]));
   // Perfis do time (quem tem WhatsApp cadastrado ou papel vendedor), na mesma ordem e cor do painel
   const donos = new Set(((insts ?? []) as { vendedor_id: string }[]).map((i) => i.vendedor_id));
-  const time = ((perfis ?? []) as { id: string; nome: string; papel: string; funcao: string | null; ativo: boolean; foto_url: string | null }[]).filter((x) => x.ativo && (x.papel === "vendedor" || donos.has(x.id)));
+  const time = ((perfis ?? []) as { id: string; nome: string; papel: string; funcao: string | null; ativo: boolean; foto_url: string | null }[]).filter((x) => x.ativo && donos.has(x.id));
   const qtd = new Map<string, number>();
   for (const r of (porVend ?? []) as { vendedor_id: string }[]) qtd.set(r.vendedor_id, (qtd.get(r.vendedor_id) ?? 0) + 1);
   const totalPeriodo = (porVend ?? []).length;

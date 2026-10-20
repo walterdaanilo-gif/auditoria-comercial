@@ -78,9 +78,9 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   // SDRs = perfis com papel vendedor. A cor segue a pessoa (ordem por nome na lista completa), nunca o filtro.
   const perfis = (rPerf.data ?? []) as { id: string; nome: string; papel: string; ativo: boolean; funcao: string | null; foto_url: string | null }[];
   const nomes = new Map(perfis.map((x) => [x.id, x.nome]));
-  // equipe = quem tem WhatsApp cadastrado (o cadastro do vendedor e feito na aba WhatsApp) ou papel vendedor
+  // equipe = so quem tem WhatsApp cadastrado na aba WhatsApp (tirou o WhatsApp, sai do time)
   const donos = new Set(((rInst.data ?? []) as { vendedor_id: string }[]).map((i) => i.vendedor_id));
-  const sdrsTodos = perfis.filter((x) => x.ativo && (x.papel === "vendedor" || donos.has(x.id)));
+  const sdrsTodos = perfis.filter((x) => x.ativo && donos.has(x.id));
   const cfgMetas = rMetas.data as { meta_sdr_conversas: number | null; meta_sdr_marcacoes: number | null } | null;
   const metaDe = (chave: string, padrao: number | null) => (chave === "respostas" ? cfgMetas?.meta_sdr_conversas ?? padrao : chave === "agendados" ? cfgMetas?.meta_sdr_marcacoes ?? padrao : padrao);
   const cor = new Map(sdrsTodos.map((s, i) => [s.id, corSdr(i)]));

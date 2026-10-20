@@ -63,3 +63,27 @@ export async function redefinirSenha(fd: FormData): Promise<void> {
   if (error) redirect("/admin/usuarios?erro=" + encodeURIComponent(error.message));
   redirect("/admin/usuarios?ok=Senha redefinida");
 }
+
+// Excluir usuario. Apagar o cadastro apaga em cascata conversas, mensagens e auditorias dele, entao:
+// sem historico -> exclui de vez (login e cadastro); com historico -> desativa e bloqueia o login (historico preservado).
+export async function excluirUsuario(fd: FormData): Promise<void> {
+  const eu = await exigirAdmin();
+  const id = String(fd.get("id") || "");
+  if (!id) redirect("/admin/usuarios?erro=Usuário inválido");
+  if (id === eu.id) redirect("/admin/usuarios?erro=Você não pode excluir a si mesmo");
+  const admin = createAdminClient();
+  const conta = (t: string) => admin.from(t).select("id", { count: "exact", head: true }).eq("vendedor_id", id).then((r) => r.count ?? 0);
+  const [{ data: p }, convs, ligs, insts] = await Promise.all([admin.from("profiles").select("nome").eq("id", id).maybeSingle(), conta("conversas"), conta("ligacoes"), conta("instancias_whatsapp")]);
+  const nome = p?.nome || "Usuário";
+  if (convs || ligs || insts) {
+    await admin.from("profiles").update({ ativo: false }).eq("id", id);
+    await admin.auth.admin.updateUserById(id, { ban_duration: "876000h" });
+    revalidatePath("/admin/usuarios"); revalidatePath("/conversas"); revalidatePath("/");
+    redirect("/admin/usuarios?ok=" + encodeURIComponent(`${nome} tem histórico (${convs} conversas${insts ? `, ${insts} WhatsApp` : ""}), então foi desativado: sai das telas e não entra mais, mas o histórico fica guardado.${insts ? " Para tirar o WhatsApp, remova na aba WhatsApp." : ""}`));
+  }
+  const { error } = await admin.auth.admin.deleteUser(id);
+  if (error) redirect("/admin/usuarios?erro=" + encodeURIComponent(erroAdmin(error, "Não foi possível excluir.")));
+  await admin.from("profiles").delete().eq("id", id); // normalmente ja sai junto com o login
+  revalidatePath("/admin/usuarios"); revalidatePath("/conversas"); revalidatePath("/");
+  redirect("/admin/usuarios?ok=" + encodeURIComponent(`${nome} foi excluído.`));
+}

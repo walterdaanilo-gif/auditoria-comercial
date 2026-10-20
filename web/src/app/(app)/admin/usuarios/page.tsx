@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Perfil } from "@/lib/types";
 import { fmtDataHora } from "@/lib/format";
 import NovoUsuarioForm from "./NovoUsuarioForm";
+import BotaoExcluir from "./BotaoExcluir";
 import { atualizarUsuario, redefinirSenha } from "./actions";
 
 export default async function Usuarios({ searchParams: searchParamsP }: { searchParams: Promise<{ erro?: string; ok?: string }> }) {
@@ -35,7 +36,8 @@ export default async function Usuarios({ searchParams: searchParamsP }: { search
                     <span className="text-xs text-mute">{fmtDataHora(u.criado_em)}</span>
                     <button className="btn-ghost">Salvar</button>
                   </form>
-                  <details className="mt-1">
+                  <div className="mt-1 flex flex-wrap items-start gap-x-6 gap-y-1">
+                  <details>
                     <summary className="cursor-pointer text-xs text-mute">Redefinir senha</summary>
                     <form action={redefinirSenha} className="mt-2 flex gap-2">
                       <input type="hidden" name="id" value={u.id} />
@@ -43,6 +45,9 @@ export default async function Usuarios({ searchParams: searchParamsP }: { search
                       <button className="btn-ghost">Definir</button>
                     </form>
                   </details>
+                  {u.id !== eu.id && <BotaoExcluir id={u.id} nome={u.nome} />}
+                  {!u.ativo && <span className="text-xs text-warn">inativo</span>}
+                  </div>
                 </td>
               </tr>
             ))}

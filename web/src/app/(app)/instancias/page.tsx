@@ -50,8 +50,19 @@ async function resetar(fd: FormData) {
 async function remover(fd: FormData) {
   "use server";
   await exigirAdmin();
-  await (await createClient()).from("instancias_whatsapp").delete().eq("id", String(fd.get("id")));
-  revalidatePath("/instancias");
+  const db = await createClient();
+  const { data: inst } = await db.from("instancias_whatsapp").select("vendedor_id").eq("id", String(fd.get("id"))).maybeSingle();
+  await db.from("instancias_whatsapp").delete().eq("id", String(fd.get("id")));
+  // vendedor criado pela aba WhatsApp (sem login proprio) e sem outro WhatsApp: sai do time (fica inativo, historico preservado)
+  if (inst?.vendedor_id) {
+    const admin = createAdminClient();
+    const [{ count }, { data: p }] = await Promise.all([
+      admin.from("instancias_whatsapp").select("id", { count: "exact", head: true }).eq("vendedor_id", inst.vendedor_id),
+      admin.from("profiles").select("email,papel").eq("id", inst.vendedor_id).maybeSingle(),
+    ]);
+    if (!count && p?.papel === "vendedor" && String(p.email || "").endsWith("@sem-login.invalid")) await admin.from("profiles").update({ ativo: false }).eq("id", inst.vendedor_id);
+  }
+  revalidatePath("/instancias"); revalidatePath("/conversas"); revalidatePath("/");
 }
 
 const COR: Record<string, string> = { conectado: "text-ok", aguardando_qr: "text-warn", conectando: "text-mute", aguardando: "text-mute", desconectado: "text-bad", erro: "text-bad" };

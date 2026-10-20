@@ -47,7 +47,7 @@ function Painel({ titulo, nota: sub, children, className = "" }: { titulo: strin
   );
 }
 
-// equipe = quem tem WhatsApp cadastrado (o cadastro do vendedor e feito na aba WhatsApp) ou papel vendedor
+// equipe = so quem tem WhatsApp cadastrado na aba WhatsApp (tirou o WhatsApp, sai do time)
 export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean; funcao?: string | null; foto_url?: string | null }[]; linhas: Linha[]; equipe: string[]; metas: { conversas: number; marcacoes: number }; vendas: Vendas; workshopPor: WorkshopPor };
 
 // Desenho da tela, separado da busca de dados (permite previa com dados de exemplo)
@@ -56,7 +56,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
   const META_CONVERSAS = metas.conversas, META_MARCACOES = metas.marcacoes;
   // Tela dos SDRs: so quem e SDR (Closer fica fora, as metas daqui sao de conversas e marcacoes)
   // Apresentacao do time todo (SDR e Closer); so o Funil por SDR mostra apenas SDRs
-  const sdrs = perfis.filter((p) => p.ativo && (p.papel === "vendedor" || equipe.includes(p.id)));
+  const sdrs = perfis.filter((p) => p.ativo && equipe.includes(p.id));
   const sdrsFunil = sdrs.filter((p) => p.funcao !== "closer");
   const cor = new Map(sdrs.map((s, i) => [s.id, corSdr(i)]));
   const porSdr = new Map(sdrs.map((s) => [s.id, somar(linhas.filter((l) => l.vendedor_id === s.id))]));
