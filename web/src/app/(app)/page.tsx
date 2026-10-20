@@ -224,7 +224,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
                 </div>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-3 text-sm text-mute">
                   <span>Nota média <b className={corNota(media(t))}>{nota(media(t))}</b></span>
-                  <span>Ligações atendidas <b className="text-ink">{t.ligacoes_atendidas}</b> de {t.ligacoes}</span><span>{t.auditadas} auditadas</span><span>{t.efetivas} conversas efetivas</span>
+                  <span>Ligações atendidas <b className="text-ink">{t.ligacoes_atendidas}</b> de {t.ligacoes}{Number(t.ligacoes_seg) ? <> · <b className="text-ink">{duracao(Number(t.ligacoes_seg))}</b> falando</> : null}</span><span>{t.auditadas} auditadas</span><span>{t.efetivas} conversas efetivas</span>
                   <span>1ª resposta <b className={corDuracao(tSdr.get(s.id)?.primeira)}>{duracao(tSdr.get(s.id)?.primeira)}</b></span>
                   <span>Tempo médio <b className={corDuracao(tSdr.get(s.id)?.medio)}>{duracao(tSdr.get(s.id)?.medio)}</b></span>
                 </div>

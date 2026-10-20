@@ -13,7 +13,7 @@ const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const hh = h => `${Number(String(h).slice(0, 2))}h`;
 
 // Contadores que somam ao longo do dia: a tarde = dia - manha (guardada as 13h)
-const CONTA = ["respostas", "marc", "wCupom", "wPagos", "wValor", "imersao", "imValor", "reunioesImpl", "ligAt", "lig", "oport"];
+const CONTA = ["respostas", "marc", "wCupom", "wPagos", "wValor", "imersao", "imValor", "reunioesImpl", "ligAt", "lig", "ligSeg", "oport"];
 
 // Numeros de um dia: time inteiro e cada vendedor
 export async function calcularDia(db, dia) {
@@ -40,7 +40,7 @@ export async function calcularDia(db, dia) {
       oport: l.filter(a => a.oportunidade).length, reunioesImpl: l.filter(a => a.oportunidade_tipo === "reuniao_implementacao" && !a.remarcacao).length, criticos: l.filter(a => a.critico).length,
       primeira: pr.length ? somar(pr, "primeira_resposta_seg") / pr.length : null,
       medio: nResp ? md.reduce((x, a) => x + a.tempo_medio_resposta_seg * a.respostas_sdr, 0) / nResp : null,
-      respostas: somar(ls, "respostas"), marc: somar(ls, "marcacoes"), ligAt: somar(ls, "ligacoes_atendidas"), lig: somar(ls, "ligacoes"),
+      respostas: somar(ls, "respostas"), marc: somar(ls, "marcacoes"), ligAt: somar(ls, "ligacoes_atendidas"), lig: somar(ls, "ligacoes"), ligSeg: somar(ls, "ligacoes_seg"),
     };
   };
   const time = resumo(auds, linhas);
@@ -58,7 +58,7 @@ const blocoNumeros = t => [
   `✅ Auditorias: ${t.n} · ⭐ Nota média: ${nota(t.nota)}`,
   `⏱️ 1ª resposta: ${dur(t.primeira)} · tempo médio de resposta: ${dur(t.medio)}`,
   `💬 Conversas trocadas: ${t.respostas} · 📅 Marcações: ${t.marc}`,
-  `📞 Ligações atendidas: ${t.ligAt} de ${t.lig}`,
+  `📞 Ligações atendidas: ${t.ligAt} de ${t.lig}${t.ligSeg ? ` · ${dur(t.ligSeg)} falando` : ""}`,
   `🎟️ Workshop por convite (cupom 100% ou Carbone): ${t.wCupom}${t.wCarbone ? ` · ${t.wCarbone} Carbone` : ""}`,
   `💰 Workshop vendido: ${t.wPagos}${t.wValor ? ` · ${brl(t.wValor)}` : ""}`,
   `💎 Imersão: ${plural(t.imersao, "fechada", "fechadas")}${t.imValor ? ` · ${brl(t.imValor)}` : ""}`,
@@ -78,7 +78,7 @@ function linhaPessoa(p, s) {
   }
   if (p.wCupom) partes.push(`🎟️ ${plural(p.wCupom, "convite", "convites")}`);
   if (p.wPagos) partes.push(`💰 ${plural(p.wPagos, "vendido", "vendidos")} (${brl(p.wValor)})`);
-  partes.push(`📞 ${plural(p.ligAt, "atendida", "atendidas")}`);
+  partes.push(`📞 ${plural(p.ligAt, "atendida", "atendidas")}${p.ligSeg ? ` (${dur(p.ligSeg)})` : ""}`);
   return `${p.nome} (${p.closer ? "Closer" : "SDR"}): ${partes.join(" · ")}`;
 }
 const ranking = (pessoas, s) => (pessoas.length ? pessoas.map((p, i) => `${i + 1}. ${linhaPessoa(p, s)}`) : ["Ainda sem atividade registrada."]);
@@ -116,7 +116,7 @@ export function textoTarde(d, dia, manha) {
     if (t.wCupom) partes.push(`🎟️ ${plural(t.wCupom, "convite", "convites")}`);
     if (t.wPagos) partes.push(`💰 ${plural(t.wPagos, "vendido", "vendidos")}`);
     if (t.imersao) partes.push(`💎 ${plural(t.imersao, "imersão", "imersões")}`);
-    if (t.ligAt) partes.push(`📞 ${plural(t.ligAt, "atendida", "atendidas")}`);
+    if (t.ligAt) partes.push(`📞 ${plural(t.ligAt, "atendida", "atendidas")}${t.ligSeg ? ` (${dur(t.ligSeg)})` : ""}`);
     return `• ${p.nome}: ${partes.join(" · ")}`;
   };
   return [
@@ -130,7 +130,7 @@ export function textoTarde(d, dia, manha) {
       `🌇 *Tarde (${hh(s.resumo_manha_hora || "13:00")} às ${hh(s.rodada_final_hora || "19:00")})*`,
       `💬 Conversas trocadas: ${tarde.respostas} · 📅 Marcações: ${tarde.marc}`,
       `🎟️ Convites: ${tarde.wCupom} · 💰 Workshop vendido: ${tarde.wPagos}${tarde.wValor ? ` (${brl(tarde.wValor)})` : ""} · 💎 Imersão: ${tarde.imersao}${tarde.imValor ? ` (${brl(tarde.imValor)})` : ""}`,
-      `📞 Ligações atendidas: ${tarde.ligAt} de ${tarde.lig}`,
+      `📞 Ligações atendidas: ${tarde.ligAt} de ${tarde.lig}${tarde.ligSeg ? ` · ${dur(tarde.ligSeg)} falando` : ""}`,
       ...pessoas.map(linhaTarde).filter(Boolean),
       ``,
     ] : []),

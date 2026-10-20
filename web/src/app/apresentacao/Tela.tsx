@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import AbasPainel from "@/components/AbasPainel";
 import AutoRefresh from "@/components/AutoRefresh";
-import { corNota, nota } from "@/lib/format";
+import { corNota, duracao, nota } from "@/lib/format";
 import { corSdr, diasUteis } from "@/lib/metas";
 import { diasEntre, type Periodo } from "@/lib/periodo";
 import BarraMeta from "@/components/BarraMeta";
@@ -212,7 +212,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
                     </div>
                   ); })}
                   </div>
-                  <div className="text-[0.72em] text-mute">{t.ligacoes_atendidas} de {t.ligacoes} ligações atendidas · {t.enviadas} mensagens enviadas</div>
+                  <div className="text-[0.72em] text-mute">{t.ligacoes_atendidas} de {t.ligacoes} ligações atendidas{Number(t.ligacoes_seg) ? ` (${duracao(Number(t.ligacoes_seg))})` : ""} · {t.enviadas} mensagens enviadas</div>
                 </div>
               );
             })}
@@ -260,7 +260,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
         {kpi("Convites", vendas.convites, <>{vendas.carbone ? `${vendas.carbone} Carbone · ${vendas.convites - vendas.carbone} cupom · R$ 0` : "cupom 100% ou Carbone · R$ 0"}</>)}
         {kpi("Marcações", <>{time.marcacoes} <span className="text-[0.55em] font-normal text-mute">/ {metaMarc * nSdr}</span></>, <><Pill e={eMarc}>{fmtPct(time.marcacoes, metaMarc * nSdr)}</Pill> {time.workshop} workshop · {time.imersao} reunião de impl.</>)}
         {kpi("Conversas trocadas", <>{time.respostas} <span className="text-[0.55em] font-normal text-mute">/ {metaConversas * nSdr}</span></>, <>{fmtPct(time.respostas, time.contatadas)} das conversas</>)}
-        {kpi("Contatos", contatos(time), <>{time.contatadas} msg · {time.ligacoes_atendidas}/{time.ligacoes} lig. atendidas</>)}
+        {kpi("Contatos", contatos(time), <>{time.contatadas} msg · {time.ligacoes_atendidas}/{time.ligacoes} lig. atendidas{Number(time.ligacoes_seg) ? ` · ${duracao(Number(time.ligacoes_seg))}` : ""}</>)}
         {kpi("Nota média", <span className={corNota(media(time))}>{nota(media(time))}</span>, <>{time.auditadas} auditadas</>)}
       </section>
 
