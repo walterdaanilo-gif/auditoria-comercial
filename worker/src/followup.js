@@ -75,19 +75,12 @@ export function textoVendedor(nome, lista, dias) {
   ].join("\n");
 }
 
-// Para a gestao: o erro de cada vendedor
+// Para a gestao: so a contagem de cada vendedor e o link (a lista completa vai para o proprio vendedor)
 export function textoGestao(porVendedor, nomes, funcao, dias) {
-  const total = [...porVendedor.values()].reduce((n, l) => n + l.length, 0);
-  const blocos = [...porVendedor].map(([v, ls]) => [
-    `*${nomes.get(v) || "Vendedor"} (${funcao.get(v) === "closer" ? "Closer" : "SDR"})*: ${ls.length} ${ls.length === 1 ? "lead" : "leads"} sem follow-up`,
-    ...ls.slice(0, 10).map(itemLead),
-    ...(ls.length > 10 ? [`  ...e mais ${ls.length - 10} no sistema`] : []),
-  ].join("\n"));
   return [
-    `⚠️ *ERRO DE FOLLOW-UP*`, ``,
-    `${total === 1 ? "Um cliente potencial ficou" : `${total} clientes potenciais ficaram`} ${dias} dias ou mais sem follow-up do vendedor:`, ``,
-    blocos.join("\n\n"), ``,
-    `Os vendedores já foram avisados no WhatsApp e no sistema.`,
+    `⚠️ *Follow-up atrasado* · ${dias}+ dias sem mensagem`,
+    [...porVendedor].map(([v, ls]) => `${String(nomes.get(v) || "Vendedor").split(" ")[0]}: ${ls.length} ${ls.length === 1 ? "lead" : "leads"}`).join(" · "),
+    `👉 ${SITE}/conversas?aba=todas&p=30`,
   ].join("\n");
 }
 

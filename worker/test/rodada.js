@@ -60,7 +60,7 @@ assert.equal(fuV.tel, "5584986483304", "vai para o WhatsApp do proprio vendedor"
 assert.ok(fuV.texto.startsWith("⏰ *FOLLOW-UP ATRASADO*") && fuV.texto.includes("Oi, Ruan!") && fuV.texto.includes("Carla Dias") && fuV.texto.includes("8 dias sem follow-up") && fuV.texto.includes("interesse na imersão") && fuV.texto.includes("/conversas/parado"), fuV.texto);
 const fu = enviados[2].texto;
 assert.equal(enviados[2].tel, "5584999990000");
-assert.ok(fu.startsWith("⚠️ *ERRO DE FOLLOW-UP*") && fu.includes("*Ruan (SDR)*: 1 lead sem follow-up") && fu.includes("Carla Dias"), fu);
+assert.ok(fu.startsWith("⚠️ *Follow-up atrasado*") && fu.includes("Ruan: 1 lead") && !fu.includes("Carla Dias") && fu.split("\n").length === 3, fu);
 assert.ok(!fu.includes("5584988887777") && !fuV.texto.includes("(84) 98888-7777"), "lead que comprou nao entra no follow-up");
 assert.ok(db.tables.notificacoes.some(n => n.para === SDR && n.titulo.startsWith("Follow-up atrasado")), "notificacao no sistema para o vendedor");
 assert.equal(db.tables.resumos_turno.length, 1);
