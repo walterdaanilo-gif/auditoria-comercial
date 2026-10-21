@@ -2,6 +2,7 @@ import { today } from "./config.js";
 import { runAudits } from "./auditor.js";
 import { enviarRelatorio, horaAgora } from "./relatorio.js";
 import { avisarFollowups } from "./followup.js";
+import { envioConectado } from "./envio.js";
 
 // Uma volta do laco de auditoria. Duas vezes por dia (Configuracoes, padrao 13:00 e 19:00), uma vez cada:
 // audita tudo o que mudou no dia, sem esperar a conversa ficar parada, e manda o resumo ao gestor.
@@ -15,6 +16,7 @@ export async function cicloDeAuditoria(db, { hora = horaAgora(), envio, ate = nu
   const estado = {};
   const n = await runAudits(db, { final: manha || tarde, ate, estado });
   if ((manha || tarde) && estado.incompleto) { console.log(`[auditoria] rodada do turno em andamento: ${n} auditorias, continua na proxima volta`); return n; }
+  if ((manha || tarde) && !envio && !(await envioConectado(db))) { console.log("[relatorio] WhatsApp de envio desconectado: resumo espera a proxima volta"); return n; }
   const opts = envio ? { envio } : {};
   if (manha) {
     await db.update("audit_settings", { id: "eq.1" }, { resumo_manha_ultima: hoje });
