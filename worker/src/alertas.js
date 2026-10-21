@@ -44,31 +44,15 @@ export const ASSINATURA = "🚀 *Aviso do Cabueta*";
 // Sorteio fixo por conversa: a mesma conversa sempre gera o mesmo texto, conversas diferentes variam
 export const sorteio = (id, l) => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return l[h % l.length]; };
 
-// Venda com dinheiro entrando: aviso bem animado, com variacoes para nao ficar repetitivo
-const ABERTURAS = [
-  n => `🚨🚨🚨 HEIIIIIIIIIIIIIIIII 🚨🚨🚨\n💸💸 PINGOU UMA VENDA DE ${n}!!! 💸💸`,
-  n => `🔔🔔🔔 PLIM PLIM PLIIIIIIIM 🔔🔔🔔\n💰💰 CAIU DINHEIRO COM ${n}!!! 💰💰`,
-  n => `🚀🚀🚀 ALERTA DE VENDAAAAAAA 🚀🚀🚀\n🤑🤑 ${n} ACABOU DE FECHAR!!! 🤑🤑`,
-  n => `📣📣📣 PAREM TUDOOOOOOO 📣📣📣\n💵💵 TEM VENDA DE ${n} NA ÁREA!!! 💵💵`,
-  n => `🎰🎰🎰 JACKPOOOOOOT 🎰🎰🎰\n🤑🤑 ${n} FEZ O CAIXA TOCAR!!! 🤑🤑`,
-];
-const FECHOS = [n => "🍾🎉 BORA, TIME! QUEM É O PRÓXIMO? 🎉🍾", n => `👏👏👏 APLAUSOS PARA ${n}! 👏👏👏`, n => "🔥🔥 QUE DIA, MEU POVO! 🔥🔥", n => `🏆 ${n} ON FIRE! 🏆`];
-const LINKS = ["Quer ver como foi? A conversa tá aqui 👉", "Corre ver a conversa completa 👉", "Vale a pena ler essa conversa 👉", "Conversa completinha aqui 👉"];
-const verConversa = id => `${sorteio(id + "l", LINKS)} ${SITE}/conversas/${id}`;
+// Venda com dinheiro entrando: curto, para o gestor decidir rapido (quem, cliente, valor, link)
+const verConversa = id => `👉 ${SITE}/conversas/${id}`;
 const FALOU = ["E olha o que o lead mandou:", "Palavras do próprio lead:", "Saca só o que o lead falou:", "O lead soltou essa:"];
 const fala = (id, ev, max) => `${sorteio(id + "e", FALOU)} "${String(ev).slice(0, max)}"`;
 const tambemDe = outros => (outros.length ? `E não parou por aí: ${outros.map(o => o.titulo.replace(/\*/g, "").replace(/^\S+\s/, "").toLowerCase()).join(" e ")} também! 🙌` : null);
 export function textoVenda(e, { vendedor, lead, conversaId, outros = [] }) {
-  const n = String(vendedor).split(" ")[0].toUpperCase();
   return [
-    sorteio(conversaId, ABERTURAS)(n),
-    ``,
-    `🔥 ${e.produto} · ${e.extra} 🔥`,
-    `Quem comprou: ${lead} 🙌`,
-    ...(e.evidencia ? [fala(conversaId, e.evidencia, 200)] : []),
-    ...(outros.length ? [tambemDe(outros)] : []),
-    ``,
-    sorteio(conversaId + "f", FECHOS)(n),
+    `${e.titulo} · ${vendedor}`,
+    `Cliente: ${lead} · ${e.extra}${outros.length ? ` · também ${outros.map(o => o.titulo.replace(/\*/g, "").replace(/^\S+\s/, "").toLowerCase()).join(" e ")}` : ""}`,
     verConversa(conversaId),
   ].join("\n");
 }

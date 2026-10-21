@@ -1,11 +1,11 @@
 import { cfg, today } from "./config.js";
 import { enviarWhatsApp } from "./envio.js";
-import { ASSINATURA, sorteio } from "./alertas.js";
 import { gestores, notificar } from "./notificar.js";
+import { carregarRegras } from "./auditor.js";
+import { leadsParados } from "./followup.js";
 
 const SITE = (process.env.SITE_URL || "https://auditoria-comercial-omega.vercel.app").replace(/\/$/, "");
 const brl = n => Number(n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-const nota = n => (n == null ? "—" : n.toFixed(1).replace(".", ","));
 const dur = s => (s == null ? "—" : s < 60 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)}min` : `${Math.floor(s / 3600)}h${String(Math.round((s % 3600) / 60)).padStart(2, "0")}`);
 const ddmm = d => d.split("-").reverse().slice(0, 2).join("/");
 const somar = (l, k) => l.reduce((s, x) => s + Number(x[k] || 0), 0);
@@ -25,8 +25,10 @@ export async function calcularDia(db, dia) {
   const ids = convs.map(c => c.id);
   const auds = [];
   for (let i = 0; i < ids.length; i += 150) auds.push(...await db.select("auditorias", { select: "vendedor_id,nota_geral,so_bot,venda,venda_tipo,venda_valor,venda_cupom,venda_convite_origem,remarcacao,oportunidade,oportunidade_tipo,critico,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr", filters: { conversa_id: `in.(${ids.slice(i, i + 150).join(",")})` } }));
-  const vendIds = [...new Set([...linhas.map(l => l.vendedor_id), ...auds.map(a => a.vendedor_id)])];
-  const perfis = vendIds.length ? await db.select("profiles", { select: "id,nome,funcao", filters: { id: `in.(${vendIds.join(",")})` } }) : [];
+  // o time = quem tem WhatsApp cadastrado (aparece mesmo sem atividade no dia: zero marcacao tambem e informacao)
+  const time_ = (await db.select("instancias_whatsapp", { select: "vendedor_id" })).map(i => i.vendedor_id);
+  const vendIds = [...new Set([...time_, ...linhas.map(l => l.vendedor_id), ...auds.map(a => a.vendedor_id)].filter(Boolean))];
+  const perfis = vendIds.length ? (await db.select("profiles", { select: "id,nome,funcao,ativo", filters: { id: `in.(${vendIds.join(",")})` } })).filter(p => p.ativo !== false) : [];
 
   const resumo = (l, ls) => {
     const notas = l.filter(a => !a.so_bot);
@@ -51,98 +53,47 @@ export async function calcularDia(db, dia) {
 
 // So os contadores (guardados as 13h para separar a tarde as 19h)
 const contadores = d => ({ time: Object.fromEntries(CONTA.map(k => [k, d.time[k]])), pessoas: Object.fromEntries(d.pessoas.map(p => [p.id, Object.fromEntries(CONTA.map(k => [k, p[k]]))])) });
-const menos = (a, b = {}) => Object.fromEntries(CONTA.map(k => [k, Math.max(0, Number(a[k] || 0) - Number(b[k] || 0))]));
 
-// Bloco de numeros completo (manha ou dia)
-const blocoNumeros = t => [
-  `✅ Auditorias: ${t.n} · ⭐ Nota média: ${nota(t.nota)}`,
-  `⏱️ 1ª resposta: ${dur(t.primeira)} · tempo médio de resposta: ${dur(t.medio)}`,
-  `💬 Conversas trocadas: ${t.respostas} · 📅 Marcações: ${t.marc}`,
-  `📞 Ligações atendidas: ${t.ligAt} de ${t.lig}${t.ligSeg ? ` · ${dur(t.ligSeg)} falando` : ""}`,
-  `🎟️ Workshop por convite (cupom 100% ou Carbone): ${t.wCupom}${t.wCarbone ? ` · ${t.wCarbone} Carbone` : ""}`,
-  `💰 Workshop vendido: ${t.wPagos}${t.wValor ? ` · ${brl(t.wValor)}` : ""}`,
-  `💎 Imersão: ${plural(t.imersao, "fechada", "fechadas")}${t.imValor ? ` · ${brl(t.imValor)}` : ""}`,
-  `🎯 Oportunidades: ${t.oport}`,
-  ...(t.criticos ? [`⚠️ Alertas críticos: ${t.criticos} (veja no sistema)`] : []),
-];
+// Resumo para o gestor decidir rapido: vendas, marcacoes x meta, ligacoes; depois so quem precisa de atencao e o destaque.
+// Meta do dia por pessoa (Configuracoes). As 13h vale metade da meta do dia.
+const metaDe = (p, s) => (p.closer ? s.meta_closer_reunioes ?? null : s.meta_sdr_marcacoes ?? 6);
+const feitoDe = p => (p.closer ? p.reunioesImpl : p.marc);
+const alvo = (meta, turno) => (meta == null ? null : turno === "manha" ? Math.ceil(meta / 2) : meta);
 
-// Linha de cada vendedor, com a meta do dia
-function linhaPessoa(p, s) {
-  const partes = [`⭐ ${nota(p.nota)}`];
-  if (p.closer) {
-    partes.push(`${p.reunioesImpl}${s.meta_closer_reunioes != null ? `/${s.meta_closer_reunioes}` : ""} reuniões de implementação`);
-    partes.push(`${p.imersao}${s.meta_closer_vendas != null ? `/${s.meta_closer_vendas}` : ""} imersões${p.imValor ? ` (${brl(p.imValor)})` : ""}`);
-  } else {
-    partes.push(`${p.respostas}/${s.meta_sdr_conversas ?? 25} conversas trocadas`);
-    partes.push(`${p.marc}/${s.meta_sdr_marcacoes ?? 6} marcações`);
-  }
-  if (p.wCupom) partes.push(`🎟️ ${plural(p.wCupom, "convite", "convites")}`);
-  if (p.wPagos) partes.push(`💰 ${plural(p.wPagos, "vendido", "vendidos")} (${brl(p.wValor)})`);
-  partes.push(`📞 ${plural(p.ligAt, "atendida", "atendidas")}${p.ligSeg ? ` (${dur(p.ligSeg)})` : ""}`);
-  return `${p.nome} (${p.closer ? "Closer" : "SDR"}): ${partes.join(" · ")}`;
-}
-const ranking = (pessoas, s) => (pessoas.length ? pessoas.map((p, i) => `${i + 1}. ${linhaPessoa(p, s)}`) : ["Ainda sem atividade registrada."]);
-const destaque = (pessoas, quando) => { const top = pessoas.find(p => p.nota != null); return top ? [``, `👑 Destaque ${quando}: *${top.nome}*, com nota ${nota(top.nota)}. Manda aquele parabéns! 👏`] : []; };
-
-// Resumo do turno da manha (13h)
-export function textoManha(d, dia) {
-  const { s, time, pessoas } = d;
-  return [
-    ASSINATURA, ``,
-    sorteio(dia + "m", [
-      `Boa tarde, gestão! ☀️ Fechou o turno da manhã de hoje (${ddmm(dia)}). Olha como o time foi:`,
-      `Boa tarde, pessoal! 👋 Metade do dia já foi, então lá vai o resumo da manhã (${ddmm(dia)}):`,
-      `Boa tarde, gestão! 🌤️ Resumo do turno da manhã de ${ddmm(dia)} chegando:`,
-    ]), ``,
-    ...blocoNumeros(time), ``,
-    `🏆 *Como cada um foi na manhã*`,
-    ...ranking(pessoas, s),
-    ...destaque(pessoas, "da manhã"), ``,
-    sorteio(dia + "mf", ["Bora pra tarde que ainda dá pra bater a meta! 🚀", "Segundo tempo começando: foco total à tarde! ⚽🔥", "Almoço tomado, agora é acelerar a tarde! 💪"]),
-    `Quer ver tudo com calma? Tá no painel 👉 ${SITE}`,
-  ].join("\n");
+function linhaVendas(t) {
+  const partes = [];
+  if (t.imersao) partes.push(`${plural(t.imersao, "imersão", "imersões")}${t.imValor ? ` ${brl(t.imValor)}` : ""}`);
+  if (t.wPagos) partes.push(`${plural(t.wPagos, "workshop", "workshops")}${t.wValor ? ` ${brl(t.wValor)}` : ""}`);
+  if (t.wCupom) partes.push(plural(t.wCupom, "convite", "convites"));
+  return `💰 Vendas: ${partes.length ? partes.join(" · ") : "nenhuma ainda"}`;
 }
 
-// Resumo das 19h: a tarde (dia menos a manha guardada) e o dia completo
-export function textoTarde(d, dia, manha) {
+export function textoResumo(d, dia, { turno = "dia", parados = new Map() } = {}) {
   const { s, time, pessoas } = d;
-  const tarde = manha ? menos(time, manha.time) : null;
-  const dinheiro = time.wPagos + time.imersao > 0;
-  const ativo = (p, t) => t.respostas + t.marc + t.wCupom + t.wPagos + t.imersao + t.reunioesImpl + t.ligAt > 0;
-  const linhaTarde = p => {
-    const t = menos(p, manha?.pessoas?.[p.id]);
-    if (!ativo(p, t)) return null;
-    const partes = [`${t.respostas} conversas`, `${plural(t.marc, "marcação", "marcações")}`];
-    if (t.wCupom) partes.push(`🎟️ ${plural(t.wCupom, "convite", "convites")}`);
-    if (t.wPagos) partes.push(`💰 ${plural(t.wPagos, "vendido", "vendidos")}`);
-    if (t.imersao) partes.push(`💎 ${plural(t.imersao, "imersão", "imersões")}`);
-    if (t.ligAt) partes.push(`📞 ${plural(t.ligAt, "atendida", "atendidas")}${t.ligSeg ? ` (${dur(t.ligSeg)})` : ""}`);
-    return `• ${p.nome}: ${partes.join(" · ")}`;
-  };
+  const metaTime = pessoas.filter(p => !p.closer).reduce((n, p) => n + (metaDe(p, s) ?? 0), 0);
+  // atencao: abaixo da meta do turno, ou com follow-up atrasado
+  const atencao = pessoas.map(p => {
+    const meta = alvo(metaDe(p, s), turno), fu = parados.get(p.id) || 0;
+    const abaixo = meta != null && feitoDe(p) < meta;
+    if (!abaixo && !fu) return null;
+    const partes = [];
+    if (abaixo) partes.push(`${feitoDe(p)}/${metaDe(p, s)} ${p.closer ? "reuniões" : "marcações"}`);
+    if (fu) partes.push(plural(fu, "follow-up atrasado", "follow-ups atrasados"));
+    return `⚠️ ${p.nome.split(" ")[0]} ${partes.join(" · ")}`;
+  }).filter(Boolean);
+  const pontos = p => feitoDe(p) + p.wCupom + p.wPagos + p.imersao * 3;
+  const naMeta = p => { const meta = alvo(metaDe(p, s), turno); return meta == null || feitoDe(p) >= meta; };
+  const top = pessoas.filter(naMeta).sort((a, b) => pontos(b) - pontos(a) || b.ligAt - a.ligAt)[0];
+  const destaque = top && pontos(top) > 0
+    ? `👑 ${top.nome.split(" ")[0]}: ${[feitoDe(top) && plural(feitoDe(top), top.closer ? "reunião" : "marcação", top.closer ? "reuniões" : "marcações"), top.imersao && plural(top.imersao, "imersão", "imersões"), (top.wPagos + top.wCupom) && plural(top.wPagos + top.wCupom, "inscrição no workshop", "inscrições no workshop")].filter(Boolean).join(" · ")}`
+    : null;
   return [
-    ASSINATURA, ``,
-    sorteio(dia, [
-      `Boa noite, gestão! 🌙 Fechando o dia ${ddmm(dia)} com o resumo da tarde e do dia completo:`,
-      `Boa noite, pessoal! 👋 Expediente encerrado, então lá vai como foi a tarde e o dia ${ddmm(dia)}:`,
-      `Boa noite, gestão! 📊 Dia ${ddmm(dia)} fechado. Pega o café e vem ver a tarde e o dia ☕`,
-    ]), ``,
-    ...(tarde ? [
-      `🌇 *Tarde (${hh(s.resumo_manha_hora || "13:00")} às ${hh(s.rodada_final_hora || "19:00")})*`,
-      `💬 Conversas trocadas: ${tarde.respostas} · 📅 Marcações: ${tarde.marc}`,
-      `🎟️ Convites: ${tarde.wCupom} · 💰 Workshop vendido: ${tarde.wPagos}${tarde.wValor ? ` (${brl(tarde.wValor)})` : ""} · 💎 Imersão: ${tarde.imersao}${tarde.imValor ? ` (${brl(tarde.imValor)})` : ""}`,
-      `📞 Ligações atendidas: ${tarde.ligAt} de ${tarde.lig}${tarde.ligSeg ? ` · ${dur(tarde.ligSeg)} falando` : ""}`,
-      ...pessoas.map(linhaTarde).filter(Boolean),
-      ``,
-    ] : []),
-    `📊 *Dia completo*`,
-    ...blocoNumeros(time), ``,
-    `🏆 *Como cada um foi no dia*`,
-    ...ranking(pessoas, s),
-    ...destaque(pessoas, "do dia"), ``,
-    dinheiro
-      ? sorteio(dia, ["Hoje o caixa cantou! 💸 Parabéns, time. Bom descanso e amanhã tem mais 🚀", "Dia com dinheiro entrando, assim que eu gosto! 💸 Descansem que amanhã a gente repete 🚀", "Que dia, hein! 💸 Orgulho desse time. Até amanhã 🚀"])
-      : sorteio(dia, ["Hoje foi dia de plantar, amanhã a gente colhe 🌱 Bom descanso, time!", "Amanhã é dia de virar o jogo 💪 Bom descanso, pessoal!", "Valeu pelo dia, time! Amanhã tem mais e vai ser melhor 🚀"]),
-    `Quer ver tudo com calma? Tá no painel 👉 ${SITE}`,
+    `🚀 *Resumo ${hh(turno === "manha" ? s.resumo_manha_hora || "13:00" : s.rodada_final_hora || "19:00")} · ${ddmm(dia)}*`, ``,
+    linhaVendas(time),
+    `📅 Marcações: ${time.marc}${metaTime ? `/${metaTime}` : ""}`,
+    `📞 Ligações: ${time.ligAt ? `${plural(time.ligAt, "atendida", "atendidas")}${time.ligSeg ? ` · ${dur(time.ligSeg)}` : ""}` : "nenhuma atendida"}`,
+    ...(atencao.length || destaque ? [``, ...atencao, ...(destaque ? [destaque] : [])] : []),
+    ``, `Detalhes 👉 ${SITE}`,
   ].join("\n");
 }
 
@@ -164,19 +115,21 @@ export async function mandar(db, dest, texto, envio, rotulo) {
   return ok;
 }
 
-// turno "manha" (13h): resumo da manha e guarda os numeros. turno "dia" (19h): tarde + dia completo.
+// turno "manha" (13h) ou "dia" (19h). Os numeros da manha ficam guardados em resumos_turno.
 export async function enviarRelatorio(db, { turno = "dia", envio = enviarWhatsApp } = {}) {
   const hoje = today();
   const d = await calcularDia(db, hoje);
   if (turno === "manha") await db.insert("resumos_turno", [{ data: hoje, turno: "manha", dados: contadores(d) }], { onConflict: "data,turno", returning: false });
   const dest = await destinoResumo(db, d.s);
   if (!dest.tels) return dest.motivo;
-  const manha = turno === "dia" ? (await db.select("resumos_turno", { select: "dados", filters: { data: `eq.${hoje}`, turno: "eq.manha" } }))[0]?.dados : null;
-  const texto = turno === "manha" ? textoManha(d, hoje) : textoTarde(d, hoje, manha);
-  await notificar(db, await gestores(db), { categoria: "resumo", titulo: turno === "manha" ? `☀️ Resumo do turno da manhã · ${hoje.split("-").reverse().slice(0, 2).join("/")}` : `🌙 Resumo da tarde e do dia · ${hoje.split("-").reverse().slice(0, 2).join("/")}`, texto: texto.replace(/^.*\n\n/, ""), link: "/" });
+  let parados = new Map();
+  try { for (const l of await leadsParados(db, await carregarRegras(db))) parados.set(l.vendedor_id, (parados.get(l.vendedor_id) || 0) + 1); }
+  catch (e) { console.error("[relatorio] follow-up:", e.message); }
+  const texto = textoResumo(d, hoje, { turno, parados });
+  await notificar(db, await gestores(db), { categoria: "resumo", titulo: `${turno === "manha" ? "☀️ Resumo das 13h" : "🌙 Resumo do dia"} · ${ddmm(hoje)}`, texto: texto.replace(/^.*\n\n/, ""), link: "/" });
   const ok = await mandar(db, dest, texto, envio, "relatorio");
   if (ok) await db.update("audit_settings", { id: "eq.1" }, { resumo_ultimo_envio: new Date().toISOString() });
-  return `${turno === "manha" ? "resumo da manha" : "resumo da tarde e do dia"} enviado para ${ok} de ${dest.tels.length}`;
+  return `${turno === "manha" ? "resumo da manha" : "resumo do dia"} enviado para ${ok} de ${dest.tels.length}`;
 }
 
 export const horaAgora = () => new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: cfg.tz }).format(new Date());

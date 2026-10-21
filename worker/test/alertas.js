@@ -54,7 +54,7 @@ assert.deepEqual(db.tables.auditorias[0].alertas_enviados.sort(), ["reuniao_imer
   resposta = { venda: { detectada: true, tipo: "imersao", valor: 4800, evidencia: "mandei o pix" } };
   await rapida();
   assert.equal(enviados.length, 1, "imersao fechada avisa");
-  assert.match(enviados[0].texto, /IMERSÃO FECHADA/); assert.match(enviados[0].texto, /WALTER/);
+  assert.match(enviados[0].texto, /^💎 \*Imersão fechada\* · Walter/);
   enviados.length = 0;
   resposta = { venda: { detectada: true, tipo: "workshop", cupom: true, evidencia: "Show, pode me inscrever então!" }, oportunidade: { detectada: true, tipo: "reuniao_imersao" }, agendou: true, tipo_agendamento: "workshop", reuniao: { tipo: "imersao", cliente_confirmou: true, vendedor_confirmou: true, data: "2026-10-20", hora: "19:00" } };
   db.tables.conversas = db.tables.conversas.filter(c => c.vendedor_id !== CL);
@@ -76,10 +76,10 @@ assert.ok(temSinal("Link da videochamada: https://meet.google.com/abc-defg-hij")
 
 // venda com dinheiro (imersao fechada / workshop pago): aviso animado; cupom R$ 0 continua no formato normal
 const festa = textoAlerta(eventosDe({ venda: true, venda_tipo: "imersao", venda_valor: 4800, venda_evidencia: "mandei o pix" }, "closer")[0], { vendedor: "Walter Danilo", funcao: "closer", lead: "João", conversaId: "abc", formato: "resumido" });
-assert.doesNotMatch(festa, /Elon Musk/); assert.match(festa, /WALTER/); assert.match(festa, /IMERSÃO FECHADA · R\$\s4\.800/); assert.match(festa, /"mandei o pix"/); assert.match(festa, /Quem comprou: /); assert.match(festa, /👉 .*\/conversas\/abc/);
+assert.doesNotMatch(festa, /Elon Musk/); assert.match(festa, /^💎 \*Imersão fechada\* · Walter Danilo\nCliente: João · R\$\s4\.800\n👉 .*\/conversas\/abc$/); assert.equal(festa.split("\n").length, 3);
 assert.equal(eventosDe({ venda: true, venda_tipo: "workshop", venda_valor: 197 }, "sdr")[0].dinheiro, true);
 assert.equal(eventosDe({ venda: true, venda_tipo: "workshop", venda_cupom: true, venda_valor: 0 }, "sdr")[0].dinheiro, false);
-console.log("\n--- exemplo do aviso de venda com dinheiro ---\n" + festa + "\n");
+console.log("\n--- exemplo do aviso de venda (curto) ---\n" + festa + "\n");
 
 // marcacoes desligadas: nao avisa, mas registra para nao avisar depois
 db.tables.audit_settings[0].alerta_marcacao = false;

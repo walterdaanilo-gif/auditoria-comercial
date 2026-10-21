@@ -202,18 +202,15 @@ function FotoVendedor({ v }: { v: { id: string; nome: string; foto_url?: string 
 
 // ---------- previews ----------
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const ELON = "🚀 *Aviso do Cabueta*";
-const LINK = "Quer ver como foi? A conversa tá aqui 👉 <link>";
 function previewAlerta(s: Settings) {
   const blocos: string[] = [];
-  if (s.alerta_venda) blocos.push(`🚨🚨🚨 HEIIIIIIIIIIIIIIIII 🚨🚨🚨\n💸💸 PINGOU UMA VENDA DE WALTER!!! 💸💸\n\n🔥 IMERSÃO FECHADA · ${brl(4800)} 🔥\nQuem comprou: João Souza 🙌\nE olha o que o lead mandou: "mandei o pix"\n\n🍾🎉 BORA, TIME! QUEM É O PRÓXIMO? 🎉🍾\nCorre ver a conversa completa 👉 <link>`);
-  if (s.alerta_followup) blocos.push(`⏰ *ALERTA DE FOLLOW-UP*\n\nEsses 2 leads em negociação estão há ${s.followup_alerta_d} dias ou mais sem contato:\n\n*Nick (SDR)*\n• Carla Dias · (84) 91111-2222 · ${s.followup_alerta_d + 2} dias sem contato · interesse na imersão\n  <link da conversa>\n• Pedro Lima · (84) 98888-0000 · ${s.followup_alerta_d} dias sem contato · vaga no workshop\n  <link da conversa>\n\nBora retomar esses contatos antes que esfriem! 💪`);
+  if (s.alerta_venda) blocos.push(`💎 *Imersão fechada* · Walter\nCliente: João Souza · ${brl(4800)}\n👉 <link da conversa>`);
+  if (s.alerta_followup) blocos.push(`⚠️ *ERRO DE FOLLOW-UP*\n\n2 clientes potenciais ficaram ${s.followup_alerta_d} dias ou mais sem follow-up do vendedor:\n\n*Nick (SDR)*: 2 leads sem follow-up\n• Carla Dias · (84) 91111-2222 · ${s.followup_alerta_d + 2} dias sem follow-up · interesse na imersão\n• Pedro Lima · (84) 98888-0000 · ${s.followup_alerta_d} dias sem follow-up · vaga no workshop`);
   return blocos.length ? blocos.join("\n\n─────────\n\n") : "Nenhum aviso ligado: os telefones recebem só os resumos.";
 }
 function previewResumo(s: Settings) {
   const h = (x: string) => `${Number(x.slice(0, 2))}h`;
-  const numeros = (a: string) => `✅ Auditorias: ${a}\n💬 Conversas trocadas: 22 · 📅 Marcações: 5\n📞 Ligações atendidas: 9 de 15\n🎟️ Workshop por convite (cupom 100%): 3\n💰 Workshop vendido: 2 · ${brl(394)}\n💎 Imersão: 1 fechada · ${brl(4800)}\n🎯 Oportunidades: 7`;
-  return `── ${s.resumo_manha_hora} · turno da manhã ──\n\n${ELON}\n\nBoa tarde, gestão! ☀️ Fechou o turno da manhã de hoje (17/10). Olha como o time foi:\n\n${numeros("7 · ⭐ Nota média: 7,6")}\n\n🏆 *Como cada um foi na manhã*\n1. Ruan (SDR): ⭐ 8,1 · 12/25 conversas trocadas · 3/6 marcações · 🎟️ 2 convites · 📞 4 atendidas\n\nBora pra tarde que ainda dá pra bater a meta! 🚀\n\n── ${s.rodada_final_hora} · tarde e dia ──\n\n${ELON}\n\nBoa noite, gestão! 🌙 Fechando o dia 17/10 com o resumo da tarde e do dia completo:\n\n🌇 *Tarde (${h(s.resumo_manha_hora)} às ${h(s.rodada_final_hora)})*\n💬 Conversas trocadas: 10 · 📅 Marcações: 2\n🎟️ Convites: 1 · 💰 Workshop vendido: 1 (${brl(197)}) · 💎 Imersão: 1 (${brl(4800)})\n📞 Ligações atendidas: 4 de 6\n• Ruan: 10 conversas · 2 marcações · 🎟️ 1 convite\n\n📊 *Dia completo*\n${numeros("12 · ⭐ Nota média: 7,8")}\n\n🏆 *Como cada um foi no dia*\n1. Ruan (SDR): ⭐ 8,4 · 22/25 conversas trocadas · 5/6 marcações · 🎟️ 3 convites · 💰 2 vendidos (${brl(394)}) · 📞 9 atendidas\n\n👑 Destaque do dia: *Ruan*, com nota 8,4. Manda aquele parabéns! 👏\n\nHoje o caixa cantou! 💸 Parabéns, time. Bom descanso e amanhã tem mais 🚀\nQuer ver tudo com calma? Tá no painel 👉 <link do sistema>`;
+  return `🚀 *Resumo ${h(s.resumo_manha_hora)} · 17/10*\n\n💰 Vendas: 2 convites\n📅 Marcações: 2/12\n📞 Ligações: 4 atendidas · 18min\n\n⚠️ Ruan 0/6 marcações · 3 follow-ups atrasados\n👑 Nick: 2 marcações\n\nDetalhes 👉 <painel>\n\n── ${h(s.rodada_final_hora)} ──\n\n🚀 *Resumo ${h(s.rodada_final_hora)} · 17/10*\n\n💰 Vendas: 1 imersão ${brl(4800)} · 2 workshops ${brl(394)} · 5 convites\n📅 Marcações: 7/12\n📞 Ligações: 9 atendidas · 42min\n\n⚠️ Ruan 2/6 marcações\n👑 Nick: 5 marcações · 2 inscrições no workshop\n\nDetalhes 👉 <painel>`;
 }
 
 // ---------- card em acordeao ----------

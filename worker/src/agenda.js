@@ -66,12 +66,9 @@ const hm = iso => new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2
 const dm = d => d.split("-").reverse().slice(0, 2).join("/");
 export function textoConflito(r, ev, conflitos, { vendedor, cliente, conversaId, link }) {
   return [
-    `⚠️ *CONFLITO NA AGENDA*`, ``,
-    `A ${r.tipo === "imersao" ? "reunião de imersão" : "reunião de implementação"} com ${cliente}, marcada por ${vendedor} para ${dm(r.data)} às ${r.hora}, bate com:`,
-    ...conflitos.map(e => `• ${hm(e.start.dateTime)} às ${hm(e.end?.dateTime || e.start.dateTime)} · ${e.summary || "(sem título)"}`), ``,
-    `Vale remarcar com o cliente ou ajustar a agenda.`,
-    `Conversa 👉 ${SITE}/conversas/${conversaId}`,
-    ...(link ? [`Evento 👉 ${link}`] : []),
+    `⚠️ *Conflito na agenda* · ${dm(r.data)} ${r.hora}`,
+    `${r.tipo === "imersao" ? "Reunião de imersão" : "Reunião de implementação"} com ${cliente} (${vendedor}) bate com: ${conflitos.map(e => `${hm(e.start.dateTime)} às ${hm(e.end?.dateTime || e.start.dateTime)} · ${e.summary || "(sem título)"}`).join("; ")}`,
+    `👉 ${link || `${SITE}/conversas/${conversaId}`}`,
   ].join("\n");
 }
 // Avisa no WhatsApp do proprio gestor (o numero que envia os avisos; cai no chat "Voce"), uma vez por horario
