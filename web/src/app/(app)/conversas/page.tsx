@@ -103,7 +103,7 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
                 <tr key={c.id}>
                   <td className="td text-mute">{fmtData(c.data).slice(0, 5)}</td>
                   <td className="td">{nomes.get(c.vendedor_id) ?? "—"}</td>
-                  <td className="td"><Link className="text-brand" href={`/conversas/${c.id}`}>{nomeContato(c)}</Link>{c.canal === "importada" && <span className="chip ml-2 border-line text-mute">importada</span>}{c.canal === "crm" && <span className="chip ml-2 border-line text-mute" title="Histórico vindo do CRM Q5 (antes do WhatsApp ser conectado aqui)">CRM</span>}</td>
+                  <td className="td"><Link className="text-brand" href={`/conversas/${c.id}`}>{nomeContato(c)}</Link>{c.canal === "importada" && <span className="chip ml-2 border-line text-mute">importada</span>}{c.canal === "crm" && <span className="chip ml-2 border-line text-mute" title="Conversa vinda do CRM Q5">CRM</span>}</td>
                   <td className="td max-w-[420px] truncate text-mute">{c.ultimaSdr?.texto || (c.ultimaSdr ? `[${c.ultimaSdr.tipo}]` : "Só o lead escreveu")}</td>
                   <td className="td text-mute">{c.ultimaSdr ? tempo(Math.max(0, Math.round((Date.now() - new Date(c.ultimaSdr.enviada_em).getTime()) / 60000))) : "—"}</td>
                 </tr>
@@ -119,7 +119,7 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
                   <tr key={c.id}>
                     <td className="td text-mute">{fmtData(c.data).slice(0, 5)} {fmtHora(c.ultima_msg_em)}</td>
                     <td className="td">{nomes.get(c.vendedor_id) ?? "—"}</td>
-                    <td className="td"><Link className="text-brand" href={`/conversas/${c.id}`}>{nomeContato(c)}</Link>{c.canal === "importada" && <span className="chip ml-2 border-line text-mute">importada</span>}{c.canal === "crm" && <span className="chip ml-2 border-line text-mute" title="Histórico vindo do CRM Q5 (antes do WhatsApp ser conectado aqui)">CRM</span>}</td>
+                    <td className="td"><Link className="text-brand" href={`/conversas/${c.id}`}>{nomeContato(c)}</Link>{c.canal === "importada" && <span className="chip ml-2 border-line text-mute">importada</span>}{c.canal === "crm" && <span className="chip ml-2 border-line text-mute" title="Conversa vinda do CRM Q5">CRM</span>}</td>
                     <td className="td">{c.n}</td>
                     <td className={`td font-bold ${corNota(a?.nota_geral)}`}>{c.respondeu ? nota(a?.nota_geral) : "—"}</td>
                     <td className="td">{a ? <>{qualidade(a)}{a.agendou && <span className="chip ml-1 border-ok text-ok">agendou</span>}{a.remarcacao && <span className="chip ml-1 border-warn text-warn">remarcação</span>}</>

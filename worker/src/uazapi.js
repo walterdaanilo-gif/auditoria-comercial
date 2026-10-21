@@ -170,6 +170,9 @@ export async function receberWebhook(db, body) {
   if (!seg) return { ignorado: "token desconhecido" };
   const [inst] = await db.select("instancias_whatsapp", { select: "id,vendedor_id,nome", filters: { id: `eq.${seg.instancia_id}` } });
   if (!inst) return { ignorado: "conexao removida" };
+  // uma fonte so por vendedor: quem tem as conversas no CRM Q5 nao grava mensagem pelo WhatsApp (so ligacoes)
+  const [perfil] = await db.select("profiles", { select: "fonte_conversas", filters: { id: `eq.${inst.vendedor_id}` } });
+  if (perfil?.fonte_conversas === "crm") return { ignorado: "conversas deste vendedor vem do CRM" };
   const m = normalizar(body);
   m.baixarAudio = async () => {
     const r = await api("POST", "/message/download", { token: seg.token, body: { id: m.id, return_base64: true, generate_mp3: false, return_link: false } });

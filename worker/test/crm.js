@@ -60,3 +60,41 @@ const parados = await leadsParados(db, R);
 assert.deepEqual(parados.map(l => l.nome), ["Lia"]);
 assert.equal(parados[0].semResposta, true); assert.equal(parados[0].dias, 8);
 console.log("OK: historico do CRM sem duplicar, revisao so de clientes potenciais, follow-up juntando WhatsApp e CRM");
+
+// Fonte "crm": o WhatsApp do vendedor sai das conversas, o CRM entra inteiro (sem corte) e a reuniao da agenda segue o lead
+{
+  const db = fakeSupa();
+  db.tables.profiles = [{ id: NICK, nome: "Nick", funcao: "sdr", papel: "vendedor", ativo: true, fonte_conversas: "crm" }];
+  db.tables.audit_settings = [{ id: 1, auditoria_automatica: true }];
+  for (const t of ["criterios_rubrica", "numeros_ignorados", "telefones_alerta", "config_auditoria", "auditorias", "crm_corte"]) db.tables[t] = [];
+  db.tables.instancias_whatsapp = [{ id: INST, vendedor_id: NICK, numero: "558494094046" }];
+  // conversa do WhatsApp com codigo de privacidade (contato nao e telefone) e outra com o numero
+  db.tables.conversas = [
+    { id: "lid1", vendedor_id: NICK, instancia_id: INST, contato: "198765432109876", telefone: "5584911112222", canal: "whatsapp", data: hoje, ultima_msg_em: em(hoje, "09:00") },
+    { id: "num1", vendedor_id: NICK, instancia_id: INST, contato: "5584922223333", telefone: "5584922223333", canal: "whatsapp", data: hoje, ultima_msg_em: em(hoje, "09:00") },
+  ];
+  db.tables.mensagens = [
+    { id: "w1", conversa_id: "lid1", vendedor_id: NICK, wa_id: "ABC", remetente: "vendedor", texto: "oi", tipo: "texto", enviada_em: em(hoje, "09:00") },
+    { id: "w2", conversa_id: "num1", vendedor_id: NICK, wa_id: "DEF", remetente: "vendedor", texto: "oi", tipo: "texto", enviada_em: em(hoje, "09:00") },
+  ];
+  db.tables.reunioes_agenda = [{ conversa_id: "lid1", vendedor_id: NICK, google_event_id: "ev1", inicio: em(hoje, "15:00") }];
+  db.tables.crm_conversas = [
+    { id: "c1", vendedor_id: NICK, telefone: "+5584911112222", contato_nome: "Carla", status: "open" },
+    { id: "c5", vendedor_id: NICK, telefone: "+5584922223333", contato_nome: "Lia", status: "open" },
+  ];
+  db.tables.crm_mensagens = [m("1", "c1", "outbound", hoje, "09:00"), m("2", "c1", "inbound", hoje, "09:05"), m("3", "c5", "outbound", hoje, "09:00"), m("4", "c5", "inbound", hoje, "09:02")];
+
+  await importarHistoricoCrm(db);
+  assert.ok(db.tables.mensagens.every(x => x.wa_id.startsWith("crm:")), "nada do WhatsApp nas conversas");
+  assert.equal(db.tables.mensagens.length, 4, "CRM inteiro, mesmo depois da captura do WhatsApp");
+  assert.ok(!db.tables.conversas.find(c => c.id === "lid1"), "conversa do codigo ficou vazia e saiu");
+  const carla = db.tables.conversas.find(c => c.contato === "5584911112222");
+  assert.equal(db.tables.reunioes_agenda[0].conversa_id, carla.id, "reuniao passou para a conversa do CRM do mesmo lead e dia");
+  const lia = db.tables.conversas.find(c => c.id === "num1");
+  assert.equal(lia.canal, "crm", "conversa com o numero continua (mesma auditoria), agora do CRM");
+  assert.equal(db.tables.mensagens.filter(x => x.conversa_id === "num1").length, 2);
+  const n = db.tables.mensagens.length;
+  await importarHistoricoCrm(db);
+  assert.equal(db.tables.mensagens.length, n, "rodar de novo nao duplica");
+  console.log("OK: vendedor com fonte CRM: uma fonte so, sem duplicar, reuniao da agenda preservada");
+}

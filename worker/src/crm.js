@@ -1,8 +1,9 @@
 import { dayOf } from "./config.js";
 import { carregarRegras, chaveTelefone } from "./auditor.js";
 
-// CRM Q5 -> conversas do sistema. Os numeros sao os mesmos do WhatsApp conectado aqui, entao:
-// so o historico de ANTES do WhatsApp do vendedor ser capturado vem do CRM (daqui pra frente vale o WhatsApp).
+// CRM Q5 -> conversas do sistema. Cada vendedor tem UMA fonte de conversas (profiles.fonte_conversas), nunca as duas:
+// - "crm": todas as conversas vem do CRM (o WhatsApp dele so traz ligacoes);
+// - "whatsapp": o CRM so cobre o historico de ANTES do WhatsApp do vendedor ser capturado.
 // Mensagens copiadas levam wa_id "crm:<id>" (nunca duplicam). Notas internas, mensagens automaticas, apagadas e de sistema ficam de fora.
 const FORA = ["custom_chat_interno"]; // conversa interna do time
 const NAO_POTENCIAL = ["custom_chat_interno", "custom_pos_vendas_perdido", "resolved", "closed"];
@@ -23,12 +24,15 @@ async function corteDe(db, vendedorId, cortes) {
 // todosRevisar: revisa todos os clientes potenciais (primeira importacao); senao so os que receberam mensagem nova
 export async function importarHistoricoCrm(db, { agora = Date.now(), todosRevisar = false } = {}) {
   const R = await carregarRegras(db);
-  const [insts, crmConvs, cortesRows] = await Promise.all([
+  const [insts, crmConvs, cortesRows, perfis] = await Promise.all([
     db.select("instancias_whatsapp", { select: "id,vendedor_id,numero" }),
     db.selectAll("crm_conversas", { select: "id,vendedor_id,telefone,contato_nome,status" }),
     db.selectAll("crm_corte", { select: "vendedor_id,corte" }),
+    db.select("profiles", { select: "id,fonte_conversas", filters: { fonte_conversas: "eq.crm" } }),
   ]);
   const instDe = new Map(insts.map(i => [i.vendedor_id, i.id]));
+  const soCrm = new Set(perfis.map(p => p.id));
+  if (soCrm.size) await tirarWhatsApp(db, [...soCrm]);
   const doTime = new Set(insts.filter(i => i.numero).map(i => chaveTelefone(i.numero)));
   const cortes = new Map(cortesRows.map(c => [c.vendedor_id, c.corte]));
   const validas = crmConvs.filter(c => c.vendedor_id && instDe.has(c.vendedor_id) && digitos(c.telefone).length >= 10 && !FORA.includes(c.status)
@@ -44,7 +48,7 @@ export async function importarHistoricoCrm(db, { agora = Date.now(), todosRevisa
   }
   for (const cc of validas) {
     if (!porConversa.has(cc.id)) continue;
-    const corte = await corteDe(db, cc.vendedor_id, cortes);
+    const corte = soCrm.has(cc.vendedor_id) ? null : await corteDe(db, cc.vendedor_id, cortes);
     const limite = corte ? Date.parse(corte) : agora;
     const msgs = porConversa.get(cc.id)
       .filter(m => !ja.has(`crm:${m.id}`) && !m.nota_interna && !m.automatica && !m.apagada_em && ["inbound", "outbound"].includes(m.direcao) && m.tipo !== "system" && Date.parse(m.enviada_em) < limite);
@@ -67,9 +71,43 @@ export async function importarHistoricoCrm(db, { agora = Date.now(), todosRevisa
       tocadas.add(cc.id);
     }
   }
+  if (soCrm.size) await limparVazias(db, [...soCrm]);
   const revisar = await marcarRevisao(db, validas.filter(c => crmPotencial(c.status) && (tocadas.has(c.id) || todosRevisar)), instDe);
   if (novas || revisar) console.log(`[crm] ${novas} mensagens do historico copiadas · ${revisar} clientes potenciais na fila de revisao`);
   return { mensagens: novas, revisar };
+}
+
+// Vendedor com fonte "crm": as mensagens que vieram do WhatsApp saem (o CRM traz as mesmas conversas) e as conversas
+// dele passam a ser do CRM, mantendo auditoria e reuniao da agenda quando o CRM preencher a mesma conversa.
+async function tirarWhatsApp(db, vendedores) {
+  const lista = `in.(${vendedores.join(",")})`;
+  const sobra = await db.select("mensagens", { select: "id", filters: { vendedor_id: lista, wa_id: "not.like.crm:*" }, limit: 1 });
+  if (sobra.length) {
+    await db.delete("mensagens", { vendedor_id: lista, wa_id: "not.like.crm:*" });
+    console.log("[crm] mensagens do WhatsApp de vendedor com conversas no CRM retiradas");
+  }
+  await db.update("conversas", { vendedor_id: lista, canal: "eq.whatsapp" }, { canal: "crm" });
+}
+
+// Conversas que ficaram sem mensagem depois da troca (o contato era um codigo do WhatsApp, o CRM usa o telefone):
+// a reuniao da agenda passa para a conversa do CRM do mesmo lead e dia, e a conversa vazia sai.
+async function limparVazias(db, vendedores) {
+  const convs = await db.selectAll("conversas", { select: "id,vendedor_id,telefone,contato,data", filters: { vendedor_id: `in.(${vendedores.join(",")})` } });
+  const comMsg = new Set();
+  for (let i = 0; i < convs.length; i += 150) {
+    for (const m of await db.select("mensagens", { select: "conversa_id", filters: { conversa_id: `in.(${convs.slice(i, i + 150).map(c => c.id).join(",")})` } })) comMsg.add(m.conversa_id);
+  }
+  const vazias = convs.filter(c => !comMsg.has(c.id));
+  if (!vazias.length) return;
+  const chave = c => `${c.vendedor_id}|${chaveTelefone(c.telefone || c.contato)}|${c.data}`;
+  const destino = new Map(convs.filter(c => comMsg.has(c.id)).map(c => [chave(c), c.id]));
+  for (const r of await db.select("reunioes_agenda", { select: "conversa_id", filters: { conversa_id: `in.(${vazias.map(c => c.id).join(",")})` } })) {
+    const nova = destino.get(chave(vazias.find(c => c.id === r.conversa_id)));
+    const ocupada = nova && (await db.select("reunioes_agenda", { select: "conversa_id", filters: { conversa_id: `eq.${nova}` } })).length;
+    if (nova && !ocupada) await db.update("reunioes_agenda", { conversa_id: `eq.${r.conversa_id}` }, { conversa_id: nova });
+  }
+  for (let i = 0; i < vazias.length; i += 150) await db.delete("conversas", { id: `in.(${vazias.slice(i, i + 150).map(c => c.id).join(",")})` });
+  console.log(`[crm] ${vazias.length} conversas vazias depois da troca para o CRM retiradas`);
 }
 
 // Revisao so dos clientes potenciais: a ultima conversa do historico de cada lead (com mensagem dos dois lados)
