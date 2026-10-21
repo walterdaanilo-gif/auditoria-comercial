@@ -1007,3 +1007,50 @@ alter table public.instancias_uazapi add column if not exists webhook_url text;
 -- select cron.schedule('worker-rapido', '* * * * *',   $$select public.worker_disparar('rapido')$$);
 -- select cron.schedule('worker-ciclo',  '*/5 * * * *', $$select public.worker_disparar('ciclo')$$);
 -- select cron.schedule('worker-crm',    '*/15 * * * *', $$select public.worker_disparar('crm')$$);
+
+-- =====================================================================
+-- Organizacoes (varias empresas no mesmo sistema: Weevo, Carbone Educacao...)
+-- =====================================================================
+create table if not exists public.organizacoes (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
+  nome text not null,
+  cor text,            -- cor principal da interface (hex)
+  logo_url text,
+  crm_segredo text,    -- nome do segredo da Edge Function com a chave do CRM Q5 desta empresa
+  criado_em timestamptz not null default now()
+);
+alter table public.organizacoes enable row level security;
+insert into public.organizacoes (slug, nome, crm_segredo) values ('weevo', 'Weevo', 'Q5_API_KEY'), ('carbone', 'Carbone Educação', 'Q5_API_KEY_CARBONE') on conflict (slug) do nothing;
+create or replace function public.org_weevo() returns uuid language sql stable set search_path = public as $$ select id from public.organizacoes where slug = 'weevo' $$;
+
+-- usuario: a empresa dele; o super admin (dono das empresas) alterna a empresa que esta vendo em org_ativa
+alter table public.profiles add column if not exists org_id uuid not null default public.org_weevo() references public.organizacoes(id);
+alter table public.profiles add column if not exists super_admin boolean not null default false;
+alter table public.profiles add column if not exists org_ativa uuid references public.organizacoes(id);
+
+create or replace function public.org_atual() returns uuid language sql stable security definer set search_path = public as $$
+  select case when p.super_admin and p.org_ativa is not null then p.org_ativa else p.org_id end from public.profiles p where p.id = auth.uid()
+$$;
+create or replace function public.eh_super() returns boolean language sql stable security definer set search_path = public as $$ select coalesce((select super_admin from public.profiles where id = auth.uid()), false) $$;
+grant execute on function public.org_atual() to authenticated;
+
+-- empresa preenchida sozinha pelo vendedor (ou pelo destinatario, nas notificacoes)
+create or replace function public.preencher_org() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.org_id is null then
+    if tg_table_name = 'notificacoes' then select org_id into new.org_id from public.profiles where id = new.para;
+    else select org_id into new.org_id from public.profiles where id = new.vendedor_id; end if;
+  end if;
+  if new.org_id is null then new.org_id := public.org_weevo(); end if;
+  return new;
+end $$;
+
+-- org_id em todas as tabelas de dados (com o gatilho preencher_org) e de configuracao (padrao Weevo):
+--   dados: instancias_whatsapp, conversas, mensagens, ligacoes, auditorias, reunioes_agenda, crm_instancias, crm_conversas,
+--          crm_mensagens, crm_corte, followups_avisados, notificacoes
+--   configuracao: audit_settings, config_auditoria, criterios_rubrica, numeros_ignorados, telefones_alerta, analises_time,
+--          google_agenda, resumos_turno, crm_sync_estado
+-- Regras de acesso: todas as politicas dessas tabelas ganharam "and org_id = public.org_atual()".
+-- profiles_select: (id = auth.uid()) or (eh_gestor() and org_id = org_atual()) or eh_super()
+create policy org_select on public.organizacoes for select to authenticated using (id = public.org_atual() or public.eh_super());
