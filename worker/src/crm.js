@@ -93,11 +93,16 @@ async function tirarWhatsApp(db, vendedores) {
 // a reuniao da agenda passa para a conversa do CRM do mesmo lead e dia, e a conversa vazia sai.
 async function limparVazias(db, vendedores) {
   const convs = await db.selectAll("conversas", { select: "id,vendedor_id,telefone,contato,data", filters: { vendedor_id: `in.(${vendedores.join(",")})` } });
+  // selectAll: o Supabase devolve no maximo 1000 linhas por consulta; sem paginar, conversa com mensagem pareceria vazia
   const comMsg = new Set();
   for (let i = 0; i < convs.length; i += 150) {
-    for (const m of await db.select("mensagens", { select: "conversa_id", filters: { conversa_id: `in.(${convs.slice(i, i + 150).map(c => c.id).join(",")})` } })) comMsg.add(m.conversa_id);
+    for (const m of await db.selectAll("mensagens", { select: "conversa_id", filters: { conversa_id: `in.(${convs.slice(i, i + 150).map(c => c.id).join(",")})` } })) comMsg.add(m.conversa_id);
   }
-  const vazias = convs.filter(c => !comMsg.has(c.id));
+  // confirma uma a uma antes de apagar: so sai a conversa que de fato nao tem nenhuma mensagem
+  const vazias = [];
+  for (const c of convs.filter(c => !comMsg.has(c.id))) {
+    if (!(await db.select("mensagens", { select: "id", filters: { conversa_id: `eq.${c.id}` }, limit: 1 })).length) vazias.push(c);
+  }
   if (!vazias.length) return;
   const chave = c => `${c.vendedor_id}|${chaveTelefone(c.telefone || c.contato)}|${c.data}`;
   const destino = new Map(convs.filter(c => comMsg.has(c.id)).map(c => [chave(c), c.id]));

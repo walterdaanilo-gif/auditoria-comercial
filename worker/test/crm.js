@@ -98,3 +98,26 @@ console.log("OK: historico do CRM sem duplicar, revisao so de clientes potenciai
   assert.equal(db.tables.mensagens.length, n, "rodar de novo nao duplica");
   console.log("OK: vendedor com fonte CRM: uma fonte so, sem duplicar, reuniao da agenda preservada");
 }
+
+// Regressao: mais de 1000 mensagens no lote (o Supabase corta em 1000) nao pode fazer conversa com mensagem parecer vazia
+{
+  const db = fakeSupa();
+  db.tables.profiles = [{ id: NICK, nome: "Nick", funcao: "sdr", papel: "vendedor", ativo: true, fonte_conversas: "crm" }];
+  db.tables.audit_settings = [{ id: 1, auditoria_automatica: true }];
+  for (const t of ["criterios_rubrica", "numeros_ignorados", "telefones_alerta", "config_auditoria", "auditorias", "crm_corte", "reunioes_agenda"]) db.tables[t] = [];
+  db.tables.instancias_whatsapp = [{ id: INST, vendedor_id: NICK, numero: "558494094046" }];
+  db.tables.conversas = [
+    { id: "grande", vendedor_id: NICK, instancia_id: INST, contato: "5584911112222", telefone: "5584911112222", canal: "crm", data: hoje },
+    { id: "outra", vendedor_id: NICK, instancia_id: INST, contato: "5584922223333", telefone: "5584922223333", canal: "crm", data: hoje },
+  ];
+  db.tables.mensagens = [
+    ...Array.from({ length: 1200 }, (_, i) => ({ id: `g${i}`, conversa_id: "grande", vendedor_id: NICK, wa_id: `crm:g${i}`, remetente: "vendedor", tipo: "texto", enviada_em: em(hoje, "09:00") })),
+    { id: "o1", conversa_id: "outra", vendedor_id: NICK, wa_id: "crm:o1", remetente: "cliente", tipo: "texto", enviada_em: em(hoje, "09:00") },
+  ];
+  db.tables.crm_conversas = [{ id: "c1", vendedor_id: NICK, telefone: "+5584911112222", contato_nome: "Carla", status: "open" }];
+  db.tables.crm_mensagens = [];
+  await importarHistoricoCrm(db);
+  assert.equal(db.tables.conversas.length, 2, "nenhuma conversa com mensagem foi apagada");
+  assert.equal(db.tables.mensagens.length, 1201);
+  console.log("OK: limpeza da troca nao apaga conversa com mensagem, mesmo com mais de 1000 no lote");
+}

@@ -84,7 +84,7 @@ console.log("OK: agenda Google (reuniao de implementacao e de imersao confirmada
   const r9 = { tipo: "imersao", cliente_confirmou: true, vendedor_confirmou: true, data: dia, hora: "14:00", duracao_min: 40, modalidade: "presencial", local: "Sede", cliente_nome: "Ricardo", empresa: "", email: "" };
   assert.equal(await sincronizarReuniao(db, R, c9, r9, { fetchImpl: ocupado, envio }), "criada");
   assert.equal(avisos.length, 1); assert.equal(avisos[0].tel, "5584936180882"); assert.equal(avisos[0].inst, "inst-walter");
-  assert.match(avisos[0].texto, /^⚠️ \*Conflito na agenda\* · 23\/10 14:00/); assert.equal(avisos[0].texto.split("\n").length, 3); assert.match(avisos[0].texto, /Ricardo/); assert.match(avisos[0].texto, /13:30 às 14:30 · Almoço com fornecedor/);
+  assert.ok(avisos[0].texto.startsWith(`⚠️ *Conflito na agenda* · ${dia.split("-").reverse().slice(0, 2).join("/")} 14:00`), avisos[0].texto); assert.equal(avisos[0].texto.split("\n").length, 3); assert.match(avisos[0].texto, /Ricardo/); assert.match(avisos[0].texto, /13:30 às 14:30 · Almoço com fornecedor/);
   assert.doesNotMatch(avisos[0].texto, /Bloco livre|Convite recusado|Feriado/);
   // mesma reuniao com outro detalhe (mesmo horario): nao avisa de novo
   assert.equal(await sincronizarReuniao(db, R, c9, { ...r9, local: "Sede, sala 2" }, { fetchImpl: ocupado, envio }), "atualizada");

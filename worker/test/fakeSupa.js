@@ -37,11 +37,14 @@ export function fakeSupa() {
     async select(n, { filters = {}, order, limit, offset = 0, select } = {}) {
       let rows = tab(n).filter(r => match(r, filters));
       if (order) { const [c, dir] = order.split("."); rows = [...rows].sort((a, b) => (val(a[c]) > val(b[c]) ? 1 : -1) * (dir === "desc" ? -1 : 1)); }
-      rows = rows.slice(offset, limit ? offset + limit : undefined).map(r => ({ ...r }));
+      rows = rows.slice(offset, offset + (limit || 1000)).map(r => ({ ...r })); // como o Supabase: no maximo 1000 por consulta
       if (select && select !== "*") { const cols = select.split(","); rows = rows.map(r => Object.fromEntries(cols.map(c => [c, r[c]]))); }
       return rows;
     },
-    async selectAll(n, o = {}) { return api.select(n, { ...o, limit: undefined }); },
+    async selectAll(n, o = {}) {
+      const out = [];
+      for (let offset = 0; ; offset += 1000) { const p = await api.select(n, { ...o, limit: 1000, offset }); out.push(...p); if (p.length < 1000) return out; }
+    },
     async insert(n, rows, { onConflict, ignoreDuplicates } = {}) {
       const out = [];
       for (const r of rows) {
