@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { cfg } from "../src/config.js";
 import { fakeSupa } from "./fakeSupa.js";
 import { rotaCrm, enviarPeloCrm, envioConectado } from "../src/envio.js";
+const pode = async () => ({ status: 404 }), semPermissao = async () => ({ status: 403 });
 
 cfg.q5Key = "chave-teste";
 const db = fakeSupa();
@@ -34,9 +35,11 @@ assert.equal(chamadas.length, 1);
 await assert.rejects(enviarPeloCrm(db, "inst-walter", "5584996988444", "x", async () => ({ ok: false, status: 403, text: async () => "sem permissao" })), /CRM Q5 403/);
 
 // resumo nao espera o WhatsApp conectado quando o numero de envio esta no CRM
-assert.equal(await envioConectado(db), true);
+assert.equal(await envioConectado(db, pode), true);
+// chave do Q5 sem permissao de envio: espera o WhatsApp conectado, como antes
+assert.equal(await envioConectado(db, semPermissao), false);
 db.tables.audit_settings[0].instancia_envio_id = "inst-ruan";
 db.tables.instancias_whatsapp.push({ id: "inst-ruan", status: "aguardando_qr" });
-assert.equal(await envioConectado(db), false);
+assert.equal(await envioConectado(db, pode), false);
 cfg.q5Key = "";
-console.log("OK: envio pelo CRM Q5 (conversa, remetente, sem rota, erro, resumo sem WhatsApp conectado)");
+console.log("OK: envio pelo CRM Q5 (conversa, remetente, sem rota, erro, resumo sem WhatsApp conectado, chave sem permissao)");

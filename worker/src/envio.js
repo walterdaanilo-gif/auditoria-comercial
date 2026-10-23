@@ -21,6 +21,17 @@ export async function rotaCrm(db, instanciaId, numero) {
   return chat ? { chat: chat.id, remetente } : null;
 }
 
+// A chave do Q5 pode mandar mensagem? Testa contra uma conversa que nao existe (nada e enviado): 403 = sem permissao
+// "conversations:write" na chave; qualquer outra resposta = pode. Sem permissao, o envio fica com a Uazapi.
+const ZERO = "00000000-0000-0000-0000-000000000000";
+export async function crmPodeEnviar(remetente, fetchImpl = fetch) {
+  const r = await fetchImpl(`${Q5}/conversations/${ZERO}/messages`, {
+    method: "POST", headers: { Authorization: `Bearer ${cfg.q5Key}`, "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ type: "text", body: ".", sender_user_id: remetente }),
+  });
+  return r.status !== 403 && r.status !== 401;
+}
+
 export async function enviarPeloCrm(db, instanciaId, numero, texto, fetchImpl = fetch) {
   const rota = await rotaCrm(db, instanciaId, numero);
   if (!rota) return false;
@@ -38,19 +49,21 @@ export async function enviarPeloCrm(db, instanciaId, numero, texto, fetchImpl = 
 // Mensagem do sistema para o gestor, saindo do WhatsApp escolhido em Configuracoes (instancia_envio_id):
 // primeiro pelo CRM Q5; sem conversa no CRM, pela Uazapi (WhatsApp conectado aqui)
 export async function enviarWhatsApp(db, instanciaId, numero, texto) {
-  if (await enviarPeloCrm(db, instanciaId, numero, texto)) return;
+  try { if (await enviarPeloCrm(db, instanciaId, numero, texto)) return; }
+  catch (e) { console.error("[envio] CRM Q5 falhou, tentando o WhatsApp conectado:", e.message); }
   if (uazapiAtivo()) return enviarTextoUazapi(db, instanciaId, numero, texto);
   const modulo = "./whatsapp.js"; // carregado so no modo Baileys (servidor Node proprio); a Edge Function usa a Uazapi
   const { enviarTextoBaileys } = await import(modulo);
   return enviarTextoBaileys(instanciaId, numero, texto);
 }
 
-// O WhatsApp de envio (Configuracoes) consegue mandar? Pelo CRM sempre; pela Uazapi so conectado.
+// O WhatsApp de envio (Configuracoes) consegue mandar? Pelo CRM se a chave tiver permissao; pela Uazapi so conectado.
 // Sem ele, resumo e follow-up esperam em vez de se perderem.
-export async function envioConectado(db) {
+export async function envioConectado(db, fetchImpl = fetch) {
   const [s] = await db.select("audit_settings", { select: "instancia_envio_id", filters: { id: "eq.1" } });
   if (!s?.instancia_envio_id) return true; // sem WhatsApp de envio: o resumo vai so para o sino
-  if (await rotaCrm(db, s.instancia_envio_id, null)) return true;
+  const rota = await rotaCrm(db, s.instancia_envio_id, null);
+  if (rota && (await crmPodeEnviar(rota.remetente, fetchImpl).catch(() => false))) return true;
   const [inst] = await db.select("instancias_whatsapp", { select: "status", filters: { id: `eq.${s.instancia_envio_id}` } });
   return inst?.status === "conectado";
 }
