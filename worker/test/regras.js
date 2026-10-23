@@ -4,6 +4,7 @@ delete process.env.ANTHROPIC_API_KEY; process.env.TRANSCRIBE_API_KEY = "sk-teste
 const { fakeSupa } = await import("./fakeSupa.js");
 const { runAudits, notaFinal, chaveTelefone, montarPrompt, carregarRegras, rubricaDe } = await import("../src/auditor.js");
 const { provedor } = await import("../src/ia.js");
+const { today } = await import("../src/config.js");
 assert.equal(provedor(), "openai", "sem Anthropic, usa a chave da OpenAI da transcricao");
 
 const db = fakeSupa();
@@ -20,7 +21,7 @@ db.tables.conversas = []; db.tables.mensagens = []; db.tables.auditorias = []; d
 
 const velho = new Date(Date.now() - 3 * 3600_000);
 const conversa = (id, vend, contato, textos) => {
-  db.tables.conversas.push({ id, vendedor_id: vend, contato, contato_nome: null, canal: "whatsapp", data: new Date().toISOString().slice(0, 10), ultima_msg_em: velho.toISOString(), auditar_agora: false });
+  db.tables.conversas.push({ id, vendedor_id: vend, contato, contato_nome: null, canal: "whatsapp", data: today(), ultima_msg_em: velho.toISOString(), auditar_agora: false });
   textos.forEach(([rem, texto], i) => db.tables.mensagens.push({ id: `${id}-${i}`, conversa_id: id, vendedor_id: vend, remetente: rem, texto, tipo: "texto", enviada_em: new Date(velho.getTime() + i * 60_000).toISOString() }));
 };
 conversa("c1", SDR, "5584988887777", [["vendedor", "Oi, workshop quinta?"], ["cliente", "topo, uso o cupom"]]);

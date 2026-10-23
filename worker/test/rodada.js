@@ -28,10 +28,10 @@ globalThis.fetch = ia;
 
 // lead em negociacao parado ha 8 dias (interesse na imersao, sem venda): entra no alerta de follow-up
 const velho = addDays(hoje, -8);
-db.tables.conversas.push({ id: "parado", vendedor_id: SDR, instancia_id: INST, contato: "5584911112222", telefone: "5584911112222", contato_nome: "Carla Dias", canal: "whatsapp", data: velho, ultima_msg_em: `${velho}T10:00:00-03:00`, auditar_agora: false });
+db.tables.conversas.push({ id: "parado", vendedor_id: SDR, instancia_id: INST, contato: "5584911112222", telefone: "5584911112222", contato_nome: "Carla Dias", canal: "whatsapp", data: velho, ultima_msg_em: `${velho}T00:01:00-03:00`, auditar_agora: false });
 db.tables.auditorias.push({ id: "a-parado", conversa_id: "parado", vendedor_id: SDR, oportunidade: true, oportunidade_tipo: "interesse_imersao", venda: false });
-db.tables.mensagens.push({ id: "p1", conversa_id: "parado", vendedor_id: SDR, remetente: "cliente", texto: "quero saber da imersão", tipo: "texto", enviada_em: `${velho}T09:50:00-03:00` },
-  { id: "p2", conversa_id: "parado", vendedor_id: SDR, remetente: "vendedor", texto: "te mando os detalhes", tipo: "texto", enviada_em: `${velho}T10:00:00-03:00` });
+db.tables.mensagens.push({ id: "p1", conversa_id: "parado", vendedor_id: SDR, remetente: "cliente", texto: "quero saber da imersão", tipo: "texto", enviada_em: `${velho}T00:00:00-03:00` },
+  { id: "p2", conversa_id: "parado", vendedor_id: SDR, remetente: "vendedor", texto: "te mando os detalhes", tipo: "texto", enviada_em: `${velho}T00:01:00-03:00` });
 db.tables.instancias_whatsapp = [{ id: INST, vendedor_id: SDR, numero: "5584986483304" }, { id: "inst-walter", vendedor_id: "walter", numero: "5584936180882" }];
 db.tables.crm_conversas = [];
 

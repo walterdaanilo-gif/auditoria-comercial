@@ -33,7 +33,7 @@ db.tables.crm_mensagens = [
   m("7", "c1", "outbound", hoje, "10:00"), // depois do corte: o WhatsApp ja tem
   m("8", "c2", "outbound", d3, "11:00"), m("9", "c3", "inbound", d3, "11:00"),
   m("10", "c4", "outbound", d3, "11:00"), m("11", "c4", "inbound", d3, "11:05"),
-  m("12", "c5", "inbound", d8, "08:00"), // lead escreveu ha 8 dias e nunca teve resposta
+  m("12", "c5", "inbound", d8, "00:00"), // lead escreveu ha 8 dias (meia-noite: 8 dias cheios a qualquer hora do dia do teste) e nunca teve resposta
 ];
 
 const r1 = await importarHistoricoCrm(db, { todosRevisar: true });
@@ -84,7 +84,7 @@ console.log("OK: historico do CRM sem duplicar, revisao so de clientes potenciai
   ];
   db.tables.crm_mensagens = [m("1", "c1", "outbound", hoje, "09:00"), m("2", "c1", "inbound", hoje, "09:05"), m("3", "c5", "outbound", hoje, "09:00"), m("4", "c5", "inbound", hoje, "09:02")];
 
-  await importarHistoricoCrm(db);
+  await importarHistoricoCrm(db, { agora: Date.parse(em(hoje, "23:59")) }); // fim do dia: o teste passa a qualquer hora
   assert.ok(db.tables.mensagens.every(x => x.wa_id.startsWith("crm:")), "nada do WhatsApp nas conversas");
   assert.equal(db.tables.mensagens.length, 4, "CRM inteiro, mesmo depois da captura do WhatsApp");
   assert.ok(!db.tables.conversas.find(c => c.id === "lid1"), "conversa do codigo ficou vazia e saiu");

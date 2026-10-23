@@ -8,7 +8,7 @@ import "./edge-shim.js";
 import { cfg } from "./config.js";
 import { supa as db } from "./supa.js";
 import { syncUazapi, receberWebhook, segredoOk } from "./uazapi.js";
-import { transcribePending } from "./transcribe.js";
+import { transcribePending, transcreverCrm } from "./transcribe.js";
 import { runAudits } from "./auditor.js";
 import { cicloDeAuditoria } from "./ciclo.js";
 import { processAnalyses } from "./analysis.js";
@@ -37,6 +37,7 @@ const TAREFAS = {
     await passo("conexoes", async () => { await syncUazapi(db); return "ok"; });
     await db.insert("worker_status", [{ id: 1, visto_em: new Date().toISOString(), conexoes: (await db.select("instancias_whatsapp", { select: "id", filters: { status: "eq.conectado" } })).length }], { onConflict: "id", returning: false }).catch(() => {});
     await passo("transcricao", () => transcribePending(db));
+    await passo("transcricao_crm", () => transcreverCrm(db, { ate: ate - 30_000 }));
     await passo("fila_rapida", () => runAudits(db, { soSinais: true, ate }));
     await passo("agenda", () => cancelarEventos(db));
     await passo("analise", () => processAnalyses(db));

@@ -7,6 +7,8 @@ export const cfg = {
   anthropicKey: env.ANTHROPIC_API_KEY || "",
   model: env.AUDIT_MODEL || "claude-sonnet-5-5",
   transcribeKey: env.TRANSCRIBE_API_KEY || "",
+  // CRM Q5 (mesma chave do crm-sync): resumos e alertas saem pelo CRM, sem precisar do WhatsApp conectado aqui
+  q5Key: env.Q5_API_KEY || "",
   transcribeUrl: env.TRANSCRIBE_URL || "https://api.openai.com/v1/audio/transcriptions",
   transcribeModel: env.TRANSCRIBE_MODEL || "whisper-1",
   // OpenAI para auditar quando nao ha chave da Anthropic: OPENAI_API_KEY, ou a mesma chave da transcricao se ela for da OpenAI
