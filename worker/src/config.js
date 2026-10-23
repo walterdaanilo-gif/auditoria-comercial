@@ -33,7 +33,8 @@ export const cfg = {
   // alternativa ao arquivo (servidor so com variaveis): o JSON inteiro da conta de servico
   saJson: env.GOOGLE_SERVICE_ACCOUNT_JSON || "",
   // Agenda Google (login do gestor): o mesmo cliente OAuth configurado na Vercel
-  googleClientId: env.GOOGLE_CLIENT_ID || "",
+  // ID_DO_CLIENTE_DO_GOOGLE: o mesmo secret salvo com o nome traduzido pelo navegador
+  googleClientId: env.GOOGLE_CLIENT_ID || env.ID_DO_CLIENTE_DO_GOOGLE || "",
   googleClientSecret: env.GOOGLE_CLIENT_SECRET || "",
   sheetTab: env.SHEET_TAB || "SDR",
   auditTab: env.AUDIT_TAB || "Auditoria",
