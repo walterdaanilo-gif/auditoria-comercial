@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 delete process.env.ANTHROPIC_API_KEY; process.env.TRANSCRIBE_API_KEY = "sk-teste";
 const { fakeSupa } = await import("./fakeSupa.js");
-const { runAudits, notaFinal, chaveTelefone, montarPrompt, carregarRegras, rubricaDe } = await import("../src/auditor.js");
+const { runAudits, notaFinal, chaveTelefone, montarPrompt, carregarRegras, rubricaDe, interpretar } = await import("../src/auditor.js");
 const { provedor } = await import("../src/ia.js");
 const { today } = await import("../src/config.js");
 assert.equal(provedor(), "openai", "sem Anthropic, usa a chave da OpenAI da transcricao");
@@ -88,3 +88,9 @@ console.log("OK: auditoria com OpenAI seguindo Configuracoes (rubrica por funcao
   assert.equal(c.venda_cupom, false); assert.equal(c.venda_convite_origem, null); assert.equal(c.venda_valor, 197);
   console.log("OK: membro Carbone conta como convite (R$ 0), separado do cupom");
 }
+
+// criterio que nao se aplica (nota 0 ou sem nota) sai da conta: nao derruba a auditoria nem puxa a nota para baixo
+const so2 = interpretar({ notas: [{ criterio: "abordagem", nota: 4 }, { criterio: "conducao", nota: 0 }, { criterio: "x", nota: null }] }, { funcao: "sdr", rubrica: "sdr", criterios: [{ chave: "abordagem", nome: "A", peso: 40 }, { chave: "conducao", nome: "C", peso: 60 }] });
+assert.equal(so2.nota_geral, 7.5); assert.deepEqual(so2.notas_1a5.map(n => n.chave), ["abordagem"]);
+console.log("OK: criterio que nao se aplica fica fora da nota");
+

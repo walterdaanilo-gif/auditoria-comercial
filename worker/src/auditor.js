@@ -86,7 +86,7 @@ O SDR convida leads indicados para o workshop (inscrição; existe cupom de conv
 ${papel}
 
 ## Perfil de auditoria: venda consultiva (pilares do G4 Educação)
-Audite como um gestor comercial exigente de uma máquina de vendas previsível:
+Audite como um gestor comercial crítico e justo de uma máquina de vendas previsível: crítico nos apontamentos (específico, sem elogio vazio) e flexível na nota (cada conversa é avaliada pelo objetivo daquele momento, não pelo roteiro completo).
 - Pré-vendas e fechamento têm papéis diferentes: o SDR qualifica e gera o compromisso (inscrição ou reunião); o Closer diagnostica, negocia e fecha. Cobre cada um pelo seu papel.
 - Qualificação antes do convite: dor real, momento, quem decide e timing. Convite sem entender o lead é falha, mesmo que o lead aceite.
 - Valor antes de preço: o vendedor liga a dor do lead ao ganho concreto e usa prova social (indicação, resultados de quem participou).
@@ -95,6 +95,7 @@ Audite como um gestor comercial exigente de uma máquina de vendas previsível:
 - WhatsApp: resposta rápida (dentro do SLA), mensagens curtas, uma pergunta por vez, áudio curto só quando ajuda, nada de textão genérico copiado.
 - Follow-up com cadência e motivo novo; "e aí, conseguiu ver?" sem valor é follow-up fraco.
 - Seja direto e específico nos pontos de melhoria: diga o que o vendedor deveria ter escrito ou perguntado, com um exemplo de frase.
+- Momento da conversa: nem toda conversa é uma venda do zero. Confirmação de horário, remarcação, envio de link ou localização, dúvida pontual, pós-evento e follow-up são avaliados pelo que se propunham. Não cobre diagnóstico, proposta ou tratamento de objeção onde isso não cabia naquele momento (ou já foi feito antes, no histórico).
 
 ## O que o gestor definiu como venda
 Conta como venda:
@@ -116,7 +117,8 @@ ${lista(s.regras_criticas)}
 SLA de primeira resposta: ${s.sla_min} min. Primeira resposta medida nesta conversa: ${fmtSeg(primeiraResposta)}. Use isso no critério de agilidade, se existir.
 ${R.roteiro ? `\n## Roteiro de referência da Weevo\n${R.roteiro}\n` : ""}
 ## Rubrica
-Dê nota de 1 a 5 em cada critério (1 = não fez, 3 = fez em parte, 5 = fez muito bem) com uma justificativa curta:
+Dê nota de 1 a 5 SÓ nos critérios que se aplicam ao momento desta conversa, com uma justificativa curta. Critério que não cabia (ex.: diagnóstico numa conversa só de confirmar horário; objeções quando o lead não levantou nenhuma; follow-up quando a conversa estava fluindo) fica FORA da lista "notas", e não entra na conta. Avalie sempre pelo menos um critério (condução/fechamento ou agilidade).
+Escala: 1 = errou e prejudicou a venda; 2 = fraco, deixou passar algo que cabia; 3 = fez o esperado para o momento; 4 = bem feito; 5 = excelente, referência para o time. Conversa que cumpriu o objetivo do momento (marcou, confirmou, remarcou sem perder o lead, tirou a dúvida e avançou) não fica abaixo de 3 nos critérios avaliados, a não ser que haja um erro claro, que deve ser citado na justificativa.
 ${criterios.map(c => `- ${c.chave}: ${c.nome}. ${c.descricao || ""}`.trim()).join("\n")}
 
 ## Regras
@@ -128,7 +130,7 @@ ${criterios.map(c => `- ${c.chave}: ${c.nome}. ${c.descricao || ""}`.trim()).joi
 - Reunião: preencha "reuniao" quando uma reunião (de implementação ou de imersão) teve data e hora combinadas. "remarcacao" = true quando é uma reunião que JÁ estava marcada antes (no histórico ou no começo da conversa) e só está mudando de dia ou horário ("vamos remarcar", "não vou conseguir, pode ser quinta?"); remarcação NÃO é marcação nova: nesse caso "agendou" false para a reunião. Leia a conversa como um todo para saber se a reunião ficou MARCADA (acordo dos dois lados sobre dia e hora), sem exigir palavras exatas. "cliente_confirmou" = o lead topou aquele dia e hora (aceitou a proposta do vendedor, ou foi ele quem propôs e seguiu na conversa). "vendedor_confirmou" = o vendedor fechou do lado dele: aceitou a proposta do lead ("perfeito", "show, te espero"), recebeu o aceite da proposta que ele fez ("pode ser", "fechado", "combinado", "beleza"), já está acertando os detalhes da reunião (online ou presencial, link, endereço) ou mandou o convite/link. Marque false quando a conversa termina com pergunta ainda sem resposta sobre o horário ("posso confirmar?" e o lead não respondeu nada que indique sim), quando ainda estão escolhendo entre opções de horário, ou quando o lead ficou de ver/retornar. Hoje é ${hojeExtenso()}; cada mensagem traz [dia/mês hora], use isso para transformar "amanhã", "quinta às 19h" em data AAAA-MM-DD e hora HH:MM. "modalidade": "online" (videochamada, Meet, Zoom) ou "presencial"; "local" só o endereço ou lugar quando presencial. "cliente_nome", "empresa" e "email" só se aparecerem na conversa ou no nome do contato. Se não houver reunião com horário, "reuniao": null.
 
 Responda APENAS com um JSON neste formato:
-{"notas": [${criterios.map(c => `{"criterio": "${c.chave}", "nota": 1 a 5, "justificativa": "curta"}`).join(", ")}],
+{"notas": [só os critérios que se aplicam, cada um assim: {"criterio": "${criterios.map(c => c.chave).join("\"|\"")}", "nota": 1 a 5, "justificativa": "curta"}],
 "qualidade": "boa"|"regular"|"ruim", "etapa": "abertura"|"descoberta"|"proposta"|"objecao"|"agendamento"|"perdido"|"sem_resposta", "efetiva": true|false,
 "agendou": true|false, "tipo_agendamento": "workshop"|"imersao"|null,
 "venda": {"detectada": true|false, "tipo": "workshop"|"imersao"|null, "valor": número em reais ou null, "cupom": true só para convite (cupom 100% ou membro Carbone, R$ 0)|false, "origem_convite": "cupom"|"carbone"|null, "evidencia": "trecho ou explicação curta"},
@@ -147,7 +149,8 @@ const bool = z.preprocess(v => v === true || v === "true", z.boolean());
 const txt = z.preprocess(v => (v == null ? "" : String(v)), z.string());
 const opc = vals => z.preprocess(v => (vals.includes(v) ? v : null), z.enum(vals).nullable());
 const Resposta = z.object({
-  notas: z.array(z.object({ criterio: z.string(), nota: z.coerce.number().min(1).max(5), justificativa: txt.default("") })).min(1),
+  // nota 0 ou vazia = a IA marcou o criterio como "nao se aplica": sai da conta em vez de derrubar a auditoria
+  notas: z.preprocess(v => (Array.isArray(v) ? v.filter(n => Number(n?.nota) >= 1) : v), z.array(z.object({ criterio: z.string(), nota: z.coerce.number().min(1).max(5), justificativa: txt.default("") })).min(1)),
   qualidade: opc(["boa", "regular", "ruim"]).default(null),
   etapa: txt.default(""),
   efetiva: bool.default(false),
