@@ -122,3 +122,36 @@ assert.ok(temSinal("fica R$ 197"));
 }
 // remarcacao nao gera aviso de reuniao marcada
 assert.equal(eventosDe({ oportunidade: true, oportunidade_tipo: "reuniao_imersao", remarcacao: true, reuniao: { cliente_confirmou: true, vendedor_confirmou: true, remarcacao: true } }, "sdr").length, 0);
+
+// toda reuniao de implementacao vai para o WhatsApp do gestor (numero de envio), mesmo com marcacao desligada; Rai nao recebe
+{
+  const { avisarEventos } = await import("../src/alertas.js");
+  const { today } = await import("../src/config.js");
+  const db = fakeSupa();
+  db.tables.instancias_whatsapp = [{ id: "inst-w", numero: "5584936180882" }];
+  db.tables.auditorias = [{ conversa_id: "cv1" }];
+  const R = { funcao: new Map([["nick", "sdr"]]), nomes: new Map([["nick", "Nick"]]), alertas: { venda: true, marcacao: false, oportunidade: false, formato: "resumido", instancia: "inst-w", telefones: ["5584996988444"] } };
+  const c = { id: "cv1", vendedor_id: "nick", contato_nome: "Ana", contato: "5584911112222", data: today(), canal: "crm" };
+  const a = { oportunidade: true, oportunidade_tipo: "reuniao_implementacao", reuniao: { tipo: "implementacao", cliente_confirmou: true, vendedor_confirmou: true, data: "2026-10-29", hora: "15:00", modalidade: "online", empresa: "Loja X" } };
+  const enviados = [];
+  const envio = async (_db, inst, num, texto) => enviados.push({ inst, num, texto });
+  await avisarEventos(db, R, c, a, [], { envio });
+  assert.equal(enviados.length, 1);
+  assert.equal(enviados[0].num, "5584936180882");
+  assert.match(enviados[0].texto, /Reunião de implementação marcada\* · Nick \(SDR\)/);
+  assert.match(enviados[0].texto, /Ana · Loja X/);
+  assert.match(enviados[0].texto, /qui 29\/10 às 15:00 · online/);
+  // mesma conversa de novo: nao repete
+  await avisarEventos(db, R, c, a, db.tables.auditorias[0].alertas_enviados, { envio });
+  assert.equal(enviados.length, 1);
+  // remarcou: avisa o horario novo
+  const rem = { ...a, remarcacao: true, reuniao: { ...a.reuniao, remarcacao: true, data: "2026-10-30" } };
+  await avisarEventos(db, R, c, rem, db.tables.auditorias[0].alertas_enviados, { envio });
+  assert.equal(enviados.length, 2);
+  assert.match(enviados[1].texto, /remarcada.*\n.*\nQuando: sex 30\/10/);
+  // envio falhou: tenta de novo na proxima auditoria
+  const db2 = fakeSupa(); db2.tables.instancias_whatsapp = db.tables.instancias_whatsapp; db2.tables.auditorias = [{ conversa_id: "cv1" }];
+  await avisarEventos(db2, R, c, a, [], { envio: async () => { throw new Error("fora"); } });
+  assert.ok(!(db2.tables.auditorias[0].alertas_enviados || []).includes("reuniao_implementacao"));
+  console.log("OK: reuniao de implementacao (marcada e remarcada) avisada ao gestor");
+}
