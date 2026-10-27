@@ -72,7 +72,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
     gestor ? supabase.from("analises_time").select("*").eq("status", "pronta").order("criado_em", { ascending: false }).limit(1) : Promise.resolve({ data: [] as any[] }),
     gestor ? supabase.from("analises_time").select("id").eq("status", "pendente").limit(1) : Promise.resolve({ data: [] as any[] }),
     gestor ? supabase.from("analises_time").select("status,erro").order("criado_em", { ascending: false }).limit(1) : Promise.resolve({ data: [] as any[] }),
-    supabase.from("audit_settings").select("meta_sdr_conversas,meta_sdr_marcacoes").eq("id", 1).maybeSingle(),
+    supabase.from("audit_settings").select("meta_sdr_conversas,meta_sdr_marcacoes").maybeSingle() // a RLS devolve so a linha da empresa aberta,
   ]);
 
   // SDRs = perfis com papel vendedor. A cor segue a pessoa (ordem por nome na lista completa), nunca o filtro.

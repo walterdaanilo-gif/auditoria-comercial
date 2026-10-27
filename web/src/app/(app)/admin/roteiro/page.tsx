@@ -8,7 +8,9 @@ async function salvar(fd: FormData) {
   await exigirAdmin();
   const roteiro = String(fd.get("roteiro") || "").trim();
   if (roteiro.length < 20) redirect("/admin/roteiro?erro=O roteiro está muito curto");
-  const { error } = await (await createClient()).from("config_auditoria").update({ roteiro, atualizado_em: new Date().toISOString() }).eq("id", 1); // RLS: so admin
+  const db = await createClient();
+  const { data: org } = await db.rpc("org_atual");
+  const { error } = await db.from("config_auditoria").update({ roteiro, atualizado_em: new Date().toISOString() }).eq("org_id", org); // RLS: so admin, so a empresa aberta
   if (error) redirect("/admin/roteiro?erro=" + encodeURIComponent(error.message));
   revalidatePath("/admin/roteiro");
   redirect("/admin/roteiro?ok=1");
@@ -17,7 +19,7 @@ async function salvar(fd: FormData) {
 export default async function Roteiro({ searchParams: searchParamsP }: { searchParams: Promise<{ erro?: string; ok?: string }> }) {
   const searchParams = await searchParamsP;
   await exigirAdmin();
-  const { data } = await (await createClient()).from("config_auditoria").select("roteiro").eq("id", 1).single();
+  const { data } = await (await createClient()).from("config_auditoria").select("roteiro").maybeSingle(); // RLS: so a empresa aberta
   return (
     <div className="max-w-3xl space-y-4">
       <div><h1 className="page-title">Roteiro da auditoria</h1>

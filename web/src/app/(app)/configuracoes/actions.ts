@@ -21,8 +21,11 @@ export async function salvarConfiguracoes(bruto: Estado): Promise<ResultadoSalva
   const admin = createAdminClient();
   const falha = (msg: string, err: { message: string } | null) => (err ? { ok: false, erros: [`${msg}: ${err.message}`] } : null);
 
+  // empresa aberta agora (Weevo ou Carbone): cada uma tem a propria configuracao
+  const { data: org } = await db.rpc("org_atual");
+  if (!org) return { ok: false, erros: ["Não foi possível identificar a empresa aberta."] };
   const settings = Object.fromEntries(CAMPOS.map((k) => [k, e.settings[k]]));
-  let f = falha("Configurações", (await db.from("audit_settings").update({ ...settings, atualizado_em: new Date().toISOString() }).eq("id", 1)).error);
+  let f = falha("Configurações", (await db.from("audit_settings").update({ ...settings, atualizado_em: new Date().toISOString() }).eq("org_id", org)).error);
   if (f) return f;
 
   // Rubricas: a funcao do banco recusa se os pesos ativos nao somarem 100
@@ -36,7 +39,7 @@ export async function salvarConfiguracoes(bruto: Estado): Promise<ResultadoSalva
   for (const [tabela, lista] of [["numeros_ignorados", e.ignorados], ["telefones_alerta", e.alertas]] as const) {
     const del = lista.length ? db.from(tabela).delete().not("telefone", "in", `(${lista.join(",")})`) : db.from(tabela).delete().neq("telefone", "");
     f = falha(tabela === "numeros_ignorados" ? "Números ignorados" : "Telefones de alerta", (await del).error);
-    if (!f && lista.length) f = falha(tabela, (await db.from(tabela).upsert(lista.map((telefone) => ({ telefone })), { onConflict: "telefone", ignoreDuplicates: true })).error);
+    if (!f && lista.length) f = falha(tabela, (await db.from(tabela).upsert(lista.map((telefone) => ({ org_id: org, telefone })), { onConflict: "org_id,telefone", ignoreDuplicates: true })).error);
     if (f) return f;
   }
 
@@ -53,7 +56,8 @@ export async function salvarConfiguracoes(bruto: Estado): Promise<ResultadoSalva
 // Desliga a Agenda Google: apaga o token guardado (o gestor pode reconectar quando quiser)
 export async function desconectarAgenda(): Promise<void> {
   await exigirGestor();
-  await createAdminClient().from("google_agenda").upsert({ id: 1, email: null, refresh_token: null, conectado_em: null, erro: null });
+  const { data: org } = await (await createClient()).rpc("org_atual");
+  if (org) await createAdminClient().from("google_agenda").update({ email: null, refresh_token: null, conectado_em: null, erro: null }).eq("org_id", org);
   revalidatePath("/configuracoes");
 }
 

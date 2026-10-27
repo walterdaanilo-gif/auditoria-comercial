@@ -12,7 +12,7 @@ export default async function Configuracoes({ searchParams: spP }: { searchParam
   await exigirGestor();
   const db = await createClient();
   const [rCfg, rCrit, rIgn, rAl, rPerf, rInst, rAg] = await Promise.all([
-    db.from("audit_settings").select("*").eq("id", 1).single(),
+    db.from("audit_settings").select("*").maybeSingle(), // a RLS devolve so a linha da empresa aberta
     db.from("criterios_rubrica").select("rubrica,chave,nome,descricao,peso,ativo,posicao").order("posicao"),
     db.from("numeros_ignorados").select("telefone").order("criado_em"),
     db.from("telefones_alerta").select("telefone").order("criado_em"),
@@ -24,7 +24,7 @@ export default async function Configuracoes({ searchParams: spP }: { searchParam
 
   const crit = (rCrit.data ?? []) as (Criterio & { rubrica: string })[];
   const da = (r: string) => crit.filter((c) => c.rubrica === r).map(({ chave, nome, descricao, peso, ativo }) => ({ chave, nome, descricao, peso, ativo }));
-  const { id: _id, atualizado_em: _a, resumo_ultimo_envio: _r, rodada_final_ultima: _u, ...settings } = rCfg.data as Settings & { id: number; atualizado_em: string; resumo_ultimo_envio: string | null; rodada_final_ultima: string | null };
+  const { id: _id, org_id: _o, atualizado_em: _a, resumo_ultimo_envio: _r, rodada_final_ultima: _u, ...settings } = rCfg.data as Settings & { id: number; org_id: string; atualizado_em: string; resumo_ultimo_envio: string | null; rodada_final_ultima: string | null };
   const inicial: Estado = {
     settings: settings as Settings,
     // vendedor = quem tem conexao de WhatsApp (o cadastro e feito na aba WhatsApp)

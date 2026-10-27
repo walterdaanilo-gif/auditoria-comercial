@@ -21,6 +21,14 @@ export async function GET(req: NextRequest) {
   if (!r.ok || !j.refresh_token) return volta(j.refresh_token ? "erro" : "sem-token");
   let email: string | null = null;
   try { email = JSON.parse(Buffer.from(String(j.id_token).split(".")[1], "base64url").toString()).email ?? null; } catch {}
-  const { error } = await createAdminClient().from("google_agenda").upsert({ id: 1, email, refresh_token: j.refresh_token, conectado_em: new Date().toISOString(), erro: null });
+  // uma agenda por empresa: grava na linha da empresa aberta (cria a linha na primeira conexao dela)
+  const admin = createAdminClient();
+  const org = perfil.org_ativa && (perfil.super_admin || perfil.orgs_acesso?.includes(perfil.org_ativa)) ? perfil.org_ativa : perfil.org_id;
+  const dados = { email, refresh_token: j.refresh_token, conectado_em: new Date().toISOString(), erro: null };
+  const { data: linha } = await admin.from("google_agenda").select("id").eq("org_id", org).maybeSingle();
+  const { data: maior } = await admin.from("google_agenda").select("id").order("id", { ascending: false }).limit(1).maybeSingle();
+  const { error } = linha
+    ? await admin.from("google_agenda").update(dados).eq("org_id", org)
+    : await admin.from("google_agenda").insert({ id: Number(maior?.id ?? 0) + 1, org_id: org, ...dados });
   return volta(error ? "erro" : "ok");
 }

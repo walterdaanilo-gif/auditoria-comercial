@@ -20,7 +20,7 @@ export default function LoginForm() {
       setErro(error.status === 400 ? "E-mail ou senha incorretos." : "Não foi possível conectar ao servidor. Avise o administrador.");
       setCarregando(false); return;
     }
-    router.replace("/");
+    router.replace("/empresa");
     router.refresh();
   }
 

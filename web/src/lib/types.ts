@@ -1,6 +1,12 @@
 export type Papel = "admin" | "gestor" | "vendedor";
 
-export interface Perfil { id: string; nome: string; email: string; papel: Papel; ativo: boolean; criado_em: string; foto_url?: string | null }
+export interface Perfil {
+  id: string; nome: string; email: string; papel: Papel; ativo: boolean; criado_em: string; foto_url?: string | null;
+  funcao?: "sdr" | "closer"; fonte_conversas?: "whatsapp" | "crm";
+  // empresa principal, empresas que pode abrir e a que esta aberta agora (Weevo, Carbone...)
+  org_id: string; orgs_acesso: string[]; org_ativa: string | null; super_admin: boolean;
+}
+export interface Organizacao { id: string; slug: string; nome: string }
 export interface Instancia { id: string; vendedor_id: string; nome: string; numero: string | null; status: string; qr: string | null; comando: string | null; atualizado_em: string }
 export interface Conversa { id: string; vendedor_id: string; contato: string; contato_nome: string | null; canal: string; data: string; ultima_msg_em: string }
 export interface Mensagem { id: string; remetente: "vendedor" | "cliente"; texto: string | null; tipo: string; transcricao: string | null; enviada_em: string }
