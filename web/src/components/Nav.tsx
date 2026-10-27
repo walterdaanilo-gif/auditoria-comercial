@@ -1,20 +1,21 @@
 import Link from "next/link";
 import { Building2 } from "lucide-react";
 import type { Perfil } from "@/lib/types";
+import Marca from "./Marca";
 import Sino from "./Sino";
 
 const PAPEL: Record<string, string> = { admin: "Admin", gestor: "Gestor", vendedor: "Vendedor" };
 const iniciais = (nome: string) => nome.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
 
 // Barra de cima no estilo Weevo: logo a esquerda; sino de notificacoes, Sair e usuario a direita
-export default function Nav({ perfil, empresa, podeTrocar }: { perfil: Perfil; empresa: string | null; podeTrocar: boolean }) {
+export default function Nav({ perfil, empresa, podeTrocar }: { perfil: Perfil; empresa: { slug: string; nome: string } | null; podeTrocar: boolean }) {
   return (
     <header className="flex h-[76px] items-center border-b border-line/70 bg-[#0f1b1b]/80 px-4 backdrop-blur md:px-8">
-      <img src="/weevo-logo.png" alt="Weevo" className="h-6 w-auto md:h-7" />
+      <Marca empresa={empresa} />
       {/* retaguarda aberta agora; quem tem acesso a mais de uma empresa troca por aqui */}
       {empresa && (podeTrocar
-        ? <Link href="/empresa" title="Trocar retaguarda" className="ml-4 flex items-center gap-1.5 rounded-xl border border-side-edge/60 px-3 py-1.5 text-sm font-semibold text-ink hover:border-brand hover:text-brand"><Building2 size={15} />{empresa}<span className="hidden text-xs font-normal text-mute md:inline">· trocar</span></Link>
-        : <span className="ml-4 hidden text-sm font-semibold text-mute md:inline">{empresa}</span>)}
+        ? <Link href="/empresa" title="Trocar retaguarda" className="ml-4 flex items-center gap-1.5 rounded-xl border border-side-edge/60 px-3 py-1.5 text-sm font-semibold text-ink hover:border-brand hover:text-brand"><Building2 size={15} />{empresa.nome}<span className="hidden text-xs font-normal text-mute md:inline">· trocar</span></Link>
+        : <span className="ml-4 hidden text-sm font-semibold text-mute md:inline">{empresa.nome}</span>)}
       <div className="ml-auto flex items-center gap-4 md:gap-5">
         <Sino usuarioId={perfil.id} />
         <form action="/logout" method="post"><button className="text-[15px] font-semibold text-ink hover:text-brand">Sair</button></form>

@@ -1,4 +1,4 @@
-import { exigirGestor } from "@/lib/auth";
+import { empresas, exigirGestor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Criterio, Estado, Numero, Settings, Vendedor } from "@/lib/configuracoes";
 import FormConfig, { type StatusAgenda } from "./FormConfig";
@@ -9,7 +9,7 @@ export const metadata = { title: "Configurações · Cabueta do Elon Musk" };
 // Configuracoes do Auditor: so gestor e admin entram (a RLS das tabelas tambem exige gestor)
 export default async function Configuracoes({ searchParams: spP }: { searchParams: Promise<{ agenda?: string }> }) {
   const sp = await spP;
-  await exigirGestor();
+  const { atual } = await empresas(await exigirGestor());
   const db = await createClient();
   const [rCfg, rCrit, rIgn, rAl, rPerf, rInst, rAg] = await Promise.all([
     db.from("audit_settings").select("*").maybeSingle(), // a RLS devolve so a linha da empresa aberta
@@ -34,5 +34,5 @@ export default async function Configuracoes({ searchParams: spP }: { searchParam
     alertas: (rAl.data ?? []).map((x) => x.telefone as string),
     rubricas: { sdr: da("sdr"), closer: da("closer"), personalizada: da("personalizada") },
   };
-  return <FormConfig inicial={inicial} agenda={((rAg.data ?? []) as StatusAgenda[])[0] ?? null} retornoAgenda={sp.agenda} />;
+  return <FormConfig empresa={atual?.nome ?? "Weevo"} inicial={inicial} agenda={((rAg.data ?? []) as StatusAgenda[])[0] ?? null} retornoAgenda={sp.agenda} />;
 }

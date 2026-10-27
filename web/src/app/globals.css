@@ -2,8 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-/* fundo com o brilho verde-agua no canto, como no app da Weevo */
-body { @apply bg-bg font-sans text-ink antialiased; background-image: radial-gradient(1200px 600px at 0% 0%, rgba(28, 71, 70, 0.45), transparent 60%); background-attachment: fixed; }
+/* cores de cada empresa (canais RGB): Weevo e o padrao; data-org="carbone" no corpo troca para a Carbone */
+:root {
+  --brand: 109 207 192; --glow: 28 71 70;
+  --side-top: 28 71 70; --side-mid: 12 53 55; --side-bottom: 9 40 44; --side-item: 19 58 59; --side-active: 7 53 55; --side-edge: 47 81 81; --side-text: 183 231 231;
+}
+[data-org="carbone"] {
+  --brand: 242 165 65; --glow: 74 52 28;
+  --side-top: 58 42 26; --side-mid: 42 31 21; --side-bottom: 28 21 14; --side-item: 58 44 30; --side-active: 46 34 22; --side-edge: 92 70 48; --side-text: 243 220 192;
+}
+
+/* fundo com o brilho no canto, como no app da Weevo (na cor da empresa aberta) */
+body { @apply bg-bg font-sans text-ink antialiased; background-image: radial-gradient(1200px 600px at 0% 0%, rgb(var(--glow) / 0.45), transparent 60%); background-attachment: fixed; }
+/* area logada: o brilho de fundo segue a empresa aberta (as variaveis vem do data-org do proprio bloco) */
+.fundo-org { background-image: radial-gradient(1200px 600px at 0% 0%, rgb(var(--glow) / 0.45), transparent 60%); background-attachment: fixed; }
 .card { @apply rounded-3xl border border-line bg-card p-5; }
 .label { @apply text-[11px] font-semibold uppercase tracking-wider text-mute; }
 .input { @apply w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm outline-none transition focus:border-brand; }

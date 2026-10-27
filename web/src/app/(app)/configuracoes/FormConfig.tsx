@@ -232,7 +232,7 @@ function Card({ id, titulo, resumo, ok, recomendado, aberto, alternar, children 
 }
 
 // ---------- tela ----------
-export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial: Estado; agenda: StatusAgenda | null; retornoAgenda?: string }) {
+export default function FormConfig({ inicial, agenda, retornoAgenda, empresa = "Weevo" }: { inicial: Estado; agenda: StatusAgenda | null; retornoAgenda?: string; empresa?: string }) {
   const [base, setBase] = useState(inicial);
   const [e, setE] = useState(inicial);
   const [abertos, setAbertos] = useState<string[]>([]);
@@ -368,11 +368,11 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
         <Opcoes valor={s.escopo_conversas} onChange={(v) => set({ escopo_conversas: v })} opcoes={[["individual", "Apenas individuais", "Conversas 1 a 1"], ["todas", "Individuais + grupos", "Audita tudo"], ["grupo", "Apenas grupos"]]} />
         {s.escopo_conversas !== "individual" && <p className="mt-2 text-xs text-warn">Hoje as mensagens de grupo não são gravadas. A opção já fica salva e passa a valer quando a captura de grupos for ligada.</p>}
         <div className="mt-4 divide-y divide-line">
-          <Linha titulo="Mínimo de mensagens" sub={s.min_mensagens === null ? `Padrão do app: ${PADRAO_MIN_MSGS} mensagens` : "Valor próprio da Weevo"}>
+          <Linha titulo="Mínimo de mensagens" sub={s.min_mensagens === null ? `Padrão do app: ${PADRAO_MIN_MSGS} mensagens` : `Valor próprio da ${empresa}`}>
             <span className="flex items-center gap-3">{s.min_mensagens !== null && <Numero valor={s.min_mensagens} onChange={(v) => set({ min_mensagens: v ?? 1 })} min={1} max={200} sufixo="msgs" />}
               <label className="flex items-center gap-2 text-sm text-mute">Padrão <Toggle on={s.min_mensagens === null} onChange={(v) => set({ min_mensagens: v ? null : PADRAO_MIN_MSGS })} rotulo="Usar padrão de mensagens" /></label></span>
           </Linha>
-          <Linha titulo="Amostragem" sub={s.amostragem_pct === null ? `Padrão do app: ${PADRAO_AMOSTRA}% das conversas` : "Valor próprio da Weevo"}>
+          <Linha titulo="Amostragem" sub={s.amostragem_pct === null ? `Padrão do app: ${PADRAO_AMOSTRA}% das conversas` : `Valor próprio da ${empresa}`}>
             <span className="flex items-center gap-3">{s.amostragem_pct !== null && <Numero valor={s.amostragem_pct} onChange={(v) => set({ amostragem_pct: v ?? 1 })} min={1} max={100} sufixo="%" />}
               <label className="flex items-center gap-2 text-sm text-mute">Padrão <Toggle on={s.amostragem_pct === null} onChange={(v) => set({ amostragem_pct: v ? null : PADRAO_AMOSTRA })} rotulo="Usar padrão de amostragem" /></label></span>
           </Linha>
@@ -441,7 +441,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
 
       <Card {...cardProps("critico")} titulo="Alerta crítico e SLA" recomendado
         resumo={`${linhas(s.regras_criticas)} regra${linhas(s.regras_criticas) === 1 ? "" : "s"} crítica${linhas(s.regras_criticas) === 1 ? "" : "s"} · 1ª resposta em até ${slaHoras ? `${s.sla_primeira_resposta_min / 60} h` : `${s.sla_primeira_resposta_min} min`}`}>
-        <div className="label mb-2">O que é crítico na Weevo (uma situação por linha)</div>
+        <div className="label mb-2">O que é crítico na {empresa} (uma situação por linha)</div>
         <Regras linhas={s.regras_criticas} onChange={(l) => set({ regras_criticas: l })} sugestoes={SUGESTOES.critico} placeholder="Ex.: Lead ameaçou reclamar no Procon" />
         <p className="mt-2 text-xs text-mute">Essas regras somam com a régua padrão do Cabueta (lead furioso prestes a desistir, conduta grave, risco jurídico), nunca substituem.</p>
         <div className="mt-5 border-t border-line pt-4">
@@ -466,22 +466,22 @@ export default function FormConfig({ inicial, agenda, retornoAgenda }: { inicial
       </Card>
 
       <Card {...cardProps("horario")} titulo="Horário de funcionamento"
-        resumo={s.horario_modo === "desligado" ? "Desligado: conta 24h corridas" : s.horario_modo === "empresa" ? `Weevo: ${s.horario_empresa.dias.map((d) => DIAS_SEMANA[d]).join(", ")} · ${s.horario_empresa.inicio} às ${s.horario_empresa.fim}` : "Cada número com o seu horário"}>
+        resumo={s.horario_modo === "desligado" ? "Desligado: conta 24h corridas" : s.horario_modo === "empresa" ? `${empresa}: ${s.horario_empresa.dias.map((d) => DIAS_SEMANA[d]).join(", ")} · ${s.horario_empresa.inicio} às ${s.horario_empresa.fim}` : "Cada número com o seu horário"}>
         <p className="mb-3 text-sm text-mute">Com horário ligado, o tempo de resposta e o SLA só contam dentro do expediente. Mensagem de madrugada ou fim de semana não pesa contra o vendedor.</p>
-        <Opcoes valor={s.horario_modo} onChange={(v) => set({ horario_modo: v })} opcoes={[["desligado", "Desligado", "Mede 24h corridas"], ["empresa", "Da Weevo", "Um horário para todos"], ["numero", "Por número", "Cada vendedor o seu"]]} />
+        <Opcoes valor={s.horario_modo} onChange={(v) => set({ horario_modo: v })} opcoes={[["desligado", "Desligado", "Mede 24h corridas"], ["empresa", `Da ${empresa}`, "Um horário para todos"], ["numero", "Por número", "Cada vendedor o seu"]]} />
         {s.horario_modo === "empresa" && <div className="mt-4"><EditorHorario h={s.horario_empresa} onChange={(h) => set({ horario_empresa: h })} /></div>}
         {s.horario_modo === "numero" && (
           <div className="mt-4 space-y-3">
             {e.numeros.map((n) => (
               <div key={n.id} className="rounded-xl border border-line p-3">
-                <Linha titulo={n.nome} sub={n.horario ? "Horário próprio" : `Usa o da Weevo (${s.horario_empresa.inicio} às ${s.horario_empresa.fim})`}>
+                <Linha titulo={n.nome} sub={n.horario ? "Horário próprio" : `Usa o da ${empresa} (${s.horario_empresa.inicio} às ${s.horario_empresa.fim})`}>
                   <label className="flex items-center gap-2 text-sm text-mute">Próprio <Toggle on={!!n.horario} onChange={(v) => setEst({ numeros: e.numeros.map((x) => (x.id === n.id ? { ...x, horario: v ? { ...s.horario_empresa } : null } : x)) })} rotulo={`Horário próprio de ${n.nome}`} /></label>
                 </Linha>
                 {n.horario && <EditorHorario h={n.horario} onChange={(h) => setEst({ numeros: e.numeros.map((x) => (x.id === n.id ? { ...x, horario: h } : x)) })} />}
               </div>
             ))}
             {!e.numeros.length && <p className="text-sm text-mute">Nenhum WhatsApp criado ainda.</p>}
-            <div><div className="label mb-2">Horário da Weevo (para quem não tem próprio)</div><EditorHorario h={s.horario_empresa} onChange={(h) => set({ horario_empresa: h })} /></div>
+            <div><div className="label mb-2">Horário da {empresa} (para quem não tem próprio)</div><EditorHorario h={s.horario_empresa} onChange={(h) => set({ horario_empresa: h })} /></div>
           </div>
         )}
       </Card>
