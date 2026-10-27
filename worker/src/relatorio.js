@@ -102,7 +102,7 @@ export async function destinoResumo(db, s) {
   if (!s?.resumo_ativo) return { motivo: "resumo desligado" };
   if (!(s.resumo_dias || []).includes(new Date(today() + "T12:00:00Z").getUTCDay())) return { motivo: "hoje nao e dia de resumo" };
   if (!s.instancia_envio_id) return { motivo: "sem WhatsApp de envio" };
-  const tels = (await db.select("telefones_alerta", { select: "telefone" })).map(t => t.telefone);
+  const tels = (await db.select("telefones_alerta", { select: "telefone", filters: s.org_id ? { org_id: `eq.${s.org_id}` } : {} })).map(t => t.telefone);
   if (!tels.length) return { motivo: "sem telefones de alerta" };
   return { instancia: s.instancia_envio_id, tels };
 }

@@ -18,13 +18,15 @@ const RUBRICA_RESERVA = [ // so se o banco estiver sem rubrica
 ];
 
 export async function carregarRegras(db) {
-  const [[s = {}], crit, ign, perfis, [roteiroRow], tels] = await Promise.all([
-    db.select("audit_settings", { filters: { id: "eq.1" } }),
-    db.select("criterios_rubrica", { select: "rubrica,chave,nome,descricao,peso,ativo,posicao", filters: { ativo: "eq.true" }, order: "posicao" }),
-    db.select("numeros_ignorados", { select: "telefone" }),
+  // configuracao da Weevo (id 1); rubrica e listas de telefones so da mesma empresa (a Carbone tem as dela)
+  const [s = {}] = await db.select("audit_settings", { filters: { id: "eq.1" } });
+  const daOrg = s.org_id ? { org_id: `eq.${s.org_id}` } : {};
+  const [crit, ign, perfis, [roteiroRow], tels] = await Promise.all([
+    db.select("criterios_rubrica", { select: "rubrica,chave,nome,descricao,peso,ativo,posicao", filters: { ativo: "eq.true", ...daOrg }, order: "posicao" }),
+    db.select("numeros_ignorados", { select: "telefone", filters: daOrg }),
     db.select("profiles", { select: "id,nome,funcao" }),
     db.select("config_auditoria", { filters: { id: "eq.1" } }),
-    db.select("telefones_alerta", { select: "telefone" }),
+    db.select("telefones_alerta", { select: "telefone", filters: daOrg }),
   ]);
   const rub = r => crit.filter(c => c.rubrica === r && Number(c.peso) > 0);
   return {
