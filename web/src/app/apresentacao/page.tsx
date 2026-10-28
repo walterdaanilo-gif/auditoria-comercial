@@ -1,4 +1,4 @@
-import { exigirPerfil } from "@/lib/auth";
+import { empresas, exigirPerfil } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hojeBR } from "@/lib/format";
 import { lerPeriodo } from "@/lib/periodo";
@@ -9,7 +9,9 @@ export const metadata = { title: "Apresentação · Cabueta do Elon Musk" };
 
 export default async function Apresentacao({ searchParams: spP }: { searchParams: Promise<{ p?: string; de?: string; ate?: string }> }) {
   const sp = await spP;
-  await exigirPerfil();
+  // so a empresa aberta (Weevo ou Carbone): time, metas, numeros e vendas dela
+  const { atual } = await empresas(await exigirPerfil());
+  const org = atual?.id ?? "";
   const periodo = lerPeriodo(sp, "semana");
   const { de, ate } = periodo;
   const hoje = hojeBR();
@@ -20,9 +22,9 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
   const [rRes, rPerf, rInst, rCfg, rVen] = await Promise.all([
     supabase.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
     supabase.from("profiles").select("id,nome,papel,ativo,funcao,foto_url").order("nome"),
-    supabase.from("instancias_whatsapp").select("vendedor_id"),
-    supabase.from("audit_settings").select("meta_sdr_conversas,meta_sdr_marcacoes").eq("id", 1).maybeSingle(),
-    supabase.from("auditorias").select("vendedor_id,venda_tipo,venda_valor,venda_cupom,venda_convite_origem,conversas!inner(data,canal)").eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
+    supabase.from("instancias_whatsapp").select("vendedor_id").eq("org_id", org),
+    supabase.from("audit_settings").select("meta_sdr_conversas,meta_sdr_marcacoes").eq("org_id", org).maybeSingle(),
+    supabase.from("auditorias").select("vendedor_id,venda_tipo,venda_valor,venda_cupom,venda_convite_origem,conversas!inner(data,canal)").eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
   ]);
   // vendas do time (quem tem WhatsApp cadastrado ou papel vendedor)
   const equipe = [...new Set((rInst.data ?? []).map((i) => i.vendedor_id as string))];
@@ -41,7 +43,7 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
     if (v.venda_cupom) o.convites++; else { o.pagos++; o.valor += Number(v.venda_valor || 0); }
   }
   const cfg = rCfg.data as { meta_sdr_conversas: number | null; meta_sdr_marcacoes: number | null } | null;
-  return <Tela periodo={periodo} hoje={hoje} perfis={(rPerf.data ?? []) as DadosTela["perfis"]} linhas={(rRes.data ?? []) as Linha[]}
+  return <Tela empresa={atual ? { slug: atual.slug, nome: atual.nome } : null} periodo={periodo} hoje={hoje} perfis={(rPerf.data ?? []) as DadosTela["perfis"]} linhas={((rRes.data ?? []) as Linha[]).filter((l) => equipe.includes(l.vendedor_id))}
     equipe={equipe} vendas={vendas} workshopPor={workshopPor}
     metas={{ conversas: cfg?.meta_sdr_conversas ?? 25, marcacoes: cfg?.meta_sdr_marcacoes ?? 6 }}
     atualizadoEm={new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })} />;

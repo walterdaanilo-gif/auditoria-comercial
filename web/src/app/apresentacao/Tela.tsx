@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Marca from "@/components/Marca";
 import { Suspense } from "react";
 import AbasPainel from "@/components/AbasPainel";
 import AutoRefresh from "@/components/AutoRefresh";
@@ -48,10 +49,10 @@ function Painel({ titulo, nota: sub, children, className = "" }: { titulo: strin
 }
 
 // equipe = so quem tem WhatsApp cadastrado na aba WhatsApp (tirou o WhatsApp, sai do time)
-export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean; funcao?: string | null; foto_url?: string | null }[]; linhas: Linha[]; equipe: string[]; metas: { conversas: number; marcacoes: number }; vendas: Vendas; workshopPor: WorkshopPor };
+export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean; funcao?: string | null; foto_url?: string | null }[]; linhas: Linha[]; equipe: string[]; metas: { conversas: number; marcacoes: number }; vendas: Vendas; workshopPor: WorkshopPor; empresa?: { slug: string; nome: string } | null };
 
 // Desenho da tela, separado da busca de dados (permite previa com dados de exemplo)
-export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, metas, vendas, workshopPor }: DadosTela) {
+export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, metas, vendas, workshopPor, empresa = null }: DadosTela) {
   const { de, ate } = periodo;
   const META_CONVERSAS = metas.conversas, META_MARCACOES = metas.marcacoes;
   // Tela dos SDRs: so quem e SDR (Closer fica fora, as metas daqui sao de conversas e marcacoes)
@@ -221,14 +222,14 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
   );
 
   return (
-    <div className="flex min-h-screen flex-col gap-[clamp(8px,0.9vh,16px)] bg-bg px-[clamp(16px,1.4vw,32px)] py-[clamp(8px,0.9vh,16px)] text-ink lg:h-screen lg:overflow-hidden"
+    <div data-org={empresa?.slug ?? "weevo"} className="flex min-h-screen flex-col gap-[clamp(8px,0.9vh,16px)] bg-bg px-[clamp(16px,1.4vw,32px)] py-[clamp(8px,0.9vh,16px)] text-ink lg:h-screen lg:overflow-hidden"
       style={{ fontSize: "clamp(11px, 0.55vw + 0.55vh, 18px)" }}>
       <AutoRefresh segundos={60} />
 
       {/* cabecalho */}
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-[1.1em]">
-          <Link href="/" className="flex items-center" title="Voltar ao painel"><img src="/weevo-logo.png" alt="Weevo" className="h-[1.5em] w-auto" /></Link>
+          <Link href="/" className="flex items-center" title="Voltar ao painel">{empresa && empresa.slug !== "weevo" ? <Marca empresa={empresa} /> : <img src="/weevo-logo.png" alt="Weevo" className="h-[1.5em] w-auto" />}</Link>
           <i className="h-[1.6em] w-px bg-line" />
           <h1 className="whitespace-nowrap text-[0.72em] font-semibold uppercase tracking-[0.3em] text-brand">Cabueta do Elon Musk</h1>
           <Suspense><AbasPainel atual="apresentacao" /></Suspense>
@@ -241,7 +242,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
         {/* vendas em dinheiro: total em destaque, workshop e imersao lado a lado */}
         <div className="relative flex items-stretch gap-[1.1em] overflow-hidden rounded-[14px] border border-brand/40 px-[1.05em] py-[0.7em] sm:col-span-2 lg:col-span-1"
           style={{ background: "radial-gradient(60% 120% at 18% 45%, rgba(109,207,192,.2), transparent 70%), linear-gradient(120deg,#0f3a3a,#07201f)" }}>
-          <img src="/weevo-icone.png" alt="" aria-hidden className="pointer-events-none absolute -right-[2%] top-1/2 h-[140%] w-auto -translate-y-1/2 opacity-[0.06]" />
+          {(!empresa || empresa.slug === "weevo") && <img src="/weevo-icone.png" alt="" aria-hidden className="pointer-events-none absolute -right-[2%] top-1/2 h-[140%] w-auto -translate-y-1/2 opacity-[0.06]" />}
           <div className="relative flex min-w-0 flex-col justify-center">
             <div className="whitespace-nowrap text-[0.68em] font-semibold uppercase tracking-[0.26em] text-brand">Vendas <span className="tracking-[0.1em] text-side-text/60">· {periodo.rotulo}</span></div>
             <div className="whitespace-nowrap text-[2.5em] font-extrabold leading-none tracking-[-0.045em] tabular-nums">{brl(vendas.wValor + vendas.imValor)}</div>

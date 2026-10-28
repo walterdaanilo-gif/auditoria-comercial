@@ -10,15 +10,16 @@ export default async function Usuarios({ searchParams: searchParamsP }: { search
   const searchParams = await searchParamsP;
   const eu = await exigirAdmin();
   const { todas, atual } = await empresas(eu);
-  // o dono das empresas ve todos os usuarios de todas as empresas; o admin comum, so os da empresa aberta (RLS)
+  // usuarios da retaguarda aberta (a RLS ja limita o admin comum a empresa dele)
   const { data } = await (await createClient()).from("profiles").select("*").order("criado_em");
-  const usuarios = (data ?? []) as Perfil[];
+  // so quem entra na retaguarda aberta (a principal ou com acesso a ela); o dono das empresas aparece em todas
+  const usuarios = ((data ?? []) as Perfil[]).filter((u) => !atual || u.super_admin || u.org_id === atual.id || (u.orgs_acesso ?? []).includes(atual.id));
   const nomeOrg = (id: string) => todas.find((o) => o.id === id)?.nome ?? "outra empresa";
   const acessos = (u: Perfil) => [...new Set([u.org_id, ...(u.orgs_acesso ?? [])])];
 
   return (
     <div className="space-y-5">
-      <div><h1 className="page-title">Usuários</h1><p className="page-sub">Só o admin cria usuários. Não existe cadastro público. Trocar o e-mail muda o login da pessoa na hora; a senha continua a mesma.{eu.super_admin ? " Em Retaguarda você escolhe em quais empresas a pessoa entra." : ` Você está vendo a retaguarda ${atual?.nome ?? ""}.`}</p></div>
+      <div><h1 className="page-title">Usuários</h1><p className="page-sub">Só o admin cria usuários. Não existe cadastro público. Trocar o e-mail muda o login da pessoa na hora; a senha continua a mesma.{` Você está vendo os usuários da retaguarda ${atual?.nome ?? ""}.`}{eu.super_admin ? " Em Retaguarda você escolhe em quais empresas a pessoa entra." : ""}</p></div>
       {searchParams.erro && <p className="card border-bad text-sm text-bad">{searchParams.erro}</p>}
       {searchParams.ok && <p className="card border-ok text-sm text-ok">{searchParams.ok}</p>}
       <NovoUsuarioForm empresas={eu.super_admin ? todas : []} aberta={atual?.id ?? null} />
