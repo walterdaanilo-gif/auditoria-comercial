@@ -13,14 +13,17 @@ const PROMPT = `Voce e um consultor comercial senior (vendas consultivas por Wha
 ## Acoes para esta semana (3 a 5 itens numerados)
 Nao invente numeros fora dos dados. Com poucas conversas auditadas, avise que a amostra e pequena e as conclusoes sao preliminares.`;
 
-export async function gerarTexto(db, periodo, fetchImpl = fetch) {
+// org: empresa do pedido (cada empresa ve a analise so do proprio time)
+export async function gerarTexto(db, periodo, fetchImpl = fetch, org = null) {
   const back = periodo === "30" ? 29 : periodo === "7" ? 6 : 0;
   const from = addDays(today(), -back);
-  const [auds, resumo, perfis] = await Promise.all([
-    db.selectAll("auditorias", { filters: { atualizado_em: `gte.${dayStart(from)}` } }),
+  const [auds, todoResumo, perfis] = await Promise.all([
+    db.selectAll("auditorias", { filters: { atualizado_em: `gte.${dayStart(from)}`, ...(org ? { org_id: `eq.${org}` } : {}) } }),
     db.rpc("resumo_por_vendedor", { p_from: from, p_to: today() }),
     db.select("profiles", { select: "id,nome" }),
   ]);
+  const doTime = new Set(auds.map(a => a.vendedor_id));
+  const resumo = org ? todoResumo.filter(r => doTime.has(r.vendedor_id)) : todoResumo;
   if (!auds.length) throw new Error("Ainda não há conversas auditadas neste período.");
   const nome = id => perfis.find(p => p.id === id)?.nome || id;
   const n = auds.length;
@@ -49,7 +52,7 @@ export async function processAnalyses(db, opts = {}) {
   }
   const pend = await db.select("analises_time", { filters: { status: "eq.pendente" }, order: "criado_em", limit: 3 });
   for (const p of pend) {
-    try { await db.update("analises_time", { id: `eq.${p.id}` }, { status: "pronta", texto: await gerarTexto(db, p.periodo, opts.fetchImpl) }); }
+    try { await db.update("analises_time", { id: `eq.${p.id}` }, { status: "pronta", texto: await gerarTexto(db, p.periodo, opts.fetchImpl, p.org_id || null) }); }
     catch (e) { await db.update("analises_time", { id: `eq.${p.id}` }, { status: "erro", erro: String(e.message).slice(0, 300) }); }
   }
   return pend.length;

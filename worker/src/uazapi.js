@@ -55,7 +55,8 @@ const comoImagem = q => (!q ? null : q.startsWith("data:") ? q : `data:image/png
 
 export async function syncUazapi(db) {
   if (!cfg.uazapiAdminToken) { console.error("[uazapi] falta UAZAPI_ADMIN_TOKEN"); return; }
-  const linhas = await db.select("instancias_whatsapp", { select: "id,vendedor_id,nome,comando,status,qr,numero" });
+  // numero que so existe no CRM Q5 (Carbone) nao vira instancia na Uazapi: sem QR, sem conexao
+  const linhas = (await db.select("instancias_whatsapp", { select: "id,vendedor_id,nome,comando,status,qr,numero,so_crm" })).filter(l => !l.so_crm);
   const extras = new Map((await db.select("instancias_uazapi", { select: "instancia_id,token,conectar_em,webhook_url" })).map(t => [t.instancia_id, t]));
   const tokens = new Map([...extras].map(([k, t]) => [k, t.token]));
   const ids = new Set(linhas.map(l => l.id));

@@ -17,16 +17,21 @@ const CONTA = ["respostas", "marc", "wCupom", "wPagos", "wValor", "imersao", "im
 
 // Numeros de um dia: time inteiro e cada vendedor
 export async function calcularDia(db, dia) {
-  const [[s = {}], linhas, convs] = await Promise.all([
-    db.select("audit_settings", { filters: { id: "eq.1" } }),
+  // resumo da Weevo (configuracao id 1): conversas, numeros e vendedores so da empresa dela (a Carbone fica de fora)
+  const [s = {}] = await db.select("audit_settings", { filters: { id: "eq.1" } });
+  const daOrg = s.org_id ? { org_id: `eq.${s.org_id}` } : {};
+  const [todasLinhas, convs, daEmpresa] = await Promise.all([
     db.rpc("resumo_sdr2", { p_from: dia, p_to: dia }),
-    db.selectAll("conversas", { select: "id,data,canal", filters: { data: `eq.${dia}`, canal: "neq.importada" } }),
+    db.selectAll("conversas", { select: "id,data,canal", filters: { data: `eq.${dia}`, canal: "neq.importada", ...daOrg } }),
+    s.org_id ? db.select("profiles", { select: "id", filters: daOrg }) : Promise.resolve(null),
   ]);
+  const doTime = daEmpresa && new Set(daEmpresa.map(p => p.id));
+  const linhas = doTime ? todasLinhas.filter(l => doTime.has(l.vendedor_id)) : todasLinhas;
   const ids = convs.map(c => c.id);
   const auds = [];
   for (let i = 0; i < ids.length; i += 150) auds.push(...await db.select("auditorias", { select: "vendedor_id,nota_geral,so_bot,venda,venda_tipo,venda_valor,venda_cupom,venda_convite_origem,remarcacao,oportunidade,oportunidade_tipo,critico,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr", filters: { conversa_id: `in.(${ids.slice(i, i + 150).join(",")})` } }));
   // o time = quem tem WhatsApp cadastrado (aparece mesmo sem atividade no dia: zero marcacao tambem e informacao)
-  const time_ = (await db.select("instancias_whatsapp", { select: "vendedor_id" })).map(i => i.vendedor_id);
+  const time_ = (await db.select("instancias_whatsapp", { select: "vendedor_id", filters: daOrg })).map(i => i.vendedor_id);
   const vendIds = [...new Set([...time_, ...linhas.map(l => l.vendedor_id), ...auds.map(a => a.vendedor_id)].filter(Boolean))];
   const perfis = vendIds.length ? (await db.select("profiles", { select: "id,nome,funcao,ativo", filters: { id: `in.(${vendIds.join(",")})` } })).filter(p => p.ativo !== false) : [];
 

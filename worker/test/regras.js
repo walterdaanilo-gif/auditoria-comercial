@@ -94,3 +94,23 @@ const so2 = interpretar({ notas: [{ criterio: "abordagem", nota: 4 }, { criterio
 assert.equal(so2.nota_geral, 7.5); assert.deepEqual(so2.notas_1a5.map(n => n.chave), ["abordagem"]);
 console.log("OK: criterio que nao se aplica fica fora da nota");
 
+
+// Cada empresa com as proprias regras: a Carbone usa o contexto e o papel dela, e "carbone" na evidencia nao vira convite
+{
+  const db2 = fakeSupa();
+  db2.tables.audit_settings = [{ id: 1, org_id: "weevo" }, { id: 2, org_id: "carb" }];
+  db2.tables.organizacoes = [{ id: "weevo", nome: "Weevo", slug: "weevo" }, { id: "carb", nome: "Carbone Educação", slug: "carbone" }];
+  db2.tables.config_auditoria = [{ id: 1, org_id: "weevo", roteiro: "roteiro weevo" }, { id: 2, org_id: "carb", roteiro: "", contexto: "Grupos de network por nicho", papel_closer: "Closer fecha a cadeira" }];
+  db2.tables.criterios_rubrica = [{ org_id: "weevo", rubrica: "closer", chave: "fechamento", nome: "F", peso: 100, ativo: true }, { org_id: "carb", rubrica: "closer", chave: "fechamento", nome: "F", peso: 100, ativo: true }];
+  db2.tables.profiles = [{ id: "jo", nome: "Josué", funcao: "closer" }];
+  const W = await carregarRegras(db2), C = await carregarRegras(db2, "carb");
+  assert.equal(W.padrao, true); assert.equal(C.padrao, false);
+  assert.equal(C.rubricas.closer.length, 1, "so a rubrica da propria empresa");
+  const pc = montarPrompt(C, rubricaDe(C, "jo"));
+  assert.match(pc, /Auditor comercial da Carbone Educação/); assert.match(pc, /Grupos de network por nicho/); assert.match(pc, /Closer fecha a cadeira/);
+  assert.doesNotMatch(pc, /workshop \(inscrição; existe cupom/);
+  assert.match(montarPrompt(W, rubricaDe(W, "jo")), /Auditor comercial da Weevo[\s\S]*Roteiro de referência da Weevo/);
+  const v = interpretar({ notas: [{ criterio: "fechamento", nota: 4 }], venda: { detectada: true, tipo: "imersao", valor: 3000, evidencia: "fechou a cadeira da Carbone" } }, rubricaDe(C, "jo"));
+  assert.equal(v.venda_cupom, false); assert.equal(v.venda_valor, 3000);
+  console.log("OK: regras por empresa (Carbone com contexto, papel e rubrica proprios)");
+}

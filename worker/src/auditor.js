@@ -17,16 +17,18 @@ const RUBRICA_RESERVA = [ // so se o banco estiver sem rubrica
   { chave: "conducao", nome: "Condução", descricao: "Propõe próximo passo concreto.", peso: 50 },
 ];
 
-export async function carregarRegras(db) {
-  // configuracao da Weevo (id 1); rubrica e listas de telefones so da mesma empresa (a Carbone tem as dela)
-  const [s = {}] = await db.select("audit_settings", { filters: { id: "eq.1" } });
+// org: empresa (Weevo, Carbone...). Sem org = a Weevo (configuracao id 1), a empresa padrao do worker.
+// Rubrica, roteiro, contexto de venda e listas de telefones sao sempre os da mesma empresa.
+export async function carregarRegras(db, org = null) {
+  const [s = {}] = await db.select("audit_settings", { filters: org ? { org_id: `eq.${org}` } : { id: "eq.1" } });
   const daOrg = s.org_id ? { org_id: `eq.${s.org_id}` } : {};
-  const [crit, ign, perfis, [roteiroRow], tels] = await Promise.all([
+  const [crit, ign, perfis, [roteiroRow], tels, [empresa]] = await Promise.all([
     db.select("criterios_rubrica", { select: "rubrica,chave,nome,descricao,peso,ativo,posicao", filters: { ativo: "eq.true", ...daOrg }, order: "posicao" }),
     db.select("numeros_ignorados", { select: "telefone", filters: daOrg }),
     db.select("profiles", { select: "id,nome,funcao" }),
-    db.select("config_auditoria", { filters: { id: "eq.1" } }),
+    db.select("config_auditoria", { filters: s.org_id ? daOrg : { id: "eq.1" } }),
     db.select("telefones_alerta", { select: "telefone", filters: daOrg }),
+    s.org_id ? db.select("organizacoes", { select: "nome,slug", filters: { id: `eq.${s.org_id}` } }) : Promise.resolve([]),
   ]);
   const rub = r => crit.filter(c => c.rubrica === r && Number(c.peso) > 0);
   return {
@@ -44,6 +46,9 @@ export async function carregarRegras(db) {
     funcao: new Map(perfis.map(p => [p.id, p.funcao === "closer" ? "closer" : "sdr"])),
     nomes: new Map(perfis.map(p => [p.id, p.nome])),
     roteiro: roteiroRow?.roteiro || "",
+    // empresa: a Weevo (padrao) usa o contexto e os papeis escritos aqui; as outras, os de config_auditoria
+    org: s.org_id || null, padrao: !s.org_id || !empresa || empresa.slug === "weevo", empresa: empresa?.nome || "Weevo",
+    contexto: roteiroRow?.contexto || "", papelSdr: roteiroRow?.papel_sdr || "", papelCloser: roteiroRow?.papel_closer || "",
     // avisos no WhatsApp do gestor: venda = so imersao fechada; marcacao e oportunidade ficam desligadas por padrao
     alertas: { venda: s.alerta_venda ?? true, marcacao: s.alerta_marcacao ?? false, oportunidade: s.alerta_oportunidade ?? false, formato: s.alerta_formato || "detalhado", instancia: s.instancia_envio_id || null, telefones: tels.map(t => t.telefone) },
   };
@@ -51,7 +56,8 @@ export async function carregarRegras(db) {
 export const rubricaDe = (R, vendedorId) => {
   const funcao = R.funcao.get(vendedorId) || "sdr";
   const l = R.s.rubrica_modo === "personalizada" && R.rubricas.personalizada.length ? R.rubricas.personalizada : R.rubricas[funcao];
-  return { funcao, rubrica: R.s.rubrica_modo === "personalizada" && R.rubricas.personalizada.length ? "personalizada" : funcao, criterios: l.length ? l : RUBRICA_RESERVA };
+  // conviteCarbone: so na Weevo o membro da Carbone entra de cortesia no workshop
+  return { funcao, rubrica: R.s.rubrica_modo === "personalizada" && R.rubricas.personalizada.length ? "personalizada" : funcao, criterios: l.length ? l : RUBRICA_RESERVA, conviteCarbone: R.padrao !== false };
 };
 
 // Telefone comparavel: DDD + 8 ultimos digitos no Brasil (ignora o 9 extra e o 55); outros, so digitos
@@ -78,13 +84,16 @@ const fmtSeg = s => (s == null ? "sem resposta do vendedor depois do lead" : s <
 
 export function montarPrompt(R, { funcao, criterios }, { primeiraResposta } = {}) {
   const s = R.s;
-  const papel = funcao === "closer"
+  const proprio = funcao === "closer" ? R.papelCloser : R.papelSdr;
+  const papel = proprio ? proprio : funcao === "closer"
     ? `Este vendedor é CLOSER. Venda = imersão FECHADA (lead aceitou e pagou ou assinou), com o valor. Reunião de implementação marcada NÃO é venda: é oportunidade do tipo "reuniao_implementacao". Interesse claro na imersão sem fechar = oportunidade "interesse_imersao". Em "agendou", marque true quando a reunião de implementação foi marcada (tipo_agendamento "imersao").`
     : `Este vendedor é SDR. Venda = inscrição no WORKSHOP confirmada, separada com cuidado em dois tipos: CONVITE = o lead entra de cortesia, R$ 0: "cupom" true e "valor" 0. São dois jeitos de convite: (1) o cupom de convite que zera o ingresso (100% de desconto), "origem_convite" "cupom"; (2) cliente/membro da CARBONE EDUCAÇÃO (aparece como Carbone, CarboneE, Casa Carbone, "membro Carbone"), que ganha a presença no workshop sem cupom ("a sua presença fica por nossa conta"), "origem_convite" "carbone". Membro Carbone que confirmou presença no workshop é CONVITE, nunca venda paga. VENDIDO = o lead pagou o ingresso (pix, cartão, link de pagamento pago, comprovante enviado): "cupom" false e "valor" = quanto pagou; cupom de desconto PARCIAL (ex.: 50%) com pagamento também é VENDIDO, com o valor pago. Lead que aceitou, reservou ou recebeu o link mas ainda não pagou nem usou o convite NÃO é venda ainda: é oportunidade "interesse_workshop". Na dúvida entre convite e vendido, use a evidência da conversa (valor, cupom, comprovante) e explique em "evidencia". Reunião para a imersão marcada NÃO é venda: é oportunidade do tipo "reuniao_imersao". Interesse claro no workshop ou na imersão sem fechar = oportunidade "interesse_workshop" ou "interesse_imersao". Em "agendou", marque true quando o lead se inscreveu no workshop (tipo_agendamento "workshop") ou marcou a reunião de imersão (tipo_agendamento "imersao").`;
-  return `Você é o Auditor comercial da Weevo. Avalia conversas de WhatsApp (e transcrições de ligações) entre um vendedor da Weevo e um lead. Escreva em português do Brasil, direto e prático.
+  const empresa = R.empresa || "Weevo";
+  const contexto = R.contexto || "O SDR convida leads indicados para o workshop (inscrição; existe cupom de convite 100%, que deixa o valor em R$ 0) ou marca reunião para a imersão. O Closer faz a reunião de implementação e fecha a imersão.";
+  return `Você é o Auditor comercial da ${empresa}. Avalia conversas de WhatsApp (e transcrições de ligações) entre um vendedor da ${empresa} e um lead. Escreva em português do Brasil, direto e prático.
 
 ## Contexto
-O SDR convida leads indicados para o workshop (inscrição; existe cupom de convite 100%, que deixa o valor em R$ 0) ou marca reunião para a imersão. O Closer faz a reunião de implementação e fecha a imersão.
+${contexto}
 ${papel}
 
 ## Perfil de auditoria: venda consultiva (pilares do G4 Educação)
@@ -117,7 +126,7 @@ ${lista(s.regras_criticas)}
 
 ## Agilidade
 SLA de primeira resposta: ${s.sla_min} min. Primeira resposta medida nesta conversa: ${fmtSeg(primeiraResposta)}. Use isso no critério de agilidade, se existir.
-${R.roteiro ? `\n## Roteiro de referência da Weevo\n${R.roteiro}\n` : ""}
+${R.roteiro ? `\n## Roteiro de referência da ${empresa}\n${R.roteiro}\n` : ""}
 ## Rubrica
 Dê nota de 1 a 5 SÓ nos critérios que se aplicam ao momento desta conversa, com uma justificativa curta. Critério que não cabia (ex.: diagnóstico numa conversa só de confirmar horário; objeções quando o lead não levantou nenhuma; follow-up quando a conversa estava fluindo) fica FORA da lista "notas", e não entra na conta. Avalie sempre pelo menos um critério (condução/fechamento ou agilidade).
 Escala: 1 = errou e prejudicou a venda; 2 = fraco, deixou passar algo que cabia; 3 = fez o esperado para o momento; 4 = bem feito; 5 = excelente, referência para o time. Conversa que cumpriu o objetivo do momento (marcou, confirmou, remarcou sem perder o lead, tirou a dúvida e avançou) não fica abaixo de 3 nos critérios avaliados, a não ser que haja um erro claro, que deve ser citado na justificativa.
@@ -192,7 +201,7 @@ export function marcacao(a, funcao) {
   return { agendou: !!a.agendou, tipo_agendamento: tipo, remarcacao };
 }
 
-export function interpretar(bruto, { funcao, rubrica, criterios }) {
+export function interpretar(bruto, { funcao, rubrica, criterios, conviteCarbone = true }) {
   const a = Resposta.parse(bruto);
   const nota = a.conversa_so_bot ? 0 : notaFinal(criterios, a.notas);
   const por = new Map(a.notas.map(n => [n.criterio, n]));
@@ -200,7 +209,7 @@ export function interpretar(bruto, { funcao, rubrica, criterios }) {
   const vendaTipo = a.venda.detectada ? (funcao === "closer" ? "imersao" : a.venda.tipo || "workshop") : null;
   // Convite = cupom 100% (R$ 0). Cupom com valor pago acima de zero e desconto parcial: conta como vendido.
   // Convite: cupom 100% ou membro Carbone Educacao (cortesia). Membro Carbone e sempre convite, mesmo sem a IA marcar cupom.
-  const carbone = a.venda.detectada && vendaTipo === "workshop" && (a.venda.origem_convite === "carbone" || /carbone/i.test(a.venda.evidencia || ""));
+  const carbone = conviteCarbone && a.venda.detectada && vendaTipo === "workshop" && (a.venda.origem_convite === "carbone" || /carbone/i.test(a.venda.evidencia || ""));
   const convite = !!(a.venda.detectada && vendaTipo === "workshop" && (carbone || (a.venda.cupom && !(Number(a.venda.valor) > 0))));
   return {
     nota_geral: nota, rubrica,
@@ -280,17 +289,21 @@ async function avisarCritico(db, R, vendedorId, a, link, contato) {
 export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final = false, soSinais = false, envio, agendaFetch = fetch, ate = null, estado = {} } = {}) {
   const semTempo = () => { if (ate && Date.now() > ate) { estado.incompleto = true; return true; } return false; };
   if (!provedor() && fetchImpl === fetch) return 0;
-  const R = await carregarRegras(db);
+  const R0 = await carregarRegras(db);
+  // cada conversa e auditada com as regras da propria empresa (Weevo ou Carbone)
+  const cache = new Map([[R0.org, R0]]);
+  const regrasDe = async org => { if (!org || org === R0.org) return R0; if (!cache.has(org)) cache.set(org, await carregarRegras(db, org)); return cache.get(org); };
   const from = addDays(today(), -cfg.daysBack);
   let feitos = 0;
 
   const auditarConversa = async (c, msgs, { manual = false } = {}) => {
+    const R = await regrasDe(c.org_id);
     const tempos = temposResposta(msgs);
     const hist = await historico(db, c, R.s.historico_dias);
     const quem = `Vendedor: ${R.nomes.get(c.vendedor_id) || "sem nome"} · Lead: ${c.contato_nome || "nome não informado"}\n\n`;
     const texto = quem + (hist ? `${hist}\n\nCONVERSA DO DIA (avalie esta):\n${cortar(msgs.map(linha).join("\n"))}` : cortar(msgs.map(linha).join("\n")));
     let a = await auditarTexto(R, c.vendedor_id, texto, { primeiraResposta: tempos.primeira_resposta_seg }, fetchImpl);
-    if (!a.remarcacao && (a.reuniao || a.tipo_agendamento === "imersao") && c.canal !== "importada") {
+    if (R.padrao && !a.remarcacao && (a.reuniao || a.tipo_agendamento === "imersao") && c.canal !== "importada") {
       if (await reuniaoAnterior(db, c, R, { inicio: a.reuniao?.data && a.reuniao?.hora ? `${a.reuniao.data}T${a.reuniao.hora}:00-03:00` : null })) a = { ...a, ...marcacao({ ...a, remarcacao: true, agendou: a.agendou, tipo_agendamento: a.tipo_agendamento }, "sdr"), reuniao: a.reuniao ? { ...a.reuniao, remarcacao: true } : a.reuniao };
     }
     const [antes] = await db.select("auditorias", { select: "critico,alertas_enviados", filters: { conversa_id: `eq.${c.id}` } });
@@ -303,12 +316,13 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     const vendaAberta = !a.venda && (String(a.oportunidade_tipo || "").startsWith("interesse_") || (a.agendou && a.tipo_agendamento === "workshop"));
     const pendente = c.canal !== "importada" && (reuniaoAberta || vendaAberta);
     if (pendente !== !!c.reuniao_pendente) await db.update("conversas", { id: `eq.${c.id}` }, { reuniao_pendente: pendente });
-    if (a.reuniao && c.canal !== "importada") try { await sincronizarReuniao(db, R, c, a.reuniao, { fetchImpl: agendaFetch, ...(envio ? { envio } : {}) }); } catch (e) { console.error(`[agenda] conversa ${c.id}:`, e.message); }
+    // Agenda Google: so a da Weevo por enquanto (a Carbone ainda nao conectou a agenda dela)
+    if (R.padrao && a.reuniao && c.canal !== "importada") try { await sincronizarReuniao(db, R, c, a.reuniao, { fetchImpl: agendaFetch, ...(envio ? { envio } : {}) }); } catch (e) { console.error(`[agenda] conversa ${c.id}:`, e.message); }
     feitos++;
   };
   const mensagensDe = id => db.select("mensagens", { select: "remetente,texto,tipo,transcricao,enviada_em", filters: { conversa_id: `eq.${id}` }, order: "enviada_em" });
 
-  const CAMPOS_CONV = "id,vendedor_id,instancia_id,contato,telefone,contato_nome,canal,data,ultima_msg_em,nao_auditar,reuniao_pendente";
+  const CAMPOS_CONV = "id,org_id,vendedor_id,instancia_id,contato,telefone,contato_nome,canal,data,ultima_msg_em,nao_auditar,reuniao_pendente";
   if (soSinais) {
     // ----- "Auditar agora" (qualquer data, sem filtros) -----
     for (const c of await db.select("conversas", { select: CAMPOS_CONV, filters: { auditar_agora: "eq.true" }, limit: 20 })) {
@@ -324,6 +338,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
       if (semTempo()) break;
       try {
         const msgs = await mensagensDe(c.id);
+        const R = await regrasDe(c.org_id);
         const pode = R.s.auditoria_automatica && !c.nao_auditar && !R.ignorados.has(chaveTelefone(c.telefone || c.contato)) && msgs.some(m => m.remetente === "vendedor") && msgs.some(m => m.remetente === "cliente");
         if (pode) await auditarConversa(c, msgs);
       } catch (e) { console.error(`[auditoria] sinal ${c.id}:`, e.message); }
@@ -334,7 +349,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
 
   // ----- conversas do dia (automatica) -----
   // Durante o dia: so conversa parada ha parada_min. Na rodada final (fim do expediente): todas que mudaram.
-  const automatica = R.s.auditoria_automatica && R.s.escopo_conversas !== "grupo" && (final || R.s.parada_min != null); // grupos ainda nao sao gravados
+  const automatica = R0.s.auditoria_automatica && R0.s.escopo_conversas !== "grupo" && (final || R0.s.parada_min != null); // grupos ainda nao sao gravados
   const convs = automatica ? await db.selectAll("conversas", { select: CAMPOS_CONV + ",auditar_rapido,auditar_agora", filters: { data: `gte.${from}`, canal: "neq.importada" } }) : [];
   if (convs.length) {
     const resumo = new Map();
@@ -347,6 +362,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     const auds = new Map((await db.selectAll("auditorias", { select: "conversa_id,msg_count", filters: { conversa_id: "not.is.null", atualizado_em: `gte.${dayStart(addDays(from, -1))}` } })).map(a => [a.conversa_id, a.msg_count]));
     for (const c of convs) {
       if (semTempo()) break;
+      const R = await regrasDe(c.org_id);
       const r = resumo.get(c.id);
       if (!r || !r.vend || !r.cli) continue; // so audita quando o lead respondeu (mensagem dos dois lados)
       if (c.auditar_rapido || c.auditar_agora) continue; // esta na fila rapida
@@ -367,7 +383,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
   }
 
   // ----- conversas importadas (tela Testar auditor): auditadas uma vez, de qualquer data -----
-  const imps = await db.select("conversas", { select: "id,vendedor_id,contato,contato_nome,canal", filters: { canal: "eq.importada" }, order: "criado_em.desc", limit: 50 });
+  const imps = await db.select("conversas", { select: "id,org_id,vendedor_id,contato,contato_nome,canal", filters: { canal: "eq.importada" }, order: "criado_em.desc", limit: 50 });
   if (imps.length) {
     const ja = new Set((await db.select("auditorias", { select: "conversa_id", filters: { conversa_id: `in.(${imps.map(c => c.id).join(",")})` } })).map(a => a.conversa_id));
     for (const c of imps) {
@@ -382,11 +398,12 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
   }
 
   // ----- ligacoes gravadas (com transcricao) -----
-  const ligs = R.s.auditoria_automatica ? await db.select("ligacoes", { select: "id,vendedor_id,contato,transcricao", filters: { transcricao: "not.is.null" }, order: "iniciada_em.desc", limit: 50 }) : [];
+  const ligs = R0.s.auditoria_automatica ? await db.select("ligacoes", { select: "id,org_id,vendedor_id,contato,transcricao", filters: { transcricao: "not.is.null" }, order: "iniciada_em.desc", limit: 50 }) : [];
   if (ligs.length) {
     const ja = new Set((await db.selectAll("auditorias", { select: "ligacao_id", filters: { ligacao_id: "not.is.null" } })).map(a => a.ligacao_id));
     for (const l of ligs) {
       if (semTempo()) break;
+      const R = await regrasDe(l.org_id);
       if (ja.has(l.id) || l.transcricao.startsWith("[") || R.ignorados.has(chaveTelefone(l.contato))) continue;
       try {
         const a = await auditarTexto(R, l.vendedor_id, cortar("TRANSCRICAO DA LIGACAO:\n" + l.transcricao), {}, fetchImpl);

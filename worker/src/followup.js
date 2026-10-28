@@ -17,7 +17,7 @@ const MAX_LISTA = 25;
 export async function leadsParados(db, R, { agora = Date.now() } = {}) {
   const s = R.bruto, dias = s.followup_alerta_d ?? 6;
   const desde = addDays(today(), -(s.followup_limite_d ?? 30));
-  const convs = (await db.selectAll("conversas", { select: "id,vendedor_id,contato,telefone,contato_nome,ultima_msg_em,data,canal,nao_auditar", filters: { data: `gte.${desde}`, canal: "neq.importada" } }))
+  const convs = (await db.selectAll("conversas", { select: "id,vendedor_id,contato,telefone,contato_nome,ultima_msg_em,data,canal,nao_auditar", filters: { data: `gte.${desde}`, canal: "neq.importada", ...(s.org_id ? { org_id: `eq.${s.org_id}` } : {}) } }))
     .filter(c => !c.nao_auditar && !R.ignorados.has(chaveTelefone(c.telefone || c.contato)));
   const ids = convs.map(c => c.id);
   const auds = new Map(), ultVend = new Map(), primCli = new Map();

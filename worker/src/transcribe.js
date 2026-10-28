@@ -46,28 +46,36 @@ export async function transcribePending(db) {
 // Audios do CRM Q5 chegam sem transcricao e com link que expira em 1h. Renova o link na lista de mensagens da conversa
 // no Q5, baixa, transcreve e grava nas duas tabelas. Conversa ja auditada sem o texto do audio volta para a fila.
 const Q5 = "https://api.grupoquatro5.com/public/v1";
+// Cada empresa tem o seu CRM: a chave vem do segredo indicado em organizacoes.crm_segredo (Weevo: Q5_API_KEY).
 export async function transcreverCrm(db, { fetchImpl = fetch, limite = 12, dias = 8, ate = null } = {}) {
-  if (!cfg.transcribeKey || !cfg.q5Key) return 0;
-  const pend = await db.select("mensagens", { select: "id,wa_id,conversa_id", filters: { tipo: "eq.audio", transcricao: "is.null", wa_id: "like.crm:*", enviada_em: `gte.${dayStart(addDays(today(), -dias))}` }, order: "enviada_em.desc", limit: limite });
+  if (!cfg.transcribeKey) return 0;
+  const pend = await db.select("mensagens", { select: "id,wa_id,conversa_id,org_id", filters: { tipo: "eq.audio", transcricao: "is.null", wa_id: "like.crm:*", enviada_em: `gte.${dayStart(addDays(today(), -dias))}` }, order: "enviada_em.desc", limit: limite });
   if (!pend.length) return 0;
   const chats = new Map((await db.select("crm_mensagens", { select: "id,conversa_id", filters: { id: `in.(${pend.map(p => p.wa_id.slice(4)).join(",")})` } })).map(m => [m.id, m.conversa_id]));
-  const q5 = async caminho => {
-    const r = await fetchImpl(Q5 + caminho, { headers: { Authorization: `Bearer ${cfg.q5Key}`, Accept: "application/json" } });
+  const segredos = new Map((await db.select("organizacoes", { select: "id,crm_segredo" }).catch(() => [])).map(o => [o.id, o.crm_segredo]));
+  const chaveDe = org => (org && segredos.get(org) ? process.env[segredos.get(org)] || "" : cfg.q5Key);
+  const orgDoChat = new Map(pend.map(p => [chats.get(p.wa_id.slice(4)), p.org_id]));
+  const q5 = async (caminho, chave) => {
+    const r = await fetchImpl(Q5 + caminho, { headers: { Authorization: `Bearer ${chave}`, Accept: "application/json" } });
     if (!r.ok) throw new Error(`CRM Q5 ${r.status} em ${caminho}`);
     return r.json();
   };
   // link novo de cada audio: pagina a conversa do mais novo para o mais velho ate achar todos
   const links = new Map();
   for (const chat of new Set(pend.map(p => chats.get(p.wa_id.slice(4))).filter(Boolean))) {
+    const chave = chaveDe(orgDoChat.get(chat));
+    if (!chave) continue; // empresa sem chave do CRM: o audio fica como indisponivel
     const faltam = new Set(pend.filter(p => chats.get(p.wa_id.slice(4)) === chat).map(p => p.wa_id.slice(4)));
     let antes = null;
-    for (let pag = 0; pag < 10 && faltam.size; pag++) {
-      const r = await q5(`/conversations/${chat}/messages?limit=100${antes ? `&before=${antes}` : ""}`);
-      const lote = (r.data || []).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
-      for (const m of lote) if (faltam.delete(m.id) && m.mediaUrl) links.set(m.id, m.mediaUrl);
-      if (!r.hasMore || !lote.length) break;
-      antes = lote[0].id;
-    }
+    try {
+      for (let pag = 0; pag < 10 && faltam.size; pag++) {
+        const r = await q5(`/conversations/${chat}/messages?limit=100${antes ? `&before=${antes}` : ""}`, chave);
+        const lote = (r.data || []).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+        for (const m of lote) if (faltam.delete(m.id) && m.mediaUrl) links.set(m.id, m.mediaUrl);
+        if (!r.hasMore || !lote.length) break;
+        antes = lote[0].id;
+      }
+    } catch (e) { console.error(`[transcricao] links do CRM (conversa ${chat}):`, e.message); } // uma conversa com erro nao trava as outras
   }
   let feitos = 0;
   for (const p of pend) {
