@@ -121,3 +121,16 @@ console.log("OK: historico do CRM sem duplicar, revisao so de clientes potenciai
   assert.equal(db.tables.mensagens.length, 1201);
   console.log("OK: limpeza da troca nao apaga conversa com mensagem, mesmo com mais de 1000 no lote");
 }
+
+// follow-up da equipe: se outro vendedor (outro numero ou conversa) ja falou com a Lia, ela nao esta sem follow-up
+{
+  db.tables.profiles.push({ id: "walter", nome: "Walter", funcao: "closer", papel: "admin", ativo: true });
+  db.tables.conversas.push({ id: "wt1", vendedor_id: "walter", instancia_id: "inst-w", contato: "5584922223333", telefone: "5584922223333", canal: "crm", data: d3, ultima_msg_em: em(d3, "10:00") });
+  db.tables.mensagens.push({ id: "wt-m", conversa_id: "wt1", vendedor_id: "walter", wa_id: "crm:wt", remetente: "vendedor", texto: "Oi Lia, tudo certo?", tipo: "texto", enviada_em: em(d3, "10:00") });
+  assert.deepEqual((await leadsParados(db, await carregarRegras(db))).map(l => l.nome), [], "o Walter falou com a Lia ha 3 dias: sem alerta para o Nick");
+  // conversa do CRM de outro atendente com a mesma cliente tambem conta
+  db.tables.mensagens = db.tables.mensagens.filter(x => x.id !== "wt-m");
+  db.tables.crm_conversas.push({ id: "c9", vendedor_id: null, telefone: "+5584922223333", status: "open", ultima_msg_sdr_em: em(d3, "11:00") });
+  assert.deepEqual((await leadsParados(db, await carregarRegras(db))).map(l => l.nome), [], "outro atendente do CRM falou: sem alerta");
+  console.log("OK: follow-up considera a equipe toda (se alguem ja falou com o cliente, nao avisa)");
+}

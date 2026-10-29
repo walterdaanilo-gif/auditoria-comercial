@@ -31,7 +31,15 @@ export async function leadsParados(db, R, { agora = Date.now() } = {}) {
   }
   // status do CRM Q5 por lead (mesmos numeros do WhatsApp)
   const crm = new Map();
-  for (const c of await db.selectAll("crm_conversas", { select: "vendedor_id,telefone,status" })) if (c.vendedor_id && c.telefone) crm.set(`${c.vendedor_id}|${chaveTelefone(digitos(c.telefone))}`, c.status);
+  // ultima mensagem de QUALQUER pessoa da equipe para cada cliente (outro vendedor, outro numero ou conversa do CRM):
+  // se alguem do time ja falou com o cliente, ele nao esta sem follow-up
+  const equipe = new Map();
+  const viu = (fone, quando) => { if (fone && quando && (!equipe.has(fone) || quando > equipe.get(fone))) equipe.set(fone, quando); };
+  for (const c of await db.selectAll("crm_conversas", { select: "vendedor_id,telefone,status,ultima_msg_sdr_em" })) {
+    if (c.vendedor_id && c.telefone) crm.set(`${c.vendedor_id}|${chaveTelefone(digitos(c.telefone))}`, c.status);
+    if (c.telefone) viu(chaveTelefone(digitos(c.telefone)), c.ultima_msg_sdr_em);
+  }
+  for (const c of convs) viu(c.telefone ? chaveTelefone(c.telefone) : c.contato, ultVend.get(c.id));
 
   const leads = new Map();
   for (const c of convs) {
@@ -53,8 +61,11 @@ export async function leadsParados(db, R, { agora = Date.now() } = {}) {
   return [...leads.values()].map(l => {
     const status = crm.get(`${l.vendedor_id}|${l.lead}`);
     const potencial = !l.fechado && (l.negociacao || (status !== undefined && crmPotencial(status))) && !(status !== undefined && !crmPotencial(status));
-    const desdeQuando = l.ultimaVendedor || l.primeiraCliente; // sem mensagem do vendedor: conta desde que o lead escreveu
-    return { ...l, potencial, desdeQuando, semResposta: !l.ultimaVendedor, assunto: l.assunto || (status === "custom_presente_no_workshop" ? "presente no workshop" : status === "custom_interessado_na_imersao" ? "interessado na imersão" : null) };
+    // conta desde a ultima mensagem de alguem da equipe para o cliente; ninguem falou: desde que o lead escreveu
+    const daEquipe = equipe.get(l.lead) || null;
+    const ultimaDoTime = [l.ultimaVendedor, daEquipe].filter(Boolean).sort().pop() || null;
+    const desdeQuando = ultimaDoTime || l.primeiraCliente;
+    return { ...l, potencial, desdeQuando, semResposta: !ultimaDoTime, assunto: l.assunto || (status === "custom_presente_no_workshop" ? "presente no workshop" : status === "custom_interessado_na_imersao" ? "interessado na imersão" : null) };
   }).filter(l => l.potencial && l.desdeQuando && Date.parse(l.desdeQuando) <= limite)
     .map(l => ({ ...l, dias: Math.floor((agora - Date.parse(l.desdeQuando)) / 86400_000) }))
     .sort((a, b) => b.dias - a.dias);
