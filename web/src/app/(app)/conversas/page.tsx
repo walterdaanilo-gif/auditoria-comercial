@@ -79,7 +79,7 @@ export default async function Conversas({ searchParams: spP }: { searchParams: P
                   : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-extrabold text-bg" style={{ background: p.cor }}>{p.id ? p.nome.slice(0, 1).toUpperCase() : <MessagesSquare size={18} />}</span>}
                 <span className="min-w-0">
                   <b className={`block truncate ${on ? "text-ink" : ""}`}>{p.nome}</b>
-                  <span className="text-xs text-mute">{p.id ? `${p.funcao === "closer" ? "Closer" : "SDR"} · ` : ""}{p.n} conversa{p.n === 1 ? "" : "s"}</span>
+                  <span className="text-xs text-mute">{p.id ? `${p.funcao === "closer" ? "Closer" : p.funcao === "gestao" ? "Gestão" : "SDR"} · ` : ""}{p.n} conversa{p.n === 1 ? "" : "s"}</span>
                 </span>
               </Link>
             );

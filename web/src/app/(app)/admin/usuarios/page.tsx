@@ -33,7 +33,7 @@ export default async function Usuarios({ searchParams: searchParamsP }: { search
               <div><label className="label">Papel</label>
                 <select name="papel" defaultValue={u.papel} className="input"><option value="vendedor">Vendedor</option><option value="gestor">Gestor</option><option value="admin">Admin</option></select></div>
               <div><label className="label">Função</label>
-                <select name="funcao" defaultValue={u.funcao ?? "sdr"} className="input"><option value="sdr">SDR</option><option value="closer">Closer</option></select></div>
+                <select name="funcao" defaultValue={u.funcao ?? "sdr"} className="input"><option value="sdr">SDR</option><option value="closer">Closer</option><option value="gestao">Gestão</option></select></div>
               <div className="md:col-span-2"><label className="label">Conversas vêm do</label>
                 <select name="fonte_conversas" defaultValue={u.fonte_conversas ?? "whatsapp"} className="input"><option value="crm">CRM Q5</option><option value="whatsapp">WhatsApp conectado aqui</option></select></div>
               <div className="md:col-span-2">

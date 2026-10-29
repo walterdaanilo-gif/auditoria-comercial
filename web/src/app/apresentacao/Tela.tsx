@@ -203,7 +203,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
               return (
                 <div key={s.id} className="flex min-w-0 flex-col gap-[0.3em] rounded-[10px] border border-line bg-bg/60 px-[0.7em] py-[0.5em]">
                   <h3 className="flex items-center justify-between gap-1.5 text-[1em] font-extrabold tracking-[-0.02em]">
-                    <span className="flex items-center gap-[0.4em]"><Bola id={s.id} />{s.nome}</span><small className="text-[0.68em] font-medium uppercase tracking-[0.16em] text-brand">{s.funcao === "closer" ? "Closer" : "SDR"}</small>
+                    <span className="flex items-center gap-[0.4em]"><Bola id={s.id} />{s.nome}</span><small className="text-[0.68em] font-medium uppercase tracking-[0.16em] text-brand">{s.funcao === "closer" ? "Closer" : s.funcao === "gestao" ? "Gestão" : "SDR"}</small>
                   </h3>
                   <div className="flex flex-1 flex-col justify-around gap-[0.3em]">
                   {linhasP.map((l) => { const est = l.n === "Nota média" ? (nm === null ? "none" : nm >= 7 ? "good" : nm >= 4 ? "warn" : "crit") : estado(l.v, l.alvo); return (

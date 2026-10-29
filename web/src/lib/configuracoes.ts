@@ -51,7 +51,7 @@ export type Settings = {
   meta_closer_vendas: number | null;
 };
 
-export type Vendedor = { id: string; nome: string; funcao: "sdr" | "closer"; ativo: boolean; foto_url?: string | null };
+export type Vendedor = { id: string; nome: string; funcao: "sdr" | "closer" | "gestao"; ativo: boolean; foto_url?: string | null };
 export type Numero = { id: string; vendedor_id: string; nome: string; numero: string | null; status: string; horario: Horario | null };
 
 // Tudo que a tela edita e manda de uma vez no Salvar

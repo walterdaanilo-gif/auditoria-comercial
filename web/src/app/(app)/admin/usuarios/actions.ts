@@ -6,7 +6,7 @@ import { createAdminClient, erroAdmin } from "@/lib/supabase/admin";
 import type { Perfil } from "@/lib/types";
 
 const PAPEIS = ["admin", "gestor", "vendedor"];
-const FUNCOES = ["sdr", "closer"];
+const FUNCOES = ["sdr", "closer", "gestao"]; // gestao: lidera o time (nao entra na rubrica de SDR ou Closer)
 const FONTES = ["crm", "whatsapp"];
 export type Resultado = { ok: boolean; erro?: string } | null;
 const volta = (tipo: "ok" | "erro", msg: string): never => redirect(`/admin/usuarios?${tipo}=${encodeURIComponent(msg)}`);

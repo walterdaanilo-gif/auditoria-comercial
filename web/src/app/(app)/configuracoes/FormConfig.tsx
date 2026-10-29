@@ -319,7 +319,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda, empresa = "
                   <div className="font-semibold">{v.nome}{!v.ativo && <span className="ml-2 text-xs text-mute">(inativo)</span>}</div>
                   <div className="text-xs text-mute">{nums.length ? nums.map((n) => `${n.numero ? fmtTelefone(n.numero) : n.nome} · ${n.status === "conectado" ? "conectado" : n.status.replace("_", " ")}`).join(" | ") : "WhatsApp não criado"}</div>
                 </div>
-                <span className={`chip ${v.funcao === "closer" ? "border-warn text-warn" : "border-brand text-brand"}`}>{v.funcao === "closer" ? "Closer" : "SDR"}</span>
+                <span className={`chip ${v.funcao === "closer" ? "border-warn text-warn" : "border-brand text-brand"}`}>{v.funcao === "closer" ? "Closer" : v.funcao === "gestao" ? "Gestão" : "SDR"}</span>
               </div>
             );
           })}

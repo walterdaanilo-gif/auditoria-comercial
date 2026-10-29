@@ -22,7 +22,7 @@ export default function NovoUsuarioForm({ empresas, aberta }: { empresas: Organi
           <option value="vendedor">Vendedor</option><option value="gestor">Gestor</option><option value="admin">Admin</option>
         </select></div>
       <div><label className="label">Função</label>
-        <select name="funcao" className="input" defaultValue="sdr"><option value="sdr">SDR</option><option value="closer">Closer</option></select></div>
+        <select name="funcao" className="input" defaultValue="sdr"><option value="sdr">SDR</option><option value="closer">Closer</option><option value="gestao">Gestão</option></select></div>
       <div className="flex items-end"><Botao /></div>
       {empresas.length > 0 && (
         <div className="md:col-span-6"><span className="label">Retaguarda</span>

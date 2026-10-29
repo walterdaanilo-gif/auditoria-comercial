@@ -2,7 +2,7 @@ export type Papel = "admin" | "gestor" | "vendedor";
 
 export interface Perfil {
   id: string; nome: string; email: string; papel: Papel; ativo: boolean; criado_em: string; foto_url?: string | null;
-  funcao?: "sdr" | "closer"; fonte_conversas?: "whatsapp" | "crm";
+  funcao?: "sdr" | "closer" | "gestao"; fonte_conversas?: "whatsapp" | "crm";
   // empresa principal, empresas que pode abrir e a que esta aberta agora (Weevo, Carbone...)
   org_id: string; orgs_acesso: string[]; org_ativa: string | null; super_admin: boolean;
 }
