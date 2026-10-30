@@ -2,15 +2,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, ChevronsLeft, ChevronsRight, FileText, FlaskConical, MessagesSquare, Phone, Settings, Smartphone, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, ChevronsLeft, ChevronsRight, FileText, FlaskConical, MessagesSquare, Phone, Settings, Smartphone, Target, Users, type LucideIcon } from "lucide-react";
 import type { Papel } from "@/lib/types";
 import Marca from "./Marca";
 
 type Item = { href: string; texto: string; icone: LucideIcon };
 
-export function itensMenu(papel: Papel): Item[] {
+export function itensMenu(papel: Papel, funcao?: string): Item[] {
   return [
     { href: "/", texto: "Painel de atendimento", icone: BarChart3 },
+    ...(papel !== "vendedor" || funcao === "closer" ? [{ href: "/closer", texto: "Closer", icone: Target }] : []),
     { href: "/conversas", texto: "Conversas", icone: MessagesSquare },
     { href: "/ligacoes", texto: "Ligações", icone: Phone },
     ...(papel !== "vendedor" ? [{ href: "/instancias", texto: "WhatsApp", icone: Smartphone }] : []),
@@ -22,7 +23,7 @@ export function itensMenu(papel: Papel): Item[] {
 export const ativo = (path: string, href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/"));
 
 // Menu lateral no estilo Weevo: degrade verde, itens em pilula com borda e botao Recolher
-export default function Sidebar({ papel, empresa }: { papel: Papel; empresa: { slug: string; nome: string } | null }) {
+export default function Sidebar({ papel, funcao, empresa }: { papel: Papel; funcao?: string; empresa: { slug: string; nome: string } | null }) {
   const path = usePathname();
   const [recolhido, setRecolhido] = useState(false);
   useEffect(() => { try { setRecolhido(localStorage.getItem("menu-recolhido") === "1"); } catch {} }, []);
@@ -36,7 +37,7 @@ export default function Sidebar({ papel, empresa }: { papel: Papel; empresa: { s
       </div>
       <div className="mx-3.5 my-6 h-0.5 rounded bg-side-edge/70" />
       <nav className="flex flex-col gap-3">
-        {itensMenu(papel).map(({ href, texto, icone: Icone }) => {
+        {itensMenu(papel, funcao).map(({ href, texto, icone: Icone }) => {
           const on = ativo(path, href);
           return (
             <Link key={href} href={href} title={texto}
@@ -54,11 +55,11 @@ export default function Sidebar({ papel, empresa }: { papel: Papel; empresa: { s
 }
 
 // No celular o menu lateral some e vira uma faixa horizontal abaixo da barra de cima
-export function MenuCelular({ papel }: { papel: Papel }) {
+export function MenuCelular({ papel, funcao }: { papel: Papel; funcao?: string }) {
   const path = usePathname();
   return (
     <nav className="flex gap-2 overflow-x-auto border-b border-line px-4 py-2 md:hidden">
-      {itensMenu(papel).map(({ href, texto, icone: Icone }) => (
+      {itensMenu(papel, funcao).map(({ href, texto, icone: Icone }) => (
         <Link key={href} href={href} className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-semibold ${ativo(path, href) ? "border-side-edge bg-side-active text-ink" : "border-line text-mute"}`}>
           <Icone size={15} />{texto}
         </Link>
