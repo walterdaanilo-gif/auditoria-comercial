@@ -1,3 +1,4 @@
+import { ativo, textoDe } from "./modelos.js";
 import { today } from "./config.js";
 import { enviarWhatsApp } from "./envio.js";
 import { gestores, notificar } from "./notificar.js";
@@ -91,7 +92,19 @@ function frase(e, quem, lead, id) {
 }
 
 // Uma mensagem por conversa: o evento mais importante na frase principal e os outros no "E nao parou por ai"
-export function textoAlerta(e, { vendedor, funcao, lead, conversaId, formato, outros = [] }) {
+const CHAVE_ALERTA = e => (e.tipo === "venda" ? "alerta_venda" : e.tipo === "marcacao" ? "alerta_reuniao" : "alerta_oportunidade");
+export function textoAlerta(e, ctx) {
+  const { vendedor, funcao, lead, conversaId, outros = [], modelos } = ctx;
+  const vars = {
+    frase: frase(e, `${vendedor}${funcao ? ` (${funcao === "closer" ? "Closer" : "SDR"})` : ""}`, lead, conversaId),
+    vendedor, funcao: funcao === "closer" ? "Closer" : "SDR", cliente: lead, valor: e.extra || "",
+    tipo_reuniao: e.chave === "reuniao_implementacao" ? "implementação" : e.chave === "reuniao_imersao" ? "imersão" : "",
+    interesse: e.chave === "interesse_imersao" ? "imersão" : e.tipo === "oportunidade" ? "workshop" : "",
+    fala_lead: e.evidencia ? `"${String(e.evidencia).slice(0, 220)}"` : "", tambem: tambemDe(outros) || "", link: verConversa(conversaId),
+  };
+  return textoDe(modelos, CHAVE_ALERTA(e), vars, () => textoAlertaPadrao(e, ctx));
+}
+function textoAlertaPadrao(e, { vendedor, funcao, lead, conversaId, formato, outros = [] }) {
   if (e.dinheiro) return textoVenda(e, { vendedor, lead, conversaId, outros });
   const quem = `${vendedor}${funcao ? ` (${funcao === "closer" ? "Closer" : "SDR"})` : ""}`;
   const principal = frase(e, quem, lead, conversaId);
@@ -114,14 +127,15 @@ export function textoAlerta(e, { vendedor, funcao, lead, conversaId, formato, ou
 const IMPL = e => e.chave === "reuniao_implementacao" || e.chave.startsWith("remarcacao_implementacao");
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 const quandoReuniao = r => (r?.data && r?.hora ? `${DIAS[new Date(r.data + "T12:00:00Z").getUTCDay()]} ${r.data.split("-").reverse().slice(0, 2).join("/")} às ${r.hora}` : "horário não informado");
-export function textoImplementacao(e, a, { vendedor, funcao, lead, conversaId }) {
+export function textoImplementacao(e, a, { vendedor, funcao, lead, conversaId, modelos }) {
   const r = a.reuniao || {};
-  return [
+  const vars = { evento: e.titulo.replace(/\*/g, "").replace(/^\S+\s/, ""), vendedor, funcao: funcao === "closer" ? "Closer" : "SDR", cliente: r.cliente_nome || lead, empresa_cliente: r.empresa || "", quando: quandoReuniao(r), modalidade: r.modalidade ? `${r.modalidade}${r.modalidade === "presencial" && r.local ? ` (${r.local})` : ""}` : "", link: verConversa(conversaId) };
+  return textoDe(modelos, "reuniao_implementacao", vars, () => [
     `${e.titulo} · ${vendedor}${funcao ? ` (${funcao === "closer" ? "Closer" : "SDR"})` : ""}`,
     `Cliente: ${[r.cliente_nome || lead, r.empresa].filter(Boolean).join(" · ")}`,
     `Quando: ${quandoReuniao(r)}${r.modalidade ? ` · ${r.modalidade}${r.modalidade === "presencial" && r.local ? ` (${r.local})` : ""}` : ""}`,
     verConversa(conversaId),
-  ].join("\n");
+  ].join("\n"));
 }
 async function numeroDoGestor(db, instancia) {
   if (!instancia) return null;
@@ -148,11 +162,11 @@ export async function avisarEventos(db, R, c, a, jaEnviados = [], { envio = envi
   // reuniao de implementacao: aviso proprio para o Walter; se falhar, nao marca como avisada e tenta na proxima auditoria
   const impl = novos.filter(IMPL);
   let falhouImpl = false, numGestor = null;
-  if (impl.length) {
+  if (impl.length && ativo(R.modelos, "reuniao_implementacao")) {
     numGestor = await numeroDoGestor(db, s.instancia);
     if (numGestor) {
       try {
-        await envio(db, s.instancia, numGestor, textoImplementacao(impl[0], a, { vendedor, funcao, lead, conversaId: c.id }));
+        await envio(db, s.instancia, numGestor, textoImplementacao(impl[0], a, { vendedor, funcao, lead, conversaId: c.id, modelos: R.modelos }));
         console.log(`[alerta] ${impl[0].chave}: ${vendedor} com ${lead}`);
       } catch (e) { falhouImpl = true; console.error("[alerta] reuniao de implementacao:", e.message); }
     }
@@ -164,7 +178,7 @@ export async function avisarEventos(db, R, c, a, jaEnviados = [], { envio = envi
   const soImpl = permitidos.length && permitidos.every(IMPL) && numGestor && !falhouImpl;
   const destinos = s.telefones.filter(t => !(soImpl && String(t).replace(/\D/g, "") === String(numGestor).replace(/\D/g, "")));
   if (permitidos.length && s.instancia && destinos.length) {
-    const texto = textoAlerta(permitidos[0], { vendedor: R.nomes.get(c.vendedor_id) || "Vendedor", funcao, lead: c.contato_nome || `+${c.telefone || c.contato}`, conversaId: c.id, formato: s.formato, outros: permitidos.slice(1) });
+    const texto = textoAlerta(permitidos[0], { vendedor: R.nomes.get(c.vendedor_id) || "Vendedor", funcao, lead: c.contato_nome || `+${c.telefone || c.contato}`, conversaId: c.id, formato: s.formato, outros: permitidos.slice(1), modelos: R.modelos });
     for (const t of destinos) {
       try { await envio(db, s.instancia, t, texto); enviou = true; }
       catch (e) { console.error(`[alerta] envio para ${t}:`, e.message); }

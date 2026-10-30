@@ -1,3 +1,4 @@
+import { ativo, textoDe } from "./modelos.js";
 import crypto from "node:crypto";
 import { cfg } from "./config.js";
 import { enviarWhatsApp } from "./envio.js";
@@ -64,12 +65,14 @@ export async function conflitosNaAgenda(token, inicio, fim, ignorarId, fetchImpl
 }
 const hm = iso => new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: cfg.tz }).format(new Date(iso));
 const dm = d => d.split("-").reverse().slice(0, 2).join("/");
-export function textoConflito(r, ev, conflitos, { vendedor, cliente, conversaId, link }) {
-  return [
+export function textoConflito(r, ev, conflitos, { vendedor, cliente, conversaId, link, modelos }) {
+  const lista = conflitos.map(e => `${hm(e.start.dateTime)} às ${hm(e.end?.dateTime || e.start.dateTime)} · ${e.summary || "(sem título)"}`).join("; ");
+  const vars = { data: dm(r.data), hora: r.hora, tipo_reuniao: r.tipo === "imersao" ? "imersão" : "implementação", cliente, vendedor, conflitos: lista, link: `👉 ${link || `${SITE}/conversas/${conversaId}`}` };
+  return textoDe(modelos, "conflito_agenda", vars, () => [
     `⚠️ *Conflito na agenda* · ${dm(r.data)} ${r.hora}`,
     `${r.tipo === "imersao" ? "Reunião de imersão" : "Reunião de implementação"} com ${cliente} (${vendedor}) bate com: ${conflitos.map(e => `${hm(e.start.dateTime)} às ${hm(e.end?.dateTime || e.start.dateTime)} · ${e.summary || "(sem título)"}`).join("; ")}`,
     `👉 ${link || `${SITE}/conversas/${conversaId}`}`,
-  ].join("\n");
+  ].join("\n"));
 }
 // Avisa no WhatsApp do proprio gestor (o numero que envia os avisos; cai no chat "Voce"), uma vez por horario
 async function avisarConflito(db, texto, envio) {
@@ -133,10 +136,10 @@ export async function sincronizarReuniao(db, R, c, r, { fetchImpl = fetch, envio
   const chave = new Date(inicio).toISOString();
   let avisado = atual?.conflito_avisado || null;
   if (conflitos.length && avisado !== chave) {
-    const texto = textoConflito(r, ev, conflitos, { vendedor: R.nomes.get(c.vendedor_id) || "vendedor", cliente: r.cliente_nome || `+${c.telefone || c.contato}`, conversaId: c.id, link: j.htmlLink });
+    const texto = textoConflito(r, ev, conflitos, { vendedor: R.nomes.get(c.vendedor_id) || "vendedor", cliente: r.cliente_nome || `+${c.telefone || c.contato}`, conversaId: c.id, link: j.htmlLink, modelos: R.modelos });
     await notificar(db, [...await gestores(db), c.vendedor_id], { categoria: "agenda", titulo: `⚠️ Conflito na agenda: ${ev.summary} em ${dm(r.data)} às ${r.hora}`, texto: conflitos.map(e => `${hm(e.start.dateTime)} às ${hm(e.end?.dateTime || e.start.dateTime)} · ${e.summary || "(sem título)"}`).join("\n"), link: `/conversas/${c.id}` });
     avisado = chave;
-    try { if (await avisarConflito(db, texto, envio)) { avisado = chave; console.log(`[agenda] conflito avisado: ${ev.summary} x ${conflitos.map(e => e.summary).join(", ")}`); } }
+    try { if (ativo(R.modelos, "conflito_agenda") && await avisarConflito(db, texto, envio)) { avisado = chave; console.log(`[agenda] conflito avisado: ${ev.summary} x ${conflitos.map(e => e.summary).join(", ")}`); } }
     catch (e) { console.error("[agenda] aviso de conflito:", e.message); }
   }
   await db.insert("reunioes_agenda", [{ ...linha, google_event_id: j.id, link: j.htmlLink || null, erro: null, conflito_avisado: avisado }], { onConflict: "conversa_id", returning: false });

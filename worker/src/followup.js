@@ -1,3 +1,4 @@
+import { ativo, textoDe } from "./modelos.js";
 import { addDays, today } from "./config.js";
 import { enviarWhatsApp } from "./envio.js";
 import { carregarRegras, chaveTelefone } from "./auditor.js";
@@ -75,24 +76,37 @@ const nomeLead = l => l.nome || (fone(l.telefone) ? `+55 ${fone(l.telefone)}` : 
 const itemLead = l => `• ${nomeLead(l)}${l.nome && fone(l.telefone) ? ` · ${fone(l.telefone)}` : ""} · ${l.semResposta ? `lead sem resposta há ${l.dias} dias` : `${l.dias} dias sem follow-up`}${l.assunto ? ` · ${l.assunto}` : ""}\n  ${SITE}/conversas/${l.conversaId}`;
 
 // Para o proprio vendedor (WhatsApp e notificacao no sistema)
-export function textoVendedor(nome, lista, dias) {
+export function textoVendedor(nome, lista, dias, modelos) {
   const mostra = lista.slice(0, MAX_LISTA);
-  return [
+  const vars = { nome: String(nome).split(" ")[0], quantidade: lista.length, dias, lista: [...mostra.map(itemLead), ...(lista.length > mostra.length ? [`...e mais ${lista.length - mostra.length} no sistema.`] : [])].join("\n") };
+  return textoDe(modelos, "followup_vendedor", vars, () => [
     `⏰ *FOLLOW-UP ATRASADO*`, ``,
     `Oi, ${String(nome).split(" ")[0]}! ${lista.length === 1 ? "Esse cliente potencial está" : `Esses ${lista.length} clientes potenciais estão`} há ${dias} dias ou mais sem uma mensagem sua:`, ``,
     ...mostra.map(itemLead),
     ...(lista.length > mostra.length ? [``, `...e mais ${lista.length - mostra.length} no sistema.`] : []), ``,
     `Bora retomar hoje, antes que esfriem! 💪 A gestão também foi avisada.`,
-  ].join("\n");
+  ].join("\n"));
 }
 
-// Para a gestao: so a contagem de cada vendedor e o link (a lista completa vai para o proprio vendedor)
-export function textoGestao(porVendedor, nomes, funcao, dias) {
-  return [
-    `⚠️ *Follow-up atrasado* · ${dias}+ dias sem mensagem`,
-    [...porVendedor].map(([v, ls]) => `${String(nomes.get(v) || "Vendedor").split(" ")[0]}: ${ls.length} ${ls.length === 1 ? "lead" : "leads"}`).join(" · "),
-    `👉 ${SITE}/conversas?aba=todas&p=30`,
-  ].join("\n");
+// Para a gestao: o erro de cada vendedor, com a lista de leads (em Mensagens da para trocar pela versao curta, so a contagem)
+export function textoGestao(porVendedor, nomes, funcao, dias, modelos) {
+  const total = [...porVendedor.values()].reduce((n, l) => n + l.length, 0);
+  const blocos = [...porVendedor].map(([v, ls]) => [
+    `*${nomes.get(v) || "Vendedor"} (${funcao.get(v) === "closer" ? "Closer" : "SDR"})*: ${ls.length} ${ls.length === 1 ? "lead" : "leads"} sem follow-up`,
+    ...ls.slice(0, 10).map(itemLead),
+    ...(ls.length > 10 ? [`  ...e mais ${ls.length - 10} no sistema`] : []),
+  ].join("\n"));
+  const vars = {
+    dias, quantidade: total, detalhes: blocos.join("\n\n"),
+    por_vendedor: [...porVendedor].map(([v, ls]) => `${String(nomes.get(v) || "Vendedor").split(" ")[0]}: ${ls.length} ${ls.length === 1 ? "lead" : "leads"}`).join(" · "),
+    link: `👉 ${SITE}/conversas?aba=todas&p=30`,
+  };
+  return textoDe(modelos, "followup_gestao", vars, () => [
+    `⚠️ *ERRO DE FOLLOW-UP*`, ``,
+    `${total === 1 ? "Um cliente potencial ficou" : `${total} clientes potenciais ficaram`} ${dias} dias ou mais sem follow-up do vendedor:`, ``,
+    blocos.join("\n\n"), ``,
+    `Os vendedores já foram avisados no WhatsApp e no sistema.`,
+  ].join("\n"));
 }
 
 // Junto com o resumo da manha. Cada lead entra uma vez por periodo sem follow-up (a chave inclui a ultima mensagem do vendedor).
@@ -117,16 +131,16 @@ export async function avisarFollowups(db, { envio = enviarWhatsApp, agora = Date
   for (const [v, ls] of porVendedor) {
     const nome = R.nomes.get(v) || "vendedor";
     await db.insert("notificacoes", [{ para: v, tipo: "aviso", categoria: "followup", titulo: `Follow-up atrasado: ${ls.length} ${ls.length === 1 ? "cliente" : "clientes"} há ${dias}+ dias sem mensagem sua`, texto: ls.slice(0, MAX_LISTA).map(l => `${nomeLead(l)} · ${l.dias} dias`).join("\n"), link: `/conversas?v=${v}&aba=todas&p=30` }], { returning: false });
-    if (s.instancia_envio_id && numeroDe.get(v)) {
-      try { await envio(db, s.instancia_envio_id, numeroDe.get(v), textoVendedor(nome, ls, dias)); res.push(`${nome}: WhatsApp ok`); }
+    if (s.instancia_envio_id && numeroDe.get(v) && ativo(R.modelos, "followup_vendedor")) {
+      try { await envio(db, s.instancia_envio_id, numeroDe.get(v), textoVendedor(nome, ls, dias, R.modelos)); res.push(`${nome}: WhatsApp ok`); }
       catch (e) { console.error(`[followup] WhatsApp de ${nome}:`, e.message); res.push(`${nome}: WhatsApp falhou`); }
     }
   }
   // 2) gestao: WhatsApp de alerta + notificacao no sistema
-  const textoG = textoGestao(porVendedor, R.nomes, R.funcao, dias);
+  const textoG = textoGestao(porVendedor, R.nomes, R.funcao, dias, R.modelos);
   await db.insert("notificacoes", gestores.map(g => ({ para: g.id, tipo: "aviso", categoria: "followup", titulo: `Erro de follow-up: ${novos.length} clientes potenciais sem follow-up há ${dias}+ dias`, texto: [...porVendedor].map(([v, ls]) => `${R.nomes.get(v) || "Vendedor"}: ${ls.length}`).join(" · "), link: "/conversas?aba=todas&p=30" })), { returning: false });
   const dest = await destinoResumo(db, { ...s, resumo_ativo: true });
-  const ok = dest.tels ? await mandar(db, dest, textoG, envio, "followup") : 0;
+  const ok = dest.tels && ativo(R.modelos, "followup_gestao") ? await mandar(db, dest, textoG, envio, "followup") : 0;
   await db.insert("followups_avisados", novos.map(l => ({ vendedor_id: l.vendedor_id, lead: l.lead, ultima_msg_em: l.desdeQuando })), { onConflict: "vendedor_id,lead,ultima_msg_em", ignoreDuplicates: true, returning: false });
   return `${novos.length} leads sem follow-up · ${res.join(", ") || "sem WhatsApp do vendedor"} · gestao ${ok}/${dest.tels?.length ?? 0}`;
 }

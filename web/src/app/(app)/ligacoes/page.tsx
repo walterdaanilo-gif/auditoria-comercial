@@ -49,14 +49,14 @@ export default async function Ligacoes({ searchParams: spP }: { searchParams: Pr
                   <td className="td">{/^\d{10,13}$/.test(l.contato) ? telefone(l.contato) : l.contato}</td>
                   <td className="td whitespace-nowrap">
                     <span className="flex items-center gap-1.5">
-                      {l.origem === "whatsapp" ? (l.direcao === "entrada" ? <ArrowDownLeft size={15} className="text-mute" aria-label="Recebida" /> : <ArrowUpRight size={15} className="text-mute" aria-label="Feita" />) : null}
-                      {l.atendida ? <span className="font-semibold text-ok">Atendida</span> : <span className="text-bad">{l.resultado === "recusada" ? "Recusada" : "Não atendida"}</span>}
+                      {l.origem !== "manual" ? (l.direcao === "entrada" ? <ArrowDownLeft size={15} className="text-mute" aria-label="Recebida" /> : <ArrowUpRight size={15} className="text-mute" aria-label="Feita" />) : null}
+                      {l.atendida ? <span className="font-semibold text-ok">Atendida</span> : <span className="text-bad">{({ recusada: "Recusada", cancelada: "Cancelada", falhou: "Falhou", perdida: "Perdida" } as Record<string, string>)[l.resultado ?? ""] ?? "Não atendida"}</span>}
                       {l.atendida && l.duracao_seg ? <span className="text-mute">· {duracao(l.duracao_seg)}</span> : null}
                     </span>
-                    <span className="text-xs text-mute">{l.origem === "whatsapp" ? `WhatsApp · ${l.direcao === "entrada" ? "recebida" : "feita"}` : "Gravação enviada"}</span>
+                    <span className="text-xs text-mute">{l.origem !== "manual" ? `${l.origem === "crm" ? "CRM" : "WhatsApp"} · ${l.direcao === "entrada" ? "recebida" : "feita"}` : "Gravação enviada"}</span>
                   </td>
                   <td className={`td font-bold ${corNota(a?.nota_geral)}`}>{nota(a?.nota_geral)}</td>
-                  <td className="td">{l.origem === "whatsapp" && !l.audio_url ? <span className="text-mute">sem gravação</span> : a ? <span className={`chip ${a.qualidade === "boa" ? "border-ok text-ok" : a.qualidade === "regular" ? "border-warn text-warn" : "border-bad text-bad"}`}>{a.qualidade}</span> : l.transcricao ? <span className="text-mute">aguardando auditoria</span> : <span className="text-mute">transcrevendo...</span>}</td>
+                  <td className="td">{l.origem !== "manual" && !l.audio_url ? <span className="text-mute">sem gravação</span> : a ? <span className={`chip ${a.qualidade === "boa" ? "border-ok text-ok" : a.qualidade === "regular" ? "border-warn text-warn" : "border-bad text-bad"}`}>{a.qualidade}</span> : l.transcricao ? <span className="text-mute">aguardando auditoria</span> : <span className="text-mute">transcrevendo...</span>}</td>
                   <td className="td">
                     <details><summary className="cursor-pointer text-brand">abrir</summary>
                       <div className="mt-2 max-w-xl space-y-2 text-sm">

@@ -1,3 +1,4 @@
+import { ativo, carregarModelos, textoDe } from "./modelos.js";
 import { cfg, today } from "./config.js";
 import { enviarWhatsApp } from "./envio.js";
 import { gestores, notificar } from "./notificar.js";
@@ -73,7 +74,7 @@ function linhaVendas(t) {
   return `💰 Vendas: ${partes.length ? partes.join(" · ") : "nenhuma ainda"}`;
 }
 
-export function textoResumo(d, dia, { turno = "dia", parados = new Map() } = {}) {
+export function textoResumo(d, dia, { turno = "dia", parados = new Map(), modelos } = {}) {
   const { s, time, pessoas } = d;
   const metaTime = pessoas.filter(p => !p.closer).reduce((n, p) => n + (metaDe(p, s) ?? 0), 0);
   // atencao: abaixo da meta do turno, ou com follow-up atrasado
@@ -92,14 +93,20 @@ export function textoResumo(d, dia, { turno = "dia", parados = new Map() } = {})
   const destaque = top && pontos(top) > 0
     ? `👑 ${top.nome.split(" ")[0]}: ${[feitoDe(top) && plural(feitoDe(top), top.closer ? "reunião" : "marcação", top.closer ? "reuniões" : "marcações"), top.imersao && plural(top.imersao, "imersão", "imersões"), (top.wPagos + top.wCupom) && plural(top.wPagos + top.wCupom, "inscrição no workshop", "inscrições no workshop")].filter(Boolean).join(" · ")}`
     : null;
-  return [
+  const hora = hh(turno === "manha" ? s.resumo_manha_hora || "13:00" : s.rodada_final_hora || "19:00");
+  const vars = {
+    hora, data: ddmm(dia), vendas: linhaVendas(time).replace(/^💰 Vendas: /, ""), marcacoes: `${time.marc}${metaTime ? `/${metaTime}` : ""}`,
+    ligacoes: time.ligAt ? `${plural(time.ligAt, "atendida", "atendidas")}${time.ligSeg ? ` · ${dur(time.ligSeg)}` : ""}` : "nenhuma atendida",
+    atencao: atencao.join("\n"), destaque: destaque || "", painel: SITE,
+  };
+  return textoDe(modelos, turno === "manha" ? "resumo_manha" : "resumo_dia", vars, () => [
     `🚀 *Resumo ${hh(turno === "manha" ? s.resumo_manha_hora || "13:00" : s.rodada_final_hora || "19:00")} · ${ddmm(dia)}*`, ``,
     linhaVendas(time),
     `📅 Marcações: ${time.marc}${metaTime ? `/${metaTime}` : ""}`,
     `📞 Ligações: ${time.ligAt ? `${plural(time.ligAt, "atendida", "atendidas")}${time.ligSeg ? ` · ${dur(time.ligSeg)}` : ""}` : "nenhuma atendida"}`,
     ...(atencao.length || destaque ? [``, ...atencao, ...(destaque ? [destaque] : [])] : []),
     ``, `Detalhes 👉 ${SITE}`,
-  ].join("\n");
+  ].join("\n"));
 }
 
 // Para quem e por onde mandar (Configuracoes > Alertas ao gestor); null = nao manda hoje (com o motivo)
@@ -127,10 +134,12 @@ export async function enviarRelatorio(db, { turno = "dia", envio = enviarWhatsAp
   if (turno === "manha") await db.insert("resumos_turno", [{ data: hoje, turno: "manha", dados: contadores(d) }], { onConflict: "data,turno", returning: false });
   const dest = await destinoResumo(db, d.s);
   if (!dest.tels) return dest.motivo;
+  const modelos = await carregarModelos(db, d.s.org_id);
+  if (!ativo(modelos, turno === "manha" ? "resumo_manha" : "resumo_dia")) return "resumo desligado em Mensagens";
   let parados = new Map();
   try { for (const l of await leadsParados(db, await carregarRegras(db))) parados.set(l.vendedor_id, (parados.get(l.vendedor_id) || 0) + 1); }
   catch (e) { console.error("[relatorio] follow-up:", e.message); }
-  const texto = textoResumo(d, hoje, { turno, parados });
+  const texto = textoResumo(d, hoje, { turno, parados, modelos });
   await notificar(db, await gestores(db), { categoria: "resumo", titulo: `${turno === "manha" ? "☀️ Resumo das 13h" : "🌙 Resumo do dia"} · ${ddmm(hoje)}`, texto: texto.replace(/^.*\n\n/, ""), link: "/" });
   const ok = await mandar(db, dest, texto, envio, "relatorio");
   if (ok) await db.update("audit_settings", { id: "eq.1" }, { resumo_ultimo_envio: new Date().toISOString() });

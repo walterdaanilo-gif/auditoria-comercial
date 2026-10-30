@@ -1,6 +1,8 @@
 import { empresas, exigirGestor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Criterio, Estado, Numero, Settings, Vendedor } from "@/lib/configuracoes";
+import Link from "next/link";
+import { MessageSquareText } from "lucide-react";
 import FormConfig, { type StatusAgenda } from "./FormConfig";
 
 export const dynamic = "force-dynamic";
@@ -34,5 +36,15 @@ export default async function Configuracoes({ searchParams: spP }: { searchParam
     alertas: (rAl.data ?? []).map((x) => x.telefone as string),
     rubricas: { sdr: da("sdr"), closer: da("closer"), personalizada: da("personalizada") },
   };
-  return <FormConfig empresa={atual?.nome ?? "Weevo"} inicial={inicial} agenda={((rAg.data ?? []) as StatusAgenda[])[0] ?? null} retornoAgenda={sp.agenda} />;
+  return (
+    <>
+      <Link href="/configuracoes/mensagens" className="mb-4 flex items-center gap-3 rounded-3xl border border-line bg-card px-5 py-4 hover:border-brand">
+        <MessageSquareText size={20} className="shrink-0 text-brand" />
+        <span className="min-w-0 flex-1"><span className="block font-bold">Mensagens</span>
+          <span className="block text-sm text-mute">Edite os textos que o sistema manda para você e para os vendedores (resumos, alertas, follow-up)</span></span>
+        <span className="text-mute">›</span>
+      </Link>
+      <FormConfig empresa={atual?.nome ?? "Weevo"} inicial={inicial} agenda={((rAg.data ?? []) as StatusAgenda[])[0] ?? null} retornoAgenda={sp.agenda} />
+    </>
+  );
 }

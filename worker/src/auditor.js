@@ -1,3 +1,4 @@
+import { carregarModelos } from "./modelos.js";
 import { z } from "zod";
 import { cfg, today, addDays, dayStart } from "./config.js";
 import { chamarIA, extrairJson, modeloAtual, provedor } from "./ia.js";
@@ -30,6 +31,7 @@ export async function carregarRegras(db, org = null) {
     db.select("telefones_alerta", { select: "telefone", filters: daOrg }),
     s.org_id ? db.select("organizacoes", { select: "nome,slug", filters: { id: `eq.${s.org_id}` } }) : Promise.resolve([]),
   ]);
+  const modelos = await carregarModelos(db, s.org_id);
   const rub = r => crit.filter(c => c.rubrica === r && Number(c.peso) > 0);
   return {
     s: {
@@ -50,6 +52,7 @@ export async function carregarRegras(db, org = null) {
     org: s.org_id || null, padrao: !s.org_id || !empresa || empresa.slug === "weevo", empresa: empresa?.nome || "Weevo",
     contexto: roteiroRow?.contexto || "", papelSdr: roteiroRow?.papel_sdr || "", papelCloser: roteiroRow?.papel_closer || "",
     // avisos no WhatsApp do gestor: venda = so imersao fechada; marcacao e oportunidade ficam desligadas por padrao
+    modelos, // textos editados em Configuracoes > Mensagens
     alertas: { venda: s.alerta_venda ?? true, marcacao: s.alerta_marcacao ?? false, oportunidade: s.alerta_oportunidade ?? false, formato: s.alerta_formato || "detalhado", instancia: s.instancia_envio_id || null, telefones: tels.map(t => t.telefone) },
   };
 }
