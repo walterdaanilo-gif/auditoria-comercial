@@ -141,7 +141,7 @@ ${criterios.map(c => `- ${c.chave}: ${c.nome}. ${c.descricao || ""}`.trim()).joi
 - Nos exemplos de frase, use o nome real do vendedor e do lead (vêm no início do texto). Os nomes do roteiro são só exemplos.
 - Se vier um HISTÓRICO DOS DIAS ANTERIORES, use só como contexto (o que já foi falado, prometido, follow-up). A nota, a venda e a oportunidade são sobre a CONVERSA DO DIA.
 - Não invente fatos que não estão no texto. Na dúvida, venda e oportunidade ficam false.
-- Reunião: preencha "reuniao" quando uma reunião (de implementação ou de imersão) teve data e hora combinadas. "remarcacao" = true quando é uma reunião que JÁ estava marcada antes (no histórico ou no começo da conversa) e só está mudando de dia ou horário ("vamos remarcar", "não vou conseguir, pode ser quinta?"); remarcação NÃO é marcação nova: nesse caso "agendou" false para a reunião. Leia a conversa como um todo para saber se a reunião ficou MARCADA (acordo dos dois lados sobre dia e hora), sem exigir palavras exatas. "cliente_confirmou" = o lead topou aquele dia e hora (aceitou a proposta do vendedor, ou foi ele quem propôs e seguiu na conversa). "vendedor_confirmou" = o vendedor fechou do lado dele: aceitou a proposta do lead ("perfeito", "show, te espero"), recebeu o aceite da proposta que ele fez ("pode ser", "fechado", "combinado", "beleza"), já está acertando os detalhes da reunião (online ou presencial, link, endereço) ou mandou o convite/link. Marque false quando a conversa termina com pergunta ainda sem resposta sobre o horário ("posso confirmar?" e o lead não respondeu nada que indique sim), quando ainda estão escolhendo entre opções de horário, ou quando o lead ficou de ver/retornar. Hoje é ${hojeExtenso()}; cada mensagem traz [dia/mês hora], use isso para transformar "amanhã", "quinta às 19h" em data AAAA-MM-DD e hora HH:MM. "modalidade": "online" (videochamada, Meet, Zoom) ou "presencial"; "local" só o endereço ou lugar quando presencial. "cliente_nome", "empresa" e "email" só se aparecerem na conversa ou no nome do contato. Se não houver reunião com horário, "reuniao": null.
+- Reunião: preencha "reuniao" quando uma reunião (de implementação ou de imersão) teve data e hora combinadas. "remarcacao" = true quando é uma reunião que JÁ estava marcada antes (no histórico ou no começo da conversa) e só está mudando de dia ou horário ("vamos remarcar", "não vou conseguir, pode ser quinta?"); remarcação NÃO é marcação nova: nesse caso "agendou" false para a reunião. Leia a conversa como um todo para saber se a reunião ficou MARCADA (acordo dos dois lados sobre dia e hora), sem exigir palavras exatas. "cliente_confirmou" = o lead topou aquele dia e hora (aceitou a proposta do vendedor, ou foi ele quem propôs e seguiu na conversa). "vendedor_confirmou" = o vendedor fechou do lado dele: aceitou a proposta do lead ("perfeito", "show, te espero"), recebeu o aceite da proposta que ele fez ("pode ser", "fechado", "combinado", "beleza"), já está acertando os detalhes da reunião (online ou presencial, link, endereço) ou mandou o convite/link. Marque false quando a conversa termina com pergunta ainda sem resposta sobre o horário ("posso confirmar?" e o lead não respondeu nada que indique sim), quando ainda estão escolhendo entre opções de horário, ou quando o lead ficou de ver/retornar. Hoje é ${hojeExtenso()}; cada mensagem traz [dia da semana dia/mês hora], use isso para transformar "amanhã", "quinta às 19h" em data AAAA-MM-DD e hora HH:MM. Para achar a data, copie do calendário (não calcule o dia da semana de cabeça): ${calendario()}. "Terça" dita numa sexta é a terça seguinte. "modalidade": "online" (videochamada, Meet, Zoom) ou "presencial"; "local" só o endereço ou lugar quando presencial. "cliente_nome", "empresa" e "email" só se aparecerem na conversa ou no nome do contato. Se não houver reunião com horário, "reuniao": null.
 
 Responda APENAS com um JSON neste formato:
 {"notas": [só os critérios que se aplicam, cada um assim: {"criterio": "${criterios.map(c => c.chave).join("\"|\"")}", "nota": 1 a 5, "justificativa": "curta"}],
@@ -252,8 +252,33 @@ export function temposResposta(msgs) {
   return { primeira_resposta_seg: esperas[0], tempo_medio_resposta_seg: Math.round(esperas.reduce((a, b) => a + b, 0) / esperas.length), respostas_sdr: esperas.length };
 }
 
-// cada mensagem com [dia/mes hora] (Brasilia), para a IA resolver "amanha", "quinta as 19h"
-const quando = iso => (iso ? `[${new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: cfg.tz }).format(new Date(iso)).replace(",", "")}] ` : "");
+// cada mensagem com [dia da semana dia/mes hora] (Brasilia), para a IA resolver "amanha", "quinta as 19h"
+const SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const diaSemana = d => SEMANA[new Date(d + "T12:00:00Z").getUTCDay()];
+const quando = iso => (iso ? `[${diaSemana(te(iso))} ${new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: cfg.tz }).format(new Date(iso)).replace(",", "")}] ` : "");
+const te = iso => new Intl.DateTimeFormat("sv-SE", { timeZone: cfg.tz }).format(new Date(iso));
+// calendario pronto (7 dias atras ate 3 semanas a frente): a IA so copia a data, sem contar dia da semana de cabeca
+export const calendario = (hoje = today()) => Array.from({ length: 29 }, (_, i) => addDays(hoje, i - 7)).map(d => `${diaSemana(d)} ${d.slice(8)}/${d.slice(5, 7)} = ${d}`).join(" · ");
+
+// "Terca as 15h" e a IA devolveu uma segunda: vale o dia da semana escrito na conversa. Pega o ultimo dia da semana
+// citado nas mensagens e, se a data nao cai nele, move para o proximo dia com esse nome a partir da mensagem.
+const NOMES_DIA = [[0, /\bdomingo\b/], [1, /\bsegunda(?!\s+(vez|op|chance))/], [2, /\bter[cç]a\b/], [3, /\bquarta\b/], [4, /\bquinta\b/], [5, /\bsexta\b/], [6, /\bs[aá]bado\b/]];
+export function corrigirDiaDaSemana(r, msgs) {
+  if (!r?.data || !msgs?.length) return r;
+  for (const m of [...msgs].reverse()) {
+    const t = String(m.texto || m.transcricao || "").toLowerCase();
+    const achados = NOMES_DIA.filter(([, re]) => re.test(t)).map(([n]) => n);
+    if (!achados.length && /\bamanh[aã]|\bhoje\b|\b\d{1,2}\/\d{1,2}\b/.test(t)) return r; // depois do dia da semana falaram outra data
+    if (achados.length !== 1) continue;
+    const alvo = achados[0];
+    if (new Date(r.data + "T12:00:00Z").getUTCDay() === alvo) return r;
+    let d = addDays(te(m.enviada_em), /\bhoje\b/.test(t) ? 0 : 1);
+    while (new Date(d + "T12:00:00Z").getUTCDay() !== alvo) d = addDays(d, 1);
+    console.log(`[auditoria] data da reuniao corrigida: ${r.data} -> ${d} ("${t.slice(0, 60)}")`);
+    return { ...r, data: d };
+  }
+  return r;
+}
 const hojeExtenso = () => new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric", timeZone: cfg.tz }).format(new Date());
 const linha = m => `${quando(m.enviada_em)}${m.remetente === "vendedor" ? "VENDEDOR" : "CLIENTE"}: ${m.tipo === "audio" ? `[audio] ${m.transcricao || ""}` : m.texto || `[${m.tipo}]`}`;
 const cortar = t => (t.length > 14000 ? t.slice(t.length - 14000) : t);
@@ -306,6 +331,7 @@ export async function runAudits(db, { fetchImpl = fetch, now = Date.now(), final
     const quem = `Vendedor: ${R.nomes.get(c.vendedor_id) || "sem nome"} · Lead: ${c.contato_nome || "nome não informado"}\n\n`;
     const texto = quem + (hist ? `${hist}\n\nCONVERSA DO DIA (avalie esta):\n${cortar(msgs.map(linha).join("\n"))}` : cortar(msgs.map(linha).join("\n")));
     let a = await auditarTexto(R, c.vendedor_id, texto, { primeiraResposta: tempos.primeira_resposta_seg }, fetchImpl);
+    if (a.reuniao) a = { ...a, reuniao: corrigirDiaDaSemana(a.reuniao, msgs) };
     if (R.padrao && !a.remarcacao && (a.reuniao || a.tipo_agendamento === "imersao") && c.canal !== "importada") {
       if (await reuniaoAnterior(db, c, R, { inicio: a.reuniao?.data && a.reuniao?.hora ? `${a.reuniao.data}T${a.reuniao.hora}:00-03:00` : null })) a = { ...a, ...marcacao({ ...a, remarcacao: true, agendou: a.agendou, tipo_agendamento: a.tipo_agendamento }, "sdr"), reuniao: a.reuniao ? { ...a.reuniao, remarcacao: true } : a.reuniao };
     }

@@ -114,3 +114,14 @@ console.log("OK: criterio que nao se aplica fica fora da nota");
   assert.equal(v.venda_cupom, false); assert.equal(v.venda_valor, 3000);
   console.log("OK: regras por empresa (Carbone com contexto, papel e rubrica proprios)");
 }
+
+// Data da reuniao: vale o dia da semana escrito na conversa ("terca as 15h" dito numa sexta = terca seguinte)
+{
+  const { corrigirDiaDaSemana } = await import("../src/auditor.js");
+  const fabio = [{ texto: "Amigo, podemos fazer proxima semana?", enviada_em: "2026-10-30T16:04:00Z" }, { texto: "Terça feira dá certo", enviada_em: "2026-10-30T17:37:00Z" }, { texto: "15h", enviada_em: "2026-10-30T17:50:00Z" }];
+  assert.equal(corrigirDiaDaSemana({ data: "2026-11-02", hora: "15:00" }, fabio).data, "2026-11-03");
+  assert.equal(corrigirDiaDaSemana({ data: "2026-11-03", hora: "15:00" }, fabio).data, "2026-11-03", "data certa fica");
+  const mudou = [{ texto: "pode ser quinta?", enviada_em: "2026-11-03T12:00:00Z" }, { texto: "melhor amanhã às 10h", enviada_em: "2026-11-03T12:05:00Z" }];
+  assert.equal(corrigirDiaDaSemana({ data: "2026-11-04", hora: "10:00" }, mudou).data, "2026-11-04", "depois falaram amanha: confia na IA");
+  console.log("OK: data da reuniao segue o dia da semana da conversa");
+}
