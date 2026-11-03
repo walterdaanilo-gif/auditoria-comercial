@@ -23,7 +23,7 @@ Ainda em **Configurações do projeto > Propriedades do script > Adicionar propr
 
 | Propriedade | Valor |
 |---|---|
-| `API_URL` | endereço do site, sem barra no fim (ex.: `https://auditoria-comercial.vercel.app`) |
+| `API_URL` | endereço do site, sem barra no fim (hoje: `https://auditoria-comercial-omega.vercel.app`) |
 | `SYNC_SECRET` | o segredo do passo 2 |
 
 ### 5. Publicar o Web App
