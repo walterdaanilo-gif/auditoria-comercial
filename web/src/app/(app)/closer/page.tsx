@@ -4,6 +4,7 @@ import { listarLeads, modoLocal } from "@/lib/closer/dados";
 import PainelCloser from "./PainelCloser";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // "Atualizar da planilha" espera o Apps Script terminar a sincronizacao
 export const metadata = { title: "Closer · Cabueta do Elon Musk" };
 
 export default async function Closer() {
