@@ -13,7 +13,14 @@ const limpo = (s: unknown) => String(s ?? "").trim();
 const digitos = (s: string) => s.replace(/\D/g, "");
 const fimTel = (s: string) => digitos(s).slice(-9);
 const nomeChave = (s: string) => limpo(s).toLowerCase().replace(/\s+/g, " ");
-const linhas = (tabela: string[][]) => tabela.slice(1).filter((l) => l.some((c) => limpo(c))).map((l) => Object.fromEntries((tabela[0] ?? []).map((c, i) => [c, limpo(l[i])])) as Linha);
+export const linhas = (tabela: string[][]) => tabela.slice(1).filter((l) => l.some((c) => limpo(c))).map((l) => Object.fromEntries((tabela[0] ?? []).map((c, i) => [c, limpo(l[i])])) as Linha);
+
+// Identidade do lead. Sem telefone, nome e empresa juntos: so o nome confundiria pessoas diferentes (duas "Maria").
+// O Apps Script (apps-script/closer-sync.gs) calcula a mesma chave: mudou aqui, mude la.
+export function chaveDe(t: Linha) {
+  const fim = fimTel(t["Telefone"] ?? "");
+  return fim ? "tel:" + fim : `nome:${nomeChave(t["Nome"])}|${nomeChave(t["Empresa"])}`;
+}
 
 // Numero pronto para o link do WhatsApp (DDI 55 quando vier so com DDD)
 export function telefoneWhats(t: string) {
@@ -53,8 +60,7 @@ export function montarLeads(todos: string[][], participantes: string[][], atenca
     const trava = TRAVA.test(limpo(primeira)) ? limpo(primeira) : "";
     const nota = t["Nota NPS"] !== "" && !isNaN(Number(t["Nota NPS"])) ? Number(t["Nota NPS"]) : null;
     const al = fim ? alertas.get(fim) : undefined;
-    // sem telefone, nome e empresa juntos: so o nome confundiria pessoas diferentes (duas "Maria")
-    const chave = fim ? "tel:" + fim : `nome:${nomeChave(t["Nome"])}|${nomeChave(t["Empresa"])}`;
+    const chave = chaveDe(t);
     const lead: Lead = {
       chave, nome: t["Nome"], empresa: t["Empresa"], telefone: telefoneWhats(t["Telefone"]), telefoneTexto: t["Telefone"], workshop: t["Data do workshop"], ordem: i,
       nota, motivoNota: p["Motivo da nota"] || "", dor: p["Dor original (texto completo)"] || t["Dor relatada (resumo)"] || "", area: p["Área da dor"] || "", hoje: p["Como resolve hoje"] || "", deseja: p["Resultado desejado"] || "",
