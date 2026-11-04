@@ -1,50 +1,24 @@
-// Tipos e calculos do slide 1 (Visao geral) da Apresentacao. Sem acesso a banco e sem tela: so conta.
+// Tipos e calculos da tela fixa da TV (Visao geral). Sem acesso a banco e sem tela: so conta.
 // Regra de ouro: dado que nao existe vem como null, nunca como zero. A tela mostra "aguardando fonte".
 
 export type Tom = "ok" | "warn" | "bad" | "neutro";
 
-export type Produto = {
-  chave: "incompany" | "imersao" | "plataforma" | "workshop";
-  nome: string; cor: string;
-  valor: number | null;            // receita do mes em R$
-  pctMeta: number | null;          // 0 a 100 (receita / meta do produto)
-  rotuloMeta: string | null;       // ex.: "meta R$ 100 mil" ou "270 ativos"
-  ticket: string | null;           // ex.: "R$ 36 mil"
-  winloss: { ganhos: number; perdidos: number } | null;
-};
-export type EtapaFunil = { nome: string; sub?: string; valor: number | null; passagem: string | null; destaque?: boolean };
-export type CaixaProduto = { nome: string; cor: string; valor: number | null; pct: number | null };
 export type Pessoa = {
   id: string; nome: string; sigla: string; foto: string | null; tipo: "sdr" | "closer";
-  status: { texto: string; tom: Tom } | null;
-  contatos: number | null;                              // SDR
-  conversas: { v: number; meta: number | null } | null; // SDR
-  inscricoes: { v: number; meta: number | null } | null;// SDR
-  reunioes: { v: number; meta: number | null } | null;  // Closer
-  negociacao: { valor: number; n: number } | null;      // Closer
-  vendasValor: number; nota: number | null;
-  rodape: string;
+  conversas: { v: number; meta: number } | null;  // so SDR (meta do Walter por dia util x dias uteis do mes)
+  marcacoes: { v: number; meta: number } | null;  // so SDR
+  vendasValor: number; vendasN: number;            // vendas pagas (Workshop pago e Imersao)
 };
-export type CardRodape = { rotulo: string; valor: string | null; sub?: string; selo?: { texto: string; tom: Tom }; tom?: Tom };
 
-export type Slide1Dados = {
+// Tela fixa da TV (Visao geral). O que o Cabueta nao mede nao entra aqui.
+export type VisaoGeralDados = {
   demo: boolean;
   atualizadoEm: string;
   periodo: { rotulo: string; intervalo: string; diaUtil: number; diasUteisMes: number };
-  fat: {
-    real: number; meta: number | null; semFonteResto: boolean;
-    serie: { du: number; real: number; data: string }[];
-    datasUteis: string[]; // data (dd/mm) de cada dia util do mes
-  };
-  produtos: Produto[];
-  funil: EtapaFunil[];
-  caixasProduto: CaixaProduto[];
-  origem: { inbound: number; outbound: number } | null;
-  negociacao: { valor: number; n: number } | null;
-  presentesImersao: number | null;
-  semRetorno: number | null;
+  fat: { real: number; meta: number | null; serie: { du: number; real: number; data: string }[]; datasUteis: string[] };
   pessoas: Pessoa[];
-  rodape: CardRodape[];
+  semRetorno: number | null;
+  primeiraResposta: { seg: number | null; slaMin: number } | null;
 };
 
 // ---------- formatos ----------

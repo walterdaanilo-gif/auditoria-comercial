@@ -2,9 +2,9 @@ import { empresas, exigirPerfil } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hojeBR } from "@/lib/format";
 import { lerPeriodo } from "@/lib/periodo";
-import type { Slide1Dados } from "./slide1/calc";
-import { montarSlide1 } from "./slide1/dados";
-import { slide1Demo } from "./slide1/demo";
+import VisaoGeral from "./visao-geral/VisaoGeral";
+import { montarVisaoGeral } from "./visao-geral/dados";
+import { visaoGeralDemo } from "./visao-geral/demo";
 import { Tela, type DadosTela, type Linha, type Vendas, type WorkshopPor } from "./Tela";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,13 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
   // so a empresa aberta (Weevo ou Carbone): time, metas, numeros e vendas dela
   const { atual } = await empresas(await exigirPerfil());
   const org = atual?.id ?? "";
+
+  // Weevo: a Apresentacao e uma tela fixa (sem rodizio), do mes atual, so com o que o Cabueta mede.
+  // ?demo=1 mostra numeros ficticios. Se a busca falhar, cai na apresentacao antiga abaixo.
+  if (atual?.slug === "weevo") {
+    if (sp.demo === "1") return <VisaoGeral dados={visaoGeralDemo} />;
+    try { return <VisaoGeral dados={await montarVisaoGeral(org)} />; } catch { /* segue para a apresentacao antiga */ }
+  }
   const periodo = lerPeriodo(sp, "semana");
   const { de, ate } = periodo;
   const hoje = hojeBR();
@@ -45,16 +52,9 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
     const o = (workshopPor[v.vendedor_id] ??= { convites: 0, pagos: 0, valor: 0 });
     if (v.venda_cupom) o.convites++; else { o.pagos++; o.valor += Number(v.venda_valor || 0); }
   }
-  // Slide 1 novo (Visao geral): so Weevo. ?demo=1 mostra numeros ficticios; sem demo, so dados reais (o que nao existe vira "aguardando fonte").
-  // Se a busca falhar, o slide antigo continua aparecendo.
-  let slide1: Slide1Dados | null = null;
-  if (atual?.slug === "weevo") {
-    if (sp.demo === "1") slide1 = slide1Demo;
-    else { try { slide1 = await montarSlide1(org); } catch { slide1 = null; } }
-  }
   const cfg = rCfg.data as { meta_sdr_conversas: number | null; meta_sdr_marcacoes: number | null } | null;
   return <Tela empresa={atual ? { slug: atual.slug, nome: atual.nome } : null} periodo={periodo} hoje={hoje} perfis={(rPerf.data ?? []) as DadosTela["perfis"]} linhas={((rRes.data ?? []) as Linha[]).filter((l) => equipe.includes(l.vendedor_id))}
-    equipe={equipe} vendas={vendas} workshopPor={workshopPor} slide1={slide1}
+    equipe={equipe} vendas={vendas} workshopPor={workshopPor}
     metas={{ conversas: cfg?.meta_sdr_conversas ?? 25, marcacoes: cfg?.meta_sdr_marcacoes ?? 6 }}
     atualizadoEm={new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })} />;
 }
