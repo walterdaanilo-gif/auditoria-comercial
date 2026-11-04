@@ -9,6 +9,7 @@ import { diasEntre, type Periodo } from "@/lib/periodo";
 import BarraMeta from "@/components/BarraMeta";
 import Carrossel from "./Carrossel";
 import Controles from "./Controles";
+import type { Slide1Dados } from "./slide1/calc";
 
 
 // Tela de TV (16:9, sem rolagem) no molde do painel comercial de referencia, nas cores Weevo. Grade 2x2.
@@ -49,10 +50,10 @@ function Painel({ titulo, nota: sub, children, className = "" }: { titulo: strin
 }
 
 // equipe = so quem tem WhatsApp cadastrado na aba WhatsApp (tirou o WhatsApp, sai do time)
-export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean; funcao?: string | null; foto_url?: string | null }[]; linhas: Linha[]; equipe: string[]; metas: { conversas: number; marcacoes: number }; vendas: Vendas; workshopPor: WorkshopPor; empresa?: { slug: string; nome: string } | null };
+export type DadosTela = { periodo: Periodo; hoje: string; atualizadoEm: string; perfis: { id: string; nome: string; papel: string; ativo: boolean; funcao?: string | null; foto_url?: string | null }[]; linhas: Linha[]; equipe: string[]; metas: { conversas: number; marcacoes: number }; vendas: Vendas; workshopPor: WorkshopPor; empresa?: { slug: string; nome: string } | null; slide1?: Slide1Dados | null };
 
 // Desenho da tela, separado da busca de dados (permite previa com dados de exemplo)
-export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, metas, vendas, workshopPor, empresa = null }: DadosTela) {
+export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, metas, vendas, workshopPor, empresa = null, slide1 = null }: DadosTela) {
   const { de, ate } = periodo;
   const META_CONVERSAS = metas.conversas, META_MARCACOES = metas.marcacoes;
   // Tela dos SDRs: so quem e SDR (Closer fica fora, as metas daqui sao de conversas e marcacoes)
@@ -268,6 +269,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
       {/* grade 2x2 ou modo slides */}
       <Suspense>
         <Carrossel
+          slide1={slide1}
           geral={<main className="grid min-h-0 flex-1 gap-[clamp(8px,0.9vh,16px)] lg:grid-cols-[1.35fr_1fr] lg:grid-rows-[minmax(0,1fr)_minmax(0,1.1fr)]">{pMarc}{pConv}{pFunil}{pPessoa}</main>}
           slides={[{ titulo: "Marcações acumuladas", no: pMarc }, { titulo: tituloMetas, no: pConv }, { titulo: "Funil por SDR", no: pFunil }, { titulo: "Por pessoa", no: pPessoa }]}
         />

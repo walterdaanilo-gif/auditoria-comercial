@@ -49,7 +49,14 @@ export type Settings = {
   meta_sdr_marcacoes: number;
   meta_closer_reunioes: number | null;
   meta_closer_vendas: number | null;
+  // metas de faturamento do mes em R$ (slide 1 da Apresentacao); null = sem meta
+  meta_fat_mes?: number | null;
+  meta_fat_workshop?: number | null;
+  meta_fat_imersao?: number | null;
+  meta_fat_incompany?: number | null;
+  meta_fat_plataforma?: number | null;
 };
+export const CAMPOS_META_FAT = ["meta_fat_mes", "meta_fat_workshop", "meta_fat_imersao", "meta_fat_incompany", "meta_fat_plataforma"] as const;
 
 export type Vendedor = { id: string; nome: string; funcao: "sdr" | "closer" | "gestao"; ativo: boolean; foto_url?: string | null };
 export type Numero = { id: string; vendedor_id: string; nome: string; numero: string | null; status: string; horario: Horario | null };
@@ -157,6 +164,7 @@ export function validar(e: Estado): string[] {
   for (const t of [...e.alertas, ...e.ignorados]) if (!normalizarTelefone(t)) erros.push(`Telefone inválido: ${t}`);
   if (!inteiro(s.meta_sdr_conversas, 0, 1000) || !inteiro(s.meta_sdr_marcacoes, 0, 1000)) erros.push("Metas do SDR: use números de 0 a 1000.");
   for (const m of [s.meta_closer_reunioes, s.meta_closer_vendas]) if (m !== null && !inteiro(m, 0, 1000)) erros.push("Metas do closer: use números de 0 a 1000.");
+  for (const k of CAMPOS_META_FAT) if (s[k] != null && !inteiro(s[k], 0, 100000000)) erros.push("Metas de faturamento: use valores em reais de 0 a 100.000.000.");
   for (const v of e.vendedores) if (!["sdr", "closer"].includes(v.funcao)) erros.push(`Função inválida para ${v.nome}.`);
   const rubricas: [string, Criterio[]][] = s.rubrica_modo === "personalizada" ? [["personalizada", e.rubricas.personalizada]] : [["do SDR", e.rubricas.sdr], ["do Closer", e.rubricas.closer]];
   for (const [nome, l] of rubricas) {

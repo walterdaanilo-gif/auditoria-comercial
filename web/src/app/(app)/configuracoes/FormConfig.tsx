@@ -337,6 +337,14 @@ export default function FormConfig({ inicial, agenda, retornoAgenda, empresa = "
             <Linha titulo="Reuniões de implementação"><Numero vazio valor={s.meta_closer_reunioes} onChange={(v) => set({ meta_closer_reunioes: v })} sufixo="por dia" /></Linha>
             <Linha titulo="Imersões fechadas"><Numero vazio valor={s.meta_closer_vendas} onChange={(v) => set({ meta_closer_vendas: v })} sufixo="por dia" /></Linha>
           </div>
+          <div className="rounded-2xl border border-line p-4 md:col-span-2">
+            <div className="label mb-1">Metas de faturamento do mês (slide 1 da Apresentação)</div>
+            <Linha titulo="Meta total do mês" sub="Vale para o faturamento total e o ritmo do mês"><Numero vazio max={100000000} largura="w-36" valor={s.meta_fat_mes ?? null} onChange={(v) => set({ meta_fat_mes: v })} sufixo="R$" /></Linha>
+            <Linha titulo="Workshop"><Numero vazio max={100000000} largura="w-36" valor={s.meta_fat_workshop ?? null} onChange={(v) => set({ meta_fat_workshop: v })} sufixo="R$" /></Linha>
+            <Linha titulo="Imersão aberta"><Numero vazio max={100000000} largura="w-36" valor={s.meta_fat_imersao ?? null} onChange={(v) => set({ meta_fat_imersao: v })} sufixo="R$" /></Linha>
+            <Linha titulo="In-company"><Numero vazio max={100000000} largura="w-36" valor={s.meta_fat_incompany ?? null} onChange={(v) => set({ meta_fat_incompany: v })} sufixo="R$" /></Linha>
+            <Linha titulo="Plataforma"><Numero vazio max={100000000} largura="w-36" valor={s.meta_fat_plataforma ?? null} onChange={(v) => set({ meta_fat_plataforma: v })} sufixo="R$" /></Linha>
+          </div>
         </div>
       </Card>
 
