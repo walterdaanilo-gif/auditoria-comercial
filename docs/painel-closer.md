@@ -86,9 +86,19 @@ Ficam em `web/src/lib/closer/regras.ts`:
 - **Temperatura:** quente = reunião de implementação ou interesse em imersão; morno = nota 9 ou 10 e dor relatada; frio = o resto.
 - **Conferir antes de abordar:** aviso na Mensagem 1 da planilha, sem telefone, Chat interno ou Suporte/Pós-vendas no CRM.
 - **Orientações de venda:** copiadas da aba "Orientações do envio". Se a aba mudar, atualize a constante `ORIENTACOES`.
-- **Situações e motivos:** se mudar `STATUS` ou `MOTIVOS`, mude também no topo de `apps-script/closer-sync.gs` e rode `instalar` de novo (atualiza as listas).
+- **Situações e motivos:** se mudar `STATUS` ou `MOTIVOS`, mude também no topo de `apps-script/closer-sync.gs` e rode `instalar` de novo (atualiza as listas), e no topo de `worker/src/closer.js` (leitura da conversa).
 
 As abas e colunas são localizadas pelo título: renomear aba ou coluna exige ajustar `planilha.ts` e o script.
+
+## Ler conversa
+
+Na ficha do lead (e no modo Individual) o botão **Ler conversa**, ao lado de **Abrir WhatsApp**, faz a IA ler as conversas de WhatsApp daquele lead que já estão no sistema e **sugerir** o preenchimento: situação, motivo (só para desqualificado), resumo, próxima ação, uma sugestão de resposta e os trechos que justificam.
+
+- **Não grava nada sozinho.** A sugestão fica só na tela. **Aplicar** usa a mesma gravação do painel: muda a situação e o motivo, mantém as mensagens enviadas (se a pessoa já respondeu e nenhuma estava marcada, conta 1) e acrescenta o resumo no fim das anotações, sem apagar o que já havia. **Ignorar** descarta.
+- **Como acha a conversa:** pelo telefone do lead no banco (`closer_leads`), nunca pelo que vem da tela. Compara DDD + 8 últimos dígitos (aceita com ou sem 55 e o 9 extra), só nas conversas da Weevo, até 10 conversas e as últimas 60 mensagens.
+- Se o lead ainda não respondeu, a IA nem é chamada: a sugestão é "Mensagem enviada" com os dias desde a última mensagem. Com confiança baixa, a tela pede para conferir antes de aplicar.
+- **Quem pode usar:** quem tem acesso ao painel (gestor, admin e closer). A leitura passa pelo **worker** (`POST /functions/v1/worker/closer/sugestao`, com o cabeçalho `x-worker-token` da tabela `worker_token`), que lê as conversas com a chave do Supabase que ignora a RLS por vendedor. Por isso quem decide quem pode pedir é a ação `sugerirDoLead` em `web/src/app/(app)/closer/actions.ts`: qualquer pessoa com acesso ao painel pode ler a conversa dos leads do painel. O token fica só no servidor do site.
+- Usa a mesma IA da auditoria (a do worker); nenhuma chave nova. Nem o worker nem o site registram o conteúdo das conversas em log.
 
 ## Prévia no computador
 
