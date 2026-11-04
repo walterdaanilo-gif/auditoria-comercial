@@ -2,16 +2,26 @@ import { empresas, exigirPerfil } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hojeBR } from "@/lib/format";
 import { lerPeriodo } from "@/lib/periodo";
+import VisaoGeral from "./visao-geral/VisaoGeral";
+import { montarVisaoGeral } from "./visao-geral/dados";
+import { visaoGeralDemo } from "./visao-geral/demo";
 import { Tela, type DadosTela, type Linha, type Vendas, type WorkshopPor } from "./Tela";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Apresentação · Cabueta do Elon Musk" };
 
-export default async function Apresentacao({ searchParams: spP }: { searchParams: Promise<{ p?: string; de?: string; ate?: string }> }) {
+export default async function Apresentacao({ searchParams: spP }: { searchParams: Promise<{ p?: string; de?: string; ate?: string; demo?: string }> }) {
   const sp = await spP;
   // so a empresa aberta (Weevo ou Carbone): time, metas, numeros e vendas dela
   const { atual } = await empresas(await exigirPerfil());
   const org = atual?.id ?? "";
+
+  // Weevo: a Apresentacao e uma tela fixa (sem rodizio), do mes atual, so com o que o Cabueta mede.
+  // ?demo=1 mostra numeros ficticios. Se a busca falhar, cai na apresentacao antiga abaixo.
+  if (atual?.slug === "weevo") {
+    if (sp.demo === "1") return <VisaoGeral dados={visaoGeralDemo} />;
+    try { return <VisaoGeral dados={await montarVisaoGeral(org)} />; } catch { /* segue para a apresentacao antiga */ }
+  }
   const periodo = lerPeriodo(sp, "semana");
   const { de, ate } = periodo;
   const hoje = hojeBR();

@@ -1,4 +1,5 @@
 // Tipos, padroes e validacao da tela Configuracoes (usados no navegador e na Server Action)
+import { validarQuadros, type QuadroCfg } from "./quadrosTv";
 
 export const PADRAO_MIN_MSGS = 4;
 export const PADRAO_AMOSTRA = 100;
@@ -49,6 +50,10 @@ export type Settings = {
   meta_sdr_marcacoes: number;
   meta_closer_reunioes: number | null;
   meta_closer_vendas: number | null;
+  // metas de faturamento do mes em R$ (slide 1 da Apresentacao); null = sem meta
+  meta_fat_mes?: number | null;
+  // quadros da tela da TV (ordem = ordem na lista); ausente ou null = quadros padrao
+  tv_quadros?: QuadroCfg[] | null;
 };
 
 export type Vendedor = { id: string; nome: string; funcao: "sdr" | "closer" | "gestao"; ativo: boolean; foto_url?: string | null };
@@ -157,6 +162,8 @@ export function validar(e: Estado): string[] {
   for (const t of [...e.alertas, ...e.ignorados]) if (!normalizarTelefone(t)) erros.push(`Telefone inválido: ${t}`);
   if (!inteiro(s.meta_sdr_conversas, 0, 1000) || !inteiro(s.meta_sdr_marcacoes, 0, 1000)) erros.push("Metas do SDR: use números de 0 a 1000.");
   for (const m of [s.meta_closer_reunioes, s.meta_closer_vendas]) if (m !== null && !inteiro(m, 0, 1000)) erros.push("Metas do closer: use números de 0 a 1000.");
+  if (s.meta_fat_mes != null && !inteiro(s.meta_fat_mes, 0, 100000000)) erros.push("Meta de faturamento: use um valor em reais de 0 a 100.000.000.");
+  erros.push(...validarQuadros(s.tv_quadros));
   for (const v of e.vendedores) if (!["sdr", "closer"].includes(v.funcao)) erros.push(`Função inválida para ${v.nome}.`);
   const rubricas: [string, Criterio[]][] = s.rubrica_modo === "personalizada" ? [["personalizada", e.rubricas.personalizada]] : [["do SDR", e.rubricas.sdr], ["do Closer", e.rubricas.closer]];
   for (const [nome, l] of rubricas) {

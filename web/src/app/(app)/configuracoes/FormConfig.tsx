@@ -7,6 +7,7 @@ import {
   chaveDe, fmtTelefone, normalizarTelefone, somaPesos, validar,
   type Criterio, type Estado, type Horario, type Settings,
 } from "@/lib/configuracoes";
+import { CATALOGO, IDS_QUADROS, MAX_PEQUENOS, MAX_TITULO, PADRAO_QUADROS, resolverQuadros, tituloDe, type QuadroCfg, type QuadroId } from "@/lib/quadrosTv";
 import { desconectarAgenda, enviarFoto, removerFoto, salvarConfiguracoes } from "./actions";
 
 export type StatusAgenda = { conectada: boolean; email: string | null; conectado_em: string | null; erro: string | null };
@@ -213,6 +214,76 @@ function previewResumo(s: Settings) {
   return `🚀 *Resumo ${h(s.resumo_manha_hora)} · 17/10*\n\n💰 Vendas: 2 convites\n📅 Marcações: 2/12\n📞 Ligações: 4 atendidas · 18min\n\n⚠️ Ruan 0/6 marcações · 3 follow-ups atrasados\n👑 Nick: 2 marcações\n\nDetalhes 👉 <painel>\n\n── ${h(s.rodada_final_hora)} ──\n\n🚀 *Resumo ${h(s.rodada_final_hora)} · 17/10*\n\n💰 Vendas: 1 imersão ${brl(4800)} · 2 workshops ${brl(394)} · 5 convites\n📅 Marcações: 7/12\n📞 Ligações: 9 atendidas · 42min\n\n⚠️ Ruan 2/6 marcações\n👑 Nick: 5 marcações · 2 inscrições no workshop\n\nDetalhes 👉 <painel>`;
 }
 
+// ---------- quadros da TV: remover, adicionar e editar (titulo, meta e o que aparece dentro) ----------
+function EditorQuadros({ s, set }: { s: Settings; set: (p: Partial<Settings>) => void }) {
+  const lista = resolverQuadros(s.tv_quadros);
+  const grava = (l: QuadroCfg[]) => set({ tv_quadros: l });
+  const muda = (id: QuadroId, p: Partial<QuadroCfg>) => grava(lista.map((q) => (q.id === id ? { ...q, ...p } : q)));
+  const disponiveis = IDS_QUADROS.filter((id) => !lista.some((q) => q.id === id));
+  const pequenos = lista.filter((q) => !CATALOGO[q.id].grande).length, cheio = pequenos >= MAX_PEQUENOS;
+  const metas = (id: QuadroId): ReactNode => {
+    const dia = "por dia útil, por SDR";
+    if (id === "faturamento") return <Linha titulo="Meta do mês" sub="Sem meta, a TV mostra só o faturamento e a projeção"><Numero vazio max={100000000} largura="w-36" valor={s.meta_fat_mes ?? null} onChange={(v) => set({ meta_fat_mes: v })} sufixo="R$" /></Linha>;
+    if (id === "pessoas") return <>
+      <Linha titulo="Meta de conversas trocadas" sub="Vale também em Equipe e metas"><Numero valor={s.meta_sdr_conversas} onChange={(v) => set({ meta_sdr_conversas: v ?? 0 })} sufixo={dia} largura="w-24" /></Linha>
+      <Linha titulo="Meta de marcações" sub="Vale também em Equipe e metas"><Numero valor={s.meta_sdr_marcacoes} onChange={(v) => set({ meta_sdr_marcacoes: v ?? 0 })} sufixo={dia} largura="w-24" /></Linha></>;
+    if (id === "conversas_time") return <Linha titulo="Meta de conversas trocadas" sub="A mesma de Equipe e metas"><Numero valor={s.meta_sdr_conversas} onChange={(v) => set({ meta_sdr_conversas: v ?? 0 })} sufixo={dia} /></Linha>;
+    if (id === "marcacoes_time") return <Linha titulo="Meta de marcações" sub="A mesma de Equipe e metas"><Numero valor={s.meta_sdr_marcacoes} onChange={(v) => set({ meta_sdr_marcacoes: v ?? 0 })} sufixo={dia} /></Linha>;
+    if (id === "primeira") return <Linha titulo="SLA da 1ª resposta" sub="O mesmo de Alerta crítico e SLA"><Numero min={1} max={10080} valor={s.sla_primeira_resposta_min} onChange={(v) => set({ sla_primeira_resposta_min: v ?? 15 })} sufixo="minutos" /></Linha>;
+    return null;
+  };
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-mute">Escolha o que aparece na tela da TV (Apresentação). Cada quadro mostra só dado que o Cabueta já mede. <b className="text-ink">Remover</b> tira o quadro da tela; <b className="text-ink">Adicionar</b> traz de volta ou inclui um novo da lista. As mudanças valem depois de Salvar.</p>
+      <div className="space-y-3">
+        {lista.map((q) => {
+          const def = CATALOGO[q.id], atuais = q.itens ?? def.itens?.map((i) => i.id) ?? [];
+          return (
+            <div key={q.id} className="rounded-2xl border border-line p-4">
+              <div className="flex flex-wrap items-start gap-3">
+                <div className="min-w-0 flex-1"><div className="font-bold">{def.nome}</div><div className="text-xs text-mute">{def.descricao}</div></div>
+                <button type="button" disabled={lista.length <= 1} onClick={() => grava(lista.filter((x) => x.id !== q.id))} className="btn-ghost !px-3 !py-1.5 text-bad disabled:opacity-40" title={lista.length <= 1 ? "A TV precisa de pelo menos um quadro" : "Tirar da tela da TV"}><Trash2 size={15} />Remover</button>
+              </div>
+              <Linha titulo="Título na TV" sub={`Em branco usa "${def.nome}"`}>
+                <input className="input !w-64 !py-1.5" maxLength={MAX_TITULO} placeholder={def.nome} value={q.titulo ?? ""} onChange={(ev) => muda(q.id, { titulo: ev.target.value })} />
+              </Linha>
+              {metas(q.id)}
+              {def.itens && (
+                <div className="py-2">
+                  <div className="text-sm font-semibold">O que aparece dentro</div>
+                  <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1">
+                    {def.itens.map((i) => (
+                      <label key={i.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input type="checkbox" checked={atuais.includes(i.id)} onChange={(ev) => muda(q.id, { itens: ev.target.checked ? def.itens!.map((d) => d.id).filter((id) => id === i.id || atuais.includes(id)) : atuais.filter((id) => id !== i.id) })} />{i.rotulo}
+                      </label>
+                    ))}
+                  </div>
+                  {!atuais.length && <p className="mt-1 text-xs text-bad">Marque pelo menos um item, ou remova o quadro.</p>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="rounded-2xl border border-dashed border-line p-4">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div className="font-bold">Adicionar quadro</div>
+          <button type="button" onClick={() => grava(PADRAO_QUADROS)} className="text-sm font-semibold text-brand hover:underline">Restaurar os quadros padrão</button></div>
+        {cheio && <p className="mb-2 text-xs text-warn">A TV comporta no máximo {MAX_PEQUENOS} quadros pequenos ao mesmo tempo. Remova um para adicionar outro.</p>}
+        {disponiveis.length ? (
+          <div className="grid gap-2 md:grid-cols-2">
+            {disponiveis.map((id) => (
+              <button key={id} type="button" disabled={cheio && !CATALOGO[id].grande} onClick={() => grava([...lista, { id }])} className="flex items-start gap-3 rounded-xl border border-line px-3 py-2.5 text-left transition hover:border-brand disabled:cursor-not-allowed disabled:opacity-40">
+                <Plus size={16} className="mt-0.5 shrink-0 text-brand" />
+                <span className="min-w-0"><span className="block text-sm font-semibold">{CATALOGO[id].nome}</span><span className="block text-xs text-mute">{CATALOGO[id].descricao}</span></span>
+              </button>
+            ))}
+          </div>
+        ) : <p className="text-sm text-mute">Todos os quadros disponíveis já estão na tela.</p>}
+      </div>
+    </div>
+  );
+}
+
 // ---------- card em acordeao ----------
 type Passo = { id: string; titulo: string; ok: boolean };
 function Card({ id, titulo, resumo, ok, recomendado, aberto, alternar, children }: { id: string; titulo: string; resumo: string; ok: boolean; recomendado?: boolean; aberto: boolean; alternar: (id: string) => void; children: ReactNode }) {
@@ -338,6 +409,13 @@ export default function FormConfig({ inicial, agenda, retornoAgenda, empresa = "
             <Linha titulo="Imersões fechadas"><Numero vazio valor={s.meta_closer_vendas} onChange={(v) => set({ meta_closer_vendas: v })} sufixo="por dia" /></Linha>
           </div>
         </div>
+      </Card>
+
+      {/* ---------- Apresentacao (TV) ---------- */}
+      <h2 className="pt-2 text-lg font-bold">Apresentação (TV)</h2>
+      <Card id="tv" ok aberto={abertos.includes("tv")} alternar={alternar} titulo="Quadros da TV"
+        resumo={`${resolverQuadros(s.tv_quadros).length} quadro${resolverQuadros(s.tv_quadros).length === 1 ? "" : "s"} na tela: ${resolverQuadros(s.tv_quadros).map(tituloDe).join(" · ")}`}>
+        <EditorQuadros s={s} set={set} />
       </Card>
 
       {/* ---------- Essencial ---------- */}
