@@ -1065,3 +1065,7 @@ alter table public.audit_settings
   add column if not exists meta_fat_imersao numeric(12,2) check (meta_fat_imersao is null or meta_fat_imersao >= 0),
   add column if not exists meta_fat_incompany numeric(12,2) check (meta_fat_incompany is null or meta_fat_incompany >= 0),
   add column if not exists meta_fat_plataforma numeric(12,2) check (meta_fat_plataforma is null or meta_fat_plataforma >= 0);
+
+-- Quadros da tela da TV (Apresentacao): lista em ordem, cada item {id, titulo?, itens?}. null = quadros padrao.
+-- Rodar ANTES de publicar a versao com "Quadros da TV" nas Configuracoes.
+alter table public.audit_settings add column if not exists tv_quadros jsonb;

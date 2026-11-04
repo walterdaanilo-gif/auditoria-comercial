@@ -1,3 +1,4 @@
+import type { QuadroCfg, QuadroId } from "@/lib/quadrosTv";
 // Tipos e calculos da tela fixa da TV (Visao geral). Sem acesso a banco e sem tela: so conta.
 // Regra de ouro: dado que nao existe vem como null, nunca como zero. A tela mostra "aguardando fonte".
 
@@ -17,9 +18,11 @@ export type VisaoGeralDados = {
   periodo: { rotulo: string; intervalo: string; diaUtil: number; diasUteisMes: number };
   fat: { real: number; meta: number | null; serie: { du: number; real: number; data: string }[]; datasUteis: string[] };
   pessoas: Pessoa[];
-  semRetorno: number | null;
-  primeiraResposta: { seg: number | null; slaMin: number } | null;
+  quadros: QuadroCfg[];                       // quadros na tela, na ordem escolhida em Configuracoes
+  kpis: Partial<Record<QuadroId, Kpi>>;       // quadros pequenos (semretorno, primeira, nota, ...)
 };
+// Quadro pequeno: um numero grande com legenda. valor null = sem dado (a tela escreve "sem dado ainda")
+export type Kpi = { valor: string | null; sub: string; tom: Tom; selo?: string; pct?: number | null };
 
 // ---------- formatos ----------
 const num1 = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });

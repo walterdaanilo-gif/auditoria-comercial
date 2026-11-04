@@ -1,3 +1,4 @@
+import { PADRAO_QUADROS } from "@/lib/quadrosTv";
 import type { VisaoGeralDados } from "./calc";
 
 // NUMEROS FICTICIOS: so aparecem com ?demo=1 (a tela mostra o selo "EXEMPLO · NUMEROS FICTICIOS").
@@ -16,6 +17,15 @@ export const visaoGeralDemo: VisaoGeralDados = {
     { id: "c1", nome: "Closer 1", sigla: "C1", foto: null, tipo: "closer", conversas: null, marcacoes: null, vendasValor: 82000, vendasN: 15 },
     { id: "c2", nome: "Closer 2", sigla: "C2", foto: null, tipo: "closer", conversas: null, marcacoes: null, vendasValor: 53000, vendasN: 8 },
   ],
-  semRetorno: 7,
-  primeiraResposta: { seg: 300, slaMin: 15 },
+  quadros: PADRAO_QUADROS,
+  kpis: {
+    semretorno: { valor: "7", sub: "o lead escreveu e ficou mais de 15 min sem resposta", tom: "bad" },
+    primeira: { valor: "5min", sub: "média do mês", tom: "ok", selo: "dentro de 15 min" },
+    nota: { valor: "5,3", sub: "186 auditadas no mês", tom: "warn" },
+    tempo_medio: { valor: "12min", sub: "a cada vez que o lead escreve · média do mês", tom: "warn" },
+    ligacoes: { valor: "79", sub: "de 120 ligações no mês", tom: "neutro" },
+    conversas_time: { valor: "620", sub: "de 600 · 103% da meta", tom: "ok", selo: "no ritmo", pct: 103 },
+    marcacoes_time: { valor: "123", sub: "de 144 · 85% da meta", tom: "ok", selo: "no ritmo", pct: 85 },
+    convites: { valor: "74", sub: "cupom 100% ou Carbone · R$ 0", tom: "neutro" },
+  },
 };

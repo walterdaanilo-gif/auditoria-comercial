@@ -3,7 +3,8 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import AutoRefresh from "@/components/AutoRefresh";
 import { duracao } from "@/lib/format";
-import { calcularRitmo, eixoY, inteiro, moeda, tomPorDiferenca, type Pessoa, type Tom, type VisaoGeralDados } from "./calc";
+import { CATALOGO, temItem, tituloDe, type QuadroCfg } from "@/lib/quadrosTv";
+import { calcularRitmo, eixoY, inteiro, moeda, tomPorDiferenca, type Kpi, type Pessoa, type Tom, type VisaoGeralDados } from "./calc";
 
 // Tela fixa da TV do comercial (sem rodizio), fundo claro, 1920x1080 escalada para qualquer TV.
 // So mostra o que o Cabueta mede. Cores de texto com contraste minimo de 4,5:1 sobre o branco.
@@ -99,14 +100,15 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
   );
 }
 
-function Faturamento({ d }: { d: VisaoGeralDados }) {
+function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
+  const comGrafico = temItem(q, "grafico"), comPrecisa = temItem(q, "precisa"), comProjecao = temItem(q, "projecao");
   const { fat, periodo } = d;
   const r = calcularRitmo(fat.real, fat.meta, periodo.diaUtil, periodo.diasUteisMes);
   const caixa: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, background: "#eef6f4", borderRadius: 14, padding: "12px 20px", minWidth: 0 };
   return (
-    <div className="cd" style={{ background: "linear-gradient(125deg,#e3f4f0 0%,#ffffff 62%)", borderColor: "#b7dad3", padding: "20px 34px 22px", display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.05fr)", gap: 34 }}>
+    <div className="cd" style={{ background: "linear-gradient(125deg,#e3f4f0 0%,#ffffff 62%)", borderColor: "#b7dad3", padding: "20px 34px 22px", display: "grid", gridTemplateColumns: comGrafico ? "minmax(0,1fr) minmax(0,1.05fr)" : "minmax(0,1fr)", gap: 34 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
-        <div className="row"><span className="lb nw" style={{ fontSize: 18 }}>Faturamento do mês</span><div style={{ flex: 1 }} />
+        <div className="row"><span className="lb nw" style={{ fontSize: 18 }}>{tituloDe(q)}</span><div style={{ flex: 1 }} />
           {r.selo && <Selo tom={r.selo.tom}>{r.selo.texto}</Selo>}</div>
         <span className="vl nw" style={{ fontSize: 108 }}>{moeda(fat.real)}</span>
         {fat.meta ? (
@@ -122,22 +124,22 @@ function Faturamento({ d }: { d: VisaoGeralDados }) {
           </>
         ) : <span className="mu" style={{ fontSize: 22 }}>Meta do mês não cadastrada (Configurações → Equipe e metas)</span>}
         <div style={{ flex: 1 }} />
-        <div style={{ display: "grid", gridTemplateColumns: fat.meta ? "repeat(2,minmax(0,1fr))" : "1fr", gap: 14 }}>
-          {fat.meta && (
+        <div style={{ display: "grid", gridTemplateColumns: fat.meta && comPrecisa && comProjecao ? "repeat(2,minmax(0,1fr))" : "1fr", gap: 14 }}>
+          {fat.meta && comPrecisa && (
             <div style={caixa}>
               <span className="lb nw" style={{ fontSize: 15, color: C.mute }}>Precisa por dia útil</span>
               <span className="vl nw" style={{ fontSize: 40, color: r.precisaPorDia === null && r.faltam === 0 ? TOM.ok.c : C.texto }}>{r.precisaPorDia !== null ? moeda(r.precisaPorDia) : r.faltam === 0 ? "meta batida" : "—"}</span>
               <span className="mu nw" style={{ fontSize: 17 }}>média até hoje {moeda(r.mediaAteHoje)}</span>
             </div>
           )}
-          <div style={caixa}>
+          {comProjecao && <div style={caixa}>
             <span className="lb nw" style={{ fontSize: 15, color: C.mute }}>Projeção do mês</span>
             <span className="vl nw" style={{ fontSize: 40 }}>{moeda(r.projecao ?? 0)}</span>
             <span className="mu nw" style={{ fontSize: 17 }}>{r.projecaoPct !== null ? `${Math.round(r.projecaoPct)}% · faltam ${moeda(r.faltam ?? 0)}` : "no ritmo atual do mês"}</span>
-          </div>
+          </div>}
         </div>
       </div>
-      <Grafico d={d} />
+      {comGrafico && <Grafico d={d} />}
     </div>
   );
 }
@@ -154,54 +156,56 @@ function MetaBarra({ rotulo, v, meta, ritmoPct }: { rotulo: string; v: number; m
     </div>
   );
 }
-function Cartao({ p, ritmoPct }: { p: Pessoa; ritmoPct: number }) {
+function Cartao({ p, ritmoPct, q }: { p: Pessoa; ritmoPct: number; q: QuadroCfg }) {
   return (
     <div style={{ background: "#f7faf9", border: `1px solid ${C.linha}`, borderRadius: 16, padding: "14px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 10, minWidth: 0, minHeight: 0 }}>
       <div className="row" style={{ gap: 12 }}>
         {p.foto ? <img src={p.foto} alt="" style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover" }} /> : <span style={{ width: 48, height: 48, borderRadius: "50%", background: "#c9d6d3", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, color: C.texto }}>{p.sigla}</span>}
-        <span className="vl nw" style={{ fontSize: 30, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span><div style={{ flex: 1 }} /><span className="lb nw" style={{ fontSize: 14, color: C.mute }}>{p.tipo === "sdr" ? "SDR" : "Closer"}</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}><span className="vl nw" style={{ fontSize: 28, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span><span className="lb nw" style={{ fontSize: 13, color: C.mute }}>{p.tipo === "sdr" ? "SDR" : "Closer"}</span></div>
       </div>
-      {p.conversas && <MetaBarra rotulo="Conversas trocadas" v={p.conversas.v} meta={p.conversas.meta} ritmoPct={ritmoPct} />}
-      {p.marcacoes && <MetaBarra rotulo="Marcações" v={p.marcacoes.v} meta={p.marcacoes.meta} ritmoPct={ritmoPct} />}
-      <div style={{ background: "#e3f4f0", borderRadius: 12, padding: "10px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
+      {p.conversas && temItem(q, "conversas") && <MetaBarra rotulo="Conversas trocadas" v={p.conversas.v} meta={p.conversas.meta} ritmoPct={ritmoPct} />}
+      {p.marcacoes && temItem(q, "marcacoes") && <MetaBarra rotulo="Marcações" v={p.marcacoes.v} meta={p.marcacoes.meta} ritmoPct={ritmoPct} />}
+      {temItem(q, "vendas") && <div style={{ background: "#e3f4f0", borderRadius: 12, padding: "10px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
         <span className="mu" style={{ fontWeight: 600, color: C.texto, fontSize: 19 }}>Vendas pagas</span>
-        <span className="vl nw" style={{ fontSize: p.tipo === "closer" ? 56 : 38 }}>{moeda(p.vendasValor)}</span>
+        <span className="vl nw" style={{ fontSize: p.tipo === "closer" ? 46 : 38 }}>{moeda(p.vendasValor)}</span>
         <span className="mu nw" style={{ fontSize: 17 }}>{p.vendasN} venda{p.vendasN === 1 ? "" : "s"}</span>
-      </div>
+      </div>}
     </div>
   );
 }
-function PorPessoa({ d }: { d: VisaoGeralDados }) {
+function PorPessoa({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
   const ritmoPct = (Math.max(d.periodo.diaUtil, 1) / d.periodo.diasUteisMes) * 100;
   return (
     <div className="cd" style={{ padding: "16px 24px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
-      <div className="row" style={{ gap: 16 }}><span className="lb nw" style={{ fontSize: 18 }}>Por pessoa</span><span className="mu nw">real / meta do mês</span></div>
+      <div className="row" style={{ gap: 16 }}><span className="lb nw" style={{ fontSize: 18 }}>{tituloDe(q)}</span><span className="mu nw">real / meta do mês</span></div>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(d.pessoas.length, 1)},minmax(0,1fr))`, gridTemplateRows: "minmax(0,1fr)", columnGap: 14, flex: 1, minHeight: 0 }}>
-        {d.pessoas.map((p) => <Cartao key={p.id} p={p} ritmoPct={ritmoPct} />)}
+        {d.pessoas.map((p) => <Cartao key={p.id} p={p} ritmoPct={ritmoPct} q={q} />)}
         {!d.pessoas.length && <span className="mu" style={{ gridColumn: "1 / -1" }}>Nenhum vendedor cadastrado na aba WhatsApp.</span>}
       </div>
     </div>
   );
 }
 
-// ---------------- alertas ----------------
-function Alertas({ d }: { d: VisaoGeralDados }) {
-  const sr = d.semRetorno;
-  const pr = d.primeiraResposta;
-  const prTom: Tom = !pr || pr.seg === null ? "neutro" : pr.seg / 60 <= pr.slaMin ? "ok" : "bad";
-  const caixa: CSSProperties = { flex: 1, padding: "22px 26px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 10 };
+// ---------------- quadros pequenos ----------------
+function KpiCard({ q, k, tam }: { q: QuadroCfg; k: Kpi; tam: number }) {
+  const ruim = k.tom === "bad";
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}>
-      <div className="cd" style={{ ...caixa, background: sr ? "#fff1ef" : "#fff", borderColor: sr ? "#f1b8b2" : C.linha }}>
-        <span className="lb nw" style={{ fontSize: 16, color: sr ? TOM.bad.c : C.label }}>Leads sem retorno</span>
-        <span className="vl nw" style={{ fontSize: 110, color: sr ? TOM.bad.c : C.texto }}>{sr === null ? "—" : sr >= 100 ? "100+" : sr}</span>
-        <span className="mu" style={{ fontSize: 17 }}>{sr === null ? "não foi possível ler agora" : "o lead escreveu e ficou mais de 15 min sem resposta"}</span>
-      </div>
-      <div className="cd" style={caixa}>
-        <span className="lb nw" style={{ fontSize: 16 }}>Tempo de 1ª resposta</span>
-        <span className="vl nw" style={{ fontSize: 80, color: TOM[prTom].c }}>{pr && pr.seg !== null ? duracao(pr.seg) : "—"}</span>
-        <div className="row">{pr && pr.seg !== null ? <Selo tom={prTom}>{prTom === "ok" ? `dentro de ${pr.slaMin} min` : `acima de ${pr.slaMin} min`}</Selo> : null}<span className="mu nw" style={{ fontSize: 17 }}>{pr && pr.seg !== null ? "média do mês" : "sem conversas auditadas no mês"}</span></div>
-      </div>
+    <div className="cd" style={{ flex: 1, padding: "20px 26px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 8, background: ruim ? "#fff1ef" : "#fff", borderColor: ruim ? "#f1b8b2" : C.linha }}>
+      <span className="lb" style={{ fontSize: 16, color: ruim ? TOM.bad.c : C.label, whiteSpace: "normal", lineHeight: 1.25 }}>{tituloDe(q)}</span>
+      <span className="vl nw" style={{ fontSize: tam, color: k.valor === null ? C.mute : k.tom === "neutro" ? C.texto : TOM[k.tom].c }}>{k.valor ?? "—"}</span>
+      {k.pct != null && <Barra pct={k.pct} tom={k.tom} />}
+      <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>{k.selo && <Selo tom={k.tom}>{k.selo}</Selo>}<span className="mu" style={{ fontSize: 17 }}>{k.sub}</span></div>
+    </div>
+  );
+}
+function Pequenos({ d, lista, ao_lado }: { d: VisaoGeralDados; lista: QuadroCfg[]; ao_lado: boolean }) {
+  const itens = lista.filter((q) => d.kpis[q.id]);
+  const n = itens.length;
+  const tam = n <= 2 ? 96 : n === 3 ? 60 : 72;
+  const colunas = ao_lado ? (n > 3 ? 2 : 1) : Math.min(Math.max(n, 1), 4);
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${colunas},minmax(0,1fr))`, gridAutoRows: "minmax(0,1fr)", gap: 14, minHeight: 0 }}>
+      {itens.map((q) => <KpiCard key={q.id} q={q} k={d.kpis[q.id]!} tam={tam} />)}
     </div>
   );
 }
@@ -213,17 +217,21 @@ export default function VisaoGeral({ dados }: { dados: VisaoGeralDados }) {
     f(); window.addEventListener("resize", f);
     return () => window.removeEventListener("resize", f);
   }, []);
+  const fat = dados.quadros.find((q) => q.id === "faturamento"), pes = dados.quadros.find((q) => q.id === "pessoas");
+  const pequenos = dados.quadros.filter((q) => !CATALOGO[q.id].grande);
   return (
     <div className="vg" style={{ position: "fixed", inset: 0, zIndex: 30, background: "#f3f6f5", overflow: "hidden" }}>
       <style>{CSS}</style>
       {!dados.demo && <AutoRefresh segundos={60} />}
       <div style={{ position: "absolute", left: "50%", top: "50%", width: 1920, height: 1080, transform: `translate(-50%,-50%) scale(${esc ?? 1})`, visibility: esc ? "visible" : "hidden", padding: "22px 30px", background: "radial-gradient(1400px 700px at 0 0, rgba(109,207,192,.18), rgba(255,255,255,0) 60%), #f3f6f5", display: "flex", flexDirection: "column", gap: 16 }}>
         <Cabecalho d={dados} />
-        <div style={{ display: "grid", flex: 0.95, minHeight: 0 }}><Faturamento d={dados} /></div>
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 420px", gap: 16, flex: 1.05, minHeight: 0 }}>
-          <PorPessoa d={dados} />
-          <Alertas d={dados} />
-        </div>
+        {fat && <div style={{ display: "grid", flex: pes || pequenos.length ? 0.95 : 1, minHeight: 0 }}><Faturamento d={dados} q={fat} /></div>}
+        {(pes || pequenos.length > 0) && (
+          <div style={{ display: "grid", gridTemplateColumns: pes && pequenos.length ? (pequenos.length > 3 ? "minmax(0,1fr) 640px" : "minmax(0,1fr) 420px") : "minmax(0,1fr)", gap: 16, flex: fat ? 1.05 : 1, minHeight: 0 }}>
+            {pes && <PorPessoa d={dados} q={pes} />}
+            {pequenos.length > 0 && <Pequenos d={dados} lista={pequenos} ao_lado={!!pes} />}
+          </div>
+        )}
       </div>
     </div>
   );
