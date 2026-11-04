@@ -61,6 +61,8 @@ export async function sugerirDoLead(chave: string): Promise<ResultadoSugestao> {
     });
     const j = await r.json().catch(() => null);
     if (!r.ok || !j?.ok) return { erro: j?.erro && r.status !== 401 ? String(j.erro).slice(0, 160) : "Não foi possível ler a conversa agora." };
+    // worker antigo, sem a rota nova, responde so { ok: true, servico }
+    if (typeof j.encontrou !== "boolean") return { erro: "A leitura de conversa ainda não foi publicada no worker." };
     if (!j.encontrou) return { encontrou: false };
     return { encontrou: true, mensagens: Number(j.mensagens) || 0, ultima_msg_em: j.ultima_msg_em ?? null, sugestao: validarSugestao(j.sugestao) };
   } catch (e) {
