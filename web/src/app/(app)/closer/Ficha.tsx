@@ -1,7 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
-import { AlertTriangle, Ban, Check, CheckCircle2, Copy, Flame, MessageCircle, Send, Thermometer } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, Ban, Check, CheckCircle2, Copy, Flame, Loader2, MessageCircle, ScanText, Send, Thermometer, X } from "lucide-react";
 import { MOTIVOS, ORIENTACOES, STATUS, bloqueio, produtoSugerido, temperatura, type LeadCloser, type Progresso, type Status } from "@/lib/closer/regras";
+import type { ResultadoSugestao, Sugestao } from "@/lib/closer/sugestao";
+import { sugerirDoLead } from "./actions";
 
 export const CORES_TEMP = { quente: "text-bad border-bad/50", morno: "text-warn border-warn/50", frio: "text-mute border-line" };
 export const SeloTemp = ({ l }: { l: LeadCloser }) => {
@@ -42,6 +44,36 @@ function Mensagem({ texto }: { texto: string }) {
   );
 }
 
+// "Ler conversa": a IA le o WhatsApp do lead e sugere; o closer confere e aplica ou ignora (nada e gravado sem o clique)
+const CONF = { alta: "text-ok border-ok/50", media: "text-warn border-warn/50", baixa: "text-bad border-bad/50" };
+const CONF_TEXTO = { alta: "Confiança alta", media: "Confiança média", baixa: "Confiança baixa" };
+const dataCurta = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" }) : "");
+function CartaoSugestao({ r, aplicar, ignorar }: { r: ResultadoSugestao; aplicar: (s: Sugestao) => void; ignorar: () => void }) {
+  if ("erro" in r) return <div role="alert" className="flex items-start gap-2 rounded-2xl border border-bad/40 bg-bad/10 p-3 text-sm text-bad"><AlertTriangle size={16} className="mt-0.5 shrink-0" /><span className="flex-1">{r.erro}</span><button aria-label="Fechar" onClick={ignorar}><X size={16} /></button></div>;
+  if (!r.encontrou) return <div className="aviso flex items-start gap-2 !rounded-2xl !p-3"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-warn" /><span className="flex-1">Não achei conversa desse número no sistema.</span><button aria-label="Fechar" onClick={ignorar}><X size={16} /></button></div>;
+  const s = r.sugestao;
+  return (
+    <section aria-label="Sugestão da leitura da conversa" className="space-y-3 rounded-2xl border border-brand/40 bg-brand/5 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="label !mb-0">Sugestão da conversa</span>
+        {s.status ? <span className="chip border-transparent text-white" style={{ background: STATUS[s.status].cor }}>{STATUS[s.status].texto}</span> : <span className="chip border-line text-mute">Situação não identificada</span>}
+        {s.motivo && <span className="chip border-bad/50 text-bad">{s.motivo}</span>}
+        <span className={`chip ${CONF[s.confianca]}`}>{CONF_TEXTO[s.confianca]}</span>
+        <span className="text-xs text-mute">{r.mensagens} mensage{r.mensagens === 1 ? "m" : "ns"} lida{r.mensagens === 1 ? "" : "s"}{r.ultima_msg_em ? ` · última em ${dataCurta(r.ultima_msg_em)}` : ""}</span>
+      </div>
+      {s.confianca === "baixa" && <p className="flex gap-2 text-sm text-warn"><AlertTriangle size={16} className="mt-0.5 shrink-0" />A IA não tem certeza. Confira a conversa no WhatsApp antes de aplicar.</p>}
+      {s.resumo && <div><div className="label">Resumo</div><p className="mt-0.5 text-sm">{s.resumo}{s.dias_sem_resposta != null ? ` Última mensagem há ${s.dias_sem_resposta} dia${s.dias_sem_resposta === 1 ? "" : "s"}.` : ""}</p></div>}
+      {s.proxima_acao && <div><div className="label">Próxima ação</div><p className="mt-0.5 text-sm">{s.proxima_acao}</p></div>}
+      {s.sugestao_resposta && <div><div className="label mb-1.5">Sugestão de resposta</div><Mensagem texto={s.sugestao_resposta} /></div>}
+      {!!s.evidencia.length && <div><div className="label">Trechos da conversa</div><ul className="mt-1 space-y-1">{s.evidencia.map((e, i) => <li key={i} className="border-l-2 border-line pl-2 text-sm italic text-mute">“{e}”</li>)}</ul></div>}
+      <div className="flex flex-wrap gap-2 pt-1">
+        <button className="btn" onClick={() => aplicar(s)}><Check size={15} />Aplicar</button>
+        <button className="btn-ghost" onClick={ignorar}>Ignorar</button>
+      </div>
+    </section>
+  );
+}
+
 const Dado = ({ t, v }: { t: string; v: React.ReactNode }) => (v ? <div><div className="label">{t}</div><div className="mt-0.5 text-sm">{v}</div></div> : null);
 
 export default function Ficha({ lead: l, aoSalvar, aoConcluir }: { lead: LeadCloser; aoSalvar: (chave: string, p: Progresso) => void; aoConcluir?: () => void }) {
@@ -49,7 +81,11 @@ export default function Ficha({ lead: l, aoSalvar, aoConcluir }: { lead: LeadClo
   const [passo, setPasso] = useState(passoInicial(p));
   const [motivos, setMotivos] = useState(false);
   const [nota, setNota] = useState(p.anotacao);
-  useEffect(() => { setPasso(passoInicial(l.progresso)); setMotivos(false); setNota(l.progresso.anotacao); }, [l.chave]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [sugestao, setSugestao] = useState<ResultadoSugestao | null>(null);
+  const [lendo, setLendo] = useState(false);
+  const chaveAtual = useRef(l.chave); // a resposta de um lead nao aparece na ficha de outro
+  chaveAtual.current = l.chave;
+  useEffect(() => { setPasso(passoInicial(l.progresso)); setMotivos(false); setNota(l.progresso.anotacao); setSugestao(null); setLendo(false); }, [l.chave]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const salvar = (mudou: Partial<Progresso>, proximo?: number) => {
     aoSalvar(l.chave, { ...p, anotacao: nota, ...mudou });
@@ -58,7 +94,27 @@ export default function Ficha({ lead: l, aoSalvar, aoConcluir }: { lead: LeadClo
   const encerrar = (status: Status, motivo = "") => { salvar({ status, motivo }); aoConcluir?.(); };
   const trava = bloqueio(l), temp = temperatura(l), encerrado = ["fechou_plataforma", "fechou_imersao", "sem_resposta", "desqualificado"].includes(p.status);
   const whats = l.telefone ? `https://wa.me/${l.telefone}` : "";
-  const BotaoWhats = () => (whats ? <a href={whats} target="_blank" rel="noreferrer" className="btn-ghost"><MessageCircle size={15} />Abrir WhatsApp</a> : null);
+  const lerConversa = async () => {
+    const chave = l.chave;
+    setLendo(true); setSugestao(null);
+    let r: ResultadoSugestao;
+    try { r = await sugerirDoLead(chave); } catch { r = { erro: "Não foi possível ler a conversa agora. Confira a internet." }; }
+    if (chave === chaveAtual.current) { setSugestao(r); setLendo(false); }
+  };
+  // Aplicar: mesma gravacao do painel. Mantem as mensagens enviadas e acrescenta a sugestao no fim das anotacoes.
+  const aplicar = (s: Sugestao) => {
+    const status = s.status ?? p.status;
+    const avancou = ["respondeu", "negociando", "fechou_plataforma", "fechou_imersao"].includes(status);
+    const enviadas = avancou && p.enviadas === 0 ? 1 : p.enviadas;
+    const motivo = status === "desqualificado" ? s.motivo || "Outro" : "";
+    const texto = [`Leitura da conversa (${dataCurta(new Date().toISOString())}): ${s.resumo}`.trim(), s.proxima_acao && `Próximo passo: ${s.proxima_acao}`].filter(Boolean).join(" ");
+    const anotacao = (nota.trim() ? `${nota.trimEnd()}\n\n${texto}` : texto).slice(0, 4000);
+    setNota(anotacao);
+    salvar({ status, motivo, enviadas, anotacao }, passoInicial({ ...p, status, enviadas }));
+    setSugestao(null);
+  };
+  const BotaoLer = () => (l.telefone ? <button type="button" className="btn-ghost" disabled={lendo} onClick={lerConversa}>{lendo ? <Loader2 size={15} className="animate-spin" /> : <ScanText size={15} />}{lendo ? "Lendo a conversa..." : "Ler conversa"}</button> : null);
+  const BotaoWhats = () => (whats ? <><a href={whats} target="_blank" rel="noreferrer" className="btn-ghost"><MessageCircle size={15} />Abrir WhatsApp</a><BotaoLer /></> : null);
 
   return (
     <div className="space-y-5">
@@ -66,7 +122,10 @@ export default function Ficha({ lead: l, aoSalvar, aoConcluir }: { lead: LeadClo
         <div className="flex flex-wrap items-center gap-2"><h2 className="text-2xl font-extrabold tracking-tight">{l.nome}</h2><SeloTemp l={l} /><span className="chip border-transparent text-white" style={{ background: STATUS[p.status].cor }}>{STATUS[p.status].texto}</span></div>
         <p className="mt-1 text-sm text-mute">{l.empresa || "Empresa não informada"}{l.telefoneTexto ? ` · ${l.telefoneTexto}` : ""}</p>
         {p.motivo && <p className="mt-1 text-sm text-bad">Motivo: {p.motivo}</p>}
+        {whats && (passo === 0 || passo === 5) && <div className="mt-3 flex flex-wrap gap-2"><BotaoWhats /></div>}
       </div>
+
+      {sugestao && <CartaoSugestao r={sugestao} aplicar={aplicar} ignorar={() => setSugestao(null)} />}
 
       {p.status === "novo" && trava && <div className="aviso flex gap-2"><AlertTriangle size={18} className="shrink-0 text-warn" /><div><b>Conferir antes de abordar.</b> {trava}.</div></div>}
       {!!l.conversasCrm.length && (

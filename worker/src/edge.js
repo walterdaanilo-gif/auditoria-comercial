@@ -14,6 +14,7 @@ import { cicloDeAuditoria } from "./ciclo.js";
 import { processAnalyses } from "./analysis.js";
 import { importarHistoricoCrm } from "./crm.js";
 import { cancelarEventos } from "./agenda.js";
+import { sugerirParaLead } from "./closer.js";
 
 const LIMITE_MS = 120_000; // a funcao tem ~150s; para antes e a proxima volta continua
 const json = (code, obj) => new Response(JSON.stringify(obj), { status: code, headers: { "Content-Type": "application/json" } });
@@ -59,6 +60,14 @@ Deno.serve(async req => {
       const tarefa = receberWebhook(db, body).catch(e => console.error("[webhook]", e.message));
       globalThis.EdgeRuntime?.waitUntil ? globalThis.EdgeRuntime.waitUntil(tarefa) : await tarefa;
       return json(200, { ok: true });
+    }
+    // Painel do Closer (site): le a conversa do lead e devolve uma sugestao; nao grava nada
+    if (url.pathname.endsWith("/closer/sugestao")) {
+      if (req.method !== "POST") return json(405, { erro: "use POST" });
+      if (!(await tokenOk(req))) return json(401, { erro: "nao autorizado" });
+      const body = await req.json().catch(() => null);
+      if (!body) return json(400, { erro: "corpo invalido" });
+      return json(200, await sugerirParaLead(db, body));
     }
     if (url.pathname.endsWith("/tick")) {
       if (!(await tokenOk(req))) return json(401, { erro: "nao autorizado" });

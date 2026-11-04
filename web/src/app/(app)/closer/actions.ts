@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { exigirGestor, exigirPerfil } from "@/lib/auth";
 import { gravarProgresso, modoLocal } from "@/lib/closer/dados";
 import { chamarAppsScript } from "@/lib/closer/sync";
-import { STATUS, type Progresso } from "@/lib/closer/regras";
+import { ORIENTACOES, STATUS, produtoSugerido, type Progresso } from "@/lib/closer/regras";
+import { validarSugestao, type ResultadoSugestao } from "@/lib/closer/sugestao";
+import type { Lead } from "@/lib/closer/planilha";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { SUPABASE_URL } from "@/lib/supabase/config";
 
 export async function salvarProgresso(chave: string, p: Progresso): Promise<string | null> {
   const perfil = await exigirPerfil();
@@ -30,4 +35,37 @@ export async function importarPlanilha(): Promise<{ erro?: string; total?: numbe
   if (!r.ok) return { erro: r.erro };
   revalidatePath("/closer");
   return { total: Number(r.total) || 0 };
+}
+
+// "Ler conversa": pede ao worker uma sugestao de preenchimento a partir das conversas de WhatsApp do lead. Nao grava nada.
+// ATENCAO: o worker le as conversas com a chave do Supabase que ignora a RLS por vendedor. Quem decide quem pode pedir
+// e esta acao: qualquer pessoa com acesso ao painel do Closer pode ler a conversa dos leads do painel.
+export async function sugerirDoLead(chave: string): Promise<ResultadoSugestao> {
+  const perfil = await exigirPerfil(); // fora do try: sem login, o redirect para /login precisa acontecer
+  if (perfil.papel === "vendedor" && perfil.funcao !== "closer") return { erro: "Sem permissão." };
+  try {
+    if (modoLocal()) return { erro: "Na cópia local não dá para ler as conversas. Use o sistema publicado." };
+    // o telefone vem do banco (a RLS limita aos leads do painel), nunca da tela
+    const { data: linha } = await (await createClient()).from("closer_leads").select("dados").eq("chave", String(chave).slice(0, 200)).maybeSingle();
+    const lead = linha?.dados as Lead | undefined;
+    if (!lead) return { erro: "Lead não encontrado." };
+    if (!lead.telefone) return { erro: "Este lead não tem telefone na planilha." };
+    const { data: tk } = await createAdminClient().from("worker_token").select("token").eq("id", 1).maybeSingle();
+    if (!tk?.token) return { erro: "O worker não está configurado." };
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/worker/closer/sugestao`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-worker-token": tk.token },
+      body: JSON.stringify({ telefone: lead.telefone, nome: lead.nome, produto: produtoSugerido(lead), orientacoes: Object.values(ORIENTACOES) }),
+      signal: AbortSignal.timeout(55000),
+      cache: "no-store",
+    });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j?.ok) return { erro: j?.erro && r.status !== 401 ? String(j.erro).slice(0, 160) : "Não foi possível ler a conversa agora." };
+    // worker antigo, sem a rota nova, responde so { ok: true, servico }
+    if (typeof j.encontrou !== "boolean") return { erro: "A leitura de conversa ainda não foi publicada no worker." };
+    if (!j.encontrou) return { encontrou: false };
+    return { encontrou: true, mensagens: Number(j.mensagens) || 0, ultima_msg_em: j.ultima_msg_em ?? null, sugestao: validarSugestao(j.sugestao) };
+  } catch (e) {
+    return { erro: (e as Error)?.name === "TimeoutError" ? "A leitura demorou demais. Tente de novo." : "Não foi possível ler a conversa agora." };
+  }
 }
