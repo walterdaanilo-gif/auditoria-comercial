@@ -46,12 +46,15 @@ export const fone = t => { const d = digitos(t).replace(/^55(?=\d{10,11}$)/, "")
 // ---------- regra principal (sem rede nem banco) ----------
 // leads: relatorio do site. diagnosticos: linhas do painel. donos: telefone -> id do SDR. links: telefones que receberam o link de um SDR.
 const inscrito = l => !!l.data_evento && !!chave(l.whatsapp) && (l.status !== "lead" || !!l.paid_at || !!l.inscrito_direto_at); // quem so escolheu a data e nao se inscreveu fica de fora
-export function pendentesDaTurma(turma, { leads, diagnosticos, donos, links }) {
+// destinatarios: SDRs escolhidos em Configuracoes. Lista vazia/ausente = cada pendente vai para o SDR dono dele.
+// Com lista, so eles recebem: o que era de outro SDR (ou de ninguem) e repartido entre eles, em rodizio.
+export function pendentesDaTurma(turma, { leads, diagnosticos, donos, links, destinatarios = null }) {
   const preencheram = new Set();
   for (const r of diagnosticos) for (const campo of ["whatsapp", "p4_whatsapp"]) { const k = chave(r.variables?.[campo]); if (k) preencheram.add(k); }
   const doDia = leads.filter(l => inscrito(l) && l.data_evento === turma.ddmm);
   const porSdr = new Map(), semSdr = [];
-  let preenchidos = 0;
+  const escolhidos = Array.isArray(destinatarios) && destinatarios.length ? [...destinatarios] : null;
+  let preenchidos = 0, rodizio = 0;
   const vistos = new Set();
   for (const l of doDia) {
     const k = chave(l.whatsapp);
@@ -59,7 +62,8 @@ export function pendentesDaTurma(turma, { leads, diagnosticos, donos, links }) {
     vistos.add(k);
     if (preencheram.has(k)) { preenchidos++; continue; }
     const item = { nome: String(l.nome || "").trim(), telefone: l.whatsapp, linkEnviado: links.has(k) };
-    const sdr = donos.get(k);
+    let sdr = donos.get(k);
+    if (escolhidos && !escolhidos.includes(sdr)) sdr = escolhidos[rodizio++ % escolhidos.length];
     if (sdr) porSdr.set(sdr, [...(porSdr.get(sdr) || []), item]); else semSdr.push(item);
   }
   const pend = [...porSdr.values()].reduce((n, l) => n + l.length, 0) + semSdr.length;
@@ -85,7 +89,7 @@ async function lerSite(fetchImpl, caminho) {
   if (!r.ok) throw new Error(`site do diagnostico ${caminho}: HTTP ${r.status}`); // nunca inclui a resposta nem o codigo
   return r.json();
 }
-async function lerBases(db, R, desde) {
+async function lerBases(db, R, desde, ativos) {
   const [convs, crm] = await Promise.all([
     db.selectAll("conversas", { select: "id,vendedor_id,contato,telefone,ultima_msg_em", filters: { data: `gte.${desde}`, canal: "neq.importada" } }),
     db.selectAll("crm_conversas", { select: "id,vendedor_id,telefone,ultima_msg_em" }),
@@ -98,7 +102,7 @@ async function lerBases(db, R, desde) {
   const melhor = new Map();
   const ver = (v, tel, quando) => {
     const k = chave(tel);
-    if (!v || !k || R.funcao.get(v) === "closer") return;
+    if (!v || !k || R.funcao.get(v) === "closer" || !ativos.has(v)) return; // closer e perfil inativo nao sao donos
     const q = Date.parse(quando) || 0, at = melhor.get(k);
     if (!at || q > at.q) melhor.set(k, { v, q });
   };
@@ -124,9 +128,13 @@ export async function avisarDiagnosticos(db, { agora = Date.now(), fetchImpl = f
 
   const R = await carregarRegras(db);
   const s = R.bruto;
+  const perfisAtivos = new Set((await db.select("profiles", { select: "id", filters: { ativo: "eq.true" } })).map(p => p.id));
+  // quem recebe: os SDRs marcados em Configuracoes (ativos e nao closer); sem ninguem marcado, todos os SDRs ativos donos de cliente
+  const marcados = (Array.isArray(s.diagnostico_sdrs) ? s.diagnostico_sdrs : []).filter(id => perfisAtivos.has(id) && R.funcao.get(id) !== "closer");
+  if (Array.isArray(s.diagnostico_sdrs) && s.diagnostico_sdrs.length && !marcados.length) return "aviso: nenhum dos SDRs marcados em Configuracoes esta ativo; nada enviado";
   const [leadsResp, diagResp, bases, insts] = await Promise.all([
     lerSite(fetchImpl, "/api/admin/dash"), lerSite(fetchImpl, "/api/diagnostico/list"),
-    lerBases(db, R, addDays(today(), -JANELA_DIAS)),
+    lerBases(db, R, addDays(today(), -JANELA_DIAS), perfisAtivos),
     db.select("instancias_whatsapp", { select: "vendedor_id,numero" }),
   ]);
   const leads = leadsResp?.leads, diagnosticos = diagResp?.rows;
@@ -135,7 +143,7 @@ export async function avisarDiagnosticos(db, { agora = Date.now(), fetchImpl = f
 
   const resumo = [];
   for (const turma of devidas) {
-    const p = pendentesDaTurma(turma, { leads, diagnosticos, ...bases });
+    const p = pendentesDaTurma(turma, { leads, diagnosticos, ...bases, destinatarios: marcados });
     const horas = Math.max(1, Math.round((turma.inicio - agora) / 3600_000));
     const jaAvisados = new Set((await db.select("diagnostico_avisos", { select: "vendedor_id", filters: { turma: `eq.${turma.chave}` } })).map(a => a.vendedor_id));
     let enviados = 0;

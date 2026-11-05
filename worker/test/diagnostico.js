@@ -61,10 +61,10 @@ assert.equal(p.porSdr.get("sdr1")[0].linkEnviado, true); assert.equal(p.porSdr.g
 assert.equal(p.semSdr.length, 3, "D, E e I sem SDR identificado");
 
 // 5) tarefa completa
-function cenario({ envioConfigurado = true } = {}) {
+function cenario({ envioConfigurado = true, sdrs = undefined, sdr2Ativa = true } = {}) {
   const db = fakeSupa();
-  db.tables.audit_settings = [{ id: 1, ...(envioConfigurado ? { instancia_envio_id: "inst-envio" } : {}) }];
-  db.tables.profiles = [{ id: "sdr1", nome: "Rafael Costa", funcao: "sdr" }, { id: "sdr2", nome: "Bianca Dias", funcao: "sdr" }, { id: "closer1", nome: "Carlos Closer", funcao: "closer" }];
+  db.tables.audit_settings = [{ id: 1, ...(envioConfigurado ? { instancia_envio_id: "inst-envio" } : {}), ...(sdrs ? { diagnostico_sdrs: sdrs } : {}) }];
+  db.tables.profiles = [{ id: "sdr1", nome: "Rafael Costa", funcao: "sdr", ativo: true }, { id: "sdr2", nome: "Bianca Dias", funcao: "sdr", ativo: sdr2Ativa }, { id: "closer1", nome: "Carlos Closer", funcao: "closer", ativo: true }];
   db.tables.instancias_whatsapp = [{ vendedor_id: "sdr1", numero: "5584900000001" }]; // a SDR2 nao tem WhatsApp conectado
   const dia = new Date().toISOString().slice(0, 10);
   db.tables.conversas = [
@@ -140,6 +140,32 @@ try {
   const salvo = [cfg.diagnosticoCode, cfg.diagnosticoPlanilha]; cfg.diagnosticoCode = "";
   assert.match(await avisarDiagnosticos(cenario(), { agora: ini - 3 * H, fetchImpl: site(), envio }), /^desligado/);
   [cfg.diagnosticoCode, cfg.diagnosticoPlanilha] = salvo;
+
+  // 5g) so o SDR escolhido em Configuracoes recebe, e recebe tudo (o que era de outro SDR ou de ninguem tambem)
+  db = cenario({ sdrs: ["sdr1"] }); enviados = [];
+  r = await avisarDiagnosticos(db, { agora: ini - 3 * H, fetchImpl: site(), envio });
+  assert.ok(r.includes("5 sem diagnostico, 1 SDR(s) avisado(s)"), r);
+  assert.equal(enviados.length, 1); assert.equal(enviados[0].numero, "5584900000001");
+  for (const nome of ["Ana Souza", "Davi Melo", "Eva Dias", "Gil Alves", "Ivo Nunes"]) assert.ok(enviados[0].texto.includes(nome), nome + " entra na lista do SDR escolhido");
+  assert.ok(!enviados[0].texto.includes("Bia Lima"), "quem ja preencheu continua fora");
+  assert.deepEqual(db.tables.notificacoes.map(n => n.para), ["sdr1"], "a outra SDR nao recebe nada");
+  assert.deepEqual(db.tables.diagnostico_avisos.map(a => a.vendedor_id), ["sdr1"]);
+
+  // 5h) SDR inativa nao e dona de ninguem: o cliente dela fica sem SDR e ela nao recebe aviso
+  db = cenario({ sdr2Ativa: false }); enviados = [];
+  r = await avisarDiagnosticos(db, { agora: ini - 3 * H, fetchImpl: site(), envio });
+  assert.deepEqual(db.tables.notificacoes.map(n => n.para), ["sdr1"]);
+  assert.ok(r.includes("1 SDR(s) avisado(s), 4 sem SDR identificado"), r);
+
+  // 5i) marcou so quem esta inativo: nao cai em todo mundo; avisa e nao envia nem marca a turma (tenta de novo depois)
+  db = cenario({ sdrs: ["sdr2"], sdr2Ativa: false }); enviados = [];
+  r = await avisarDiagnosticos(db, { agora: ini - 3 * H, fetchImpl: site(), envio });
+  assert.match(r, /^aviso: nenhum dos SDRs marcados/); assert.equal(enviados.length, 0);
+  assert.equal((db.tables.notificacoes || []).length, 0); assert.equal((db.tables.diagnostico_turmas || []).length, 0);
+
+  // 5j) regra pura: com dois escolhidos, o que nao era deles e repartido em rodizio
+  const rr = pendentesDaTurma(t[111], { leads: LEADS, diagnosticos: DIAGS, donos: new Map(), links: new Set(), destinatarios: ["sdr1", "sdr2"] });
+  assert.deepEqual([rr.porSdr.get("sdr1").length, rr.porSdr.get("sdr2").length, rr.semSdr.length], [3, 2, 0], "5 pendentes em rodizio entre 2 SDRs");
 
   // 6) o codigo e os dados dos clientes nunca vao para o log
   const todo = logs.join("\n");
