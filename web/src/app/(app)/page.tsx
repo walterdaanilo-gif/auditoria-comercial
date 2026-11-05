@@ -231,7 +231,7 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
               </div>
             );
           })}
-          {!sdrs.length && <p className="card text-sm text-mute">Nenhum vendedor ainda. Cadastre na aba WhatsApp (nome, função e conexão).</p>}
+          {!sdrs.length && <p className="card text-sm text-mute">Nenhum vendedor ainda. Cadastre na aba Usuários (nome, função e conexão de WhatsApp).</p>}
         </div>
       </section>
 

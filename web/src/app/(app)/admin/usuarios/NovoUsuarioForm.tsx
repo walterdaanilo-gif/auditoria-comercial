@@ -24,6 +24,7 @@ export default function NovoUsuarioForm({ empresas, aberta }: { empresas: Organi
       <div><label className="label">Função</label>
         <select name="funcao" className="input" defaultValue="sdr"><option value="sdr">SDR</option><option value="closer">Closer</option><option value="gestao">Gestão</option></select></div>
       <div className="flex items-end"><Botao /></div>
+      <label className="flex items-center gap-2 text-sm md:col-span-6"><input type="checkbox" name="whatsapp" defaultChecked />Já criar a conexão de WhatsApp desta pessoa (o QR Code aparece no cartão dela, logo abaixo)</label>
       {empresas.length > 0 && (
         <div className="md:col-span-6"><span className="label">Retaguarda</span>
           <div className="flex flex-wrap gap-4">{empresas.map((o) => (

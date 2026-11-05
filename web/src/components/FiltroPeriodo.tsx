@@ -3,15 +3,15 @@ import { CalendarDays } from "lucide-react";
 import type { Periodo } from "@/lib/periodo";
 
 // Linha de filtros acima de tudo: atalhos de periodo, datas livres e (para gestor) o vendedor
-export default function FiltroPeriodo({ base, periodo, vendedores, vendedor }: {
-  base: string; periodo: Periodo; vendedores?: [string, string][]; vendedor?: string;
+export default function FiltroPeriodo({ base, periodo, vendedores, vendedor, atalhos = [["hoje", "Hoje"], ["7", "7 dias"], ["30", "30 dias"]] }: {
+  base: string; periodo: Periodo; vendedores?: [string, string][]; vendedor?: string; atalhos?: [string, string][];
 }) {
   const extra: Record<string, string> = vendedor ? { v: vendedor } : {};
   const href = (p: string) => `${base}?${new URLSearchParams({ p, ...extra })}`;
   return (
     <div className="card flex flex-wrap items-end gap-3 !p-4">
       <div className="flex flex-wrap gap-2">
-        {[["hoje", "Hoje"], ["7", "7 dias"], ["30", "30 dias"]].map(([k, t]) => (
+        {atalhos.map(([k, t]) => (
           <Link key={k} href={href(k)} className={`chip !px-3.5 !py-1.5 text-sm ${periodo.p === k ? "chip-on" : "border-line hover:border-side-edge"}`}>{t}</Link>
         ))}
       </div>
