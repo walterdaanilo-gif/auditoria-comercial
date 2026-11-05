@@ -604,6 +604,23 @@ export default function FormConfig({ inicial, agenda, retornoAgenda, empresa = "
         )}
       </Card>
 
+      <Card id="diagnostico" ok aberto={abertos.includes("diagnostico")} alternar={alternar} titulo="Aviso de diagnóstico (workshop)"
+        resumo={(s.diagnostico_sdrs ?? []).length ? `Recebem: ${e.vendedores.filter((v) => (s.diagnostico_sdrs ?? []).includes(v.id)).map((v) => v.nome).join(" · ") || "ninguém ativo"}` : "Recebem todos os SDRs ativos"}>
+        <p className="mb-3 text-sm text-mute">6 horas antes de cada turma do workshop, o SDR recebe no sino e no WhatsApp os inscritos que ainda não preencheram o diagnóstico. Marque quem deve receber. <b className="text-ink">Sem ninguém marcado, recebem todos os SDRs ativos</b>, cada um com os clientes que conversam com ele. Com alguém marcado, só os marcados recebem, e os clientes que conversaram com outros SDRs também vão para eles.</p>
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          {e.vendedores.filter((v) => v.ativo && v.funcao === "sdr").map((v) => {
+            const marcados = s.diagnostico_sdrs ?? [];
+            return (
+              <label key={v.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                <input type="checkbox" checked={marcados.includes(v.id)} onChange={(ev) => set({ diagnostico_sdrs: ev.target.checked ? [...marcados, v.id] : marcados.filter((id) => id !== v.id) })} />{v.nome}
+              </label>
+            );
+          })}
+          {!e.vendedores.some((v) => v.ativo && v.funcao === "sdr") && <span className="text-sm text-mute">Nenhum SDR ativo.</span>}
+        </div>
+        <p className="mt-3 text-xs text-mute">O aviso por WhatsApp sai do número escolhido em Alertas ao gestor e só chega a quem tem WhatsApp conectado em Usuários; os outros recebem só no sino.</p>
+      </Card>
+
       {roteiro && (
         <Card id="roteiro" ok={roteiroOk} aberto={abertos.includes("roteiro")} alternar={alternar} titulo="Roteiro da auditoria" resumo={roteiroOk ? "A régua que a IA usa para dar a nota · lido a cada auditoria" : "Escreva o roteiro: sem ele a IA audita só pela rubrica"}>
           {roteiro}
