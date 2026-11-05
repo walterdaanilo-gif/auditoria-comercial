@@ -78,6 +78,8 @@ Roda como **Edge Function `worker` do Supabase** (`worker/src/edge.js` é a entr
 
 Segredos em Supabase → Edge Functions → Secrets: `UAZAPI_URL`, `UAZAPI_ADMIN_TOKEN`, `WEBHOOK_URL` (`https://<projeto>.supabase.co/functions/v1/worker`), `WEBHOOK_SECRET`, `TRANSCRIBE_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` o Supabase já injeta.
 
+**Aviso de diagnóstico pendente (6h antes de cada turma do workshop).** Roda no ciclo de 5 minutos. Lê (só leitura) a planilha das turmas (uma aba por turma, "WORKSHOP 09/11/26 18h"), o relatório de leads e o painel de diagnósticos do site, e avisa cada SDR no sino e no WhatsApp dele. Segredos da função (nunca no código): `DIAGNOSTICO_CODE` (código de acesso do painel do site) e `DIAGNOSTICO_PLANILHA_ID` (id da planilha, a parte entre /d/ e /edit do endereço). Opcional: `DIAGNOSTICO_SITE` (padrão https://weevoedu.com). Precisa das tabelas `diagnostico_turmas` e `diagnostico_avisos` (fim de `supabase/schema.sql`). O WhatsApp só sai se houver "WhatsApp que envia" em Configurações; sem ele, só o sino.
+
 O modo antigo (Node com Baileys, `worker/src/index.js`) continua no código como alternativa para servidor próprio.
 
 O que o worker faz:

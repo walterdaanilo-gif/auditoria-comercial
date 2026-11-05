@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Bell, CalendarClock, CalendarDays, CheckCheck, Clock, FileText, Info, Trophy, X } from "lucide-react";
+import { AlertTriangle, Bell, CalendarClock, CalendarDays, CheckCheck, ClipboardList, Clock, FileText, Info, Trophy, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 // Sino de notificacoes (canto superior direito): todos os avisos da pessoa, organizados por categoria.
@@ -11,6 +11,7 @@ const CATS: { k: string; t: string; Icone: typeof Bell; cor: string }[] = [
   { k: "venda", t: "Vendas", Icone: Trophy, cor: "text-ok" },
   { k: "reuniao", t: "Reuniões", Icone: CalendarDays, cor: "text-brand" },
   { k: "followup", t: "Follow-up", Icone: Clock, cor: "text-warn" },
+  { k: "diagnostico", t: "Diagnóstico", Icone: ClipboardList, cor: "text-warn" },
   { k: "agenda", t: "Agenda", Icone: CalendarClock, cor: "text-warn" },
   { k: "critico", t: "Críticos", Icone: AlertTriangle, cor: "text-bad" },
   { k: "resumo", t: "Resumos", Icone: FileText, cor: "text-mute" },
