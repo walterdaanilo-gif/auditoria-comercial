@@ -1099,3 +1099,28 @@ do $$ begin
     with check (public.eh_gestor() and org_id = public.org_atual());
 exception when duplicate_object then null; end $$;
 revoke all on public.resultados_vendas from anon;
+
+-- =====================================================================
+-- Aviso de diagnostico pendente (6h antes de cada turma do workshop). So o worker escreve (service role); sem politicas.
+-- diagnostico_turmas: turma ja processada (uma vez so). diagnostico_avisos: o SDR ja avisado daquela turma.
+-- Rodar ANTES de publicar o worker com este aviso.
+-- =====================================================================
+create table if not exists public.diagnostico_turmas (
+  turma         text primary key,                 -- gid da aba da turma na planilha
+  nome          text,
+  inscritos     integer,
+  pendentes     integer,
+  sem_sdr       integer,
+  processada_em timestamptz not null default now()
+);
+create table if not exists public.diagnostico_avisos (
+  turma       text not null,
+  vendedor_id uuid not null references public.profiles(id) on delete cascade,
+  qtd         integer,
+  canais      text,                               -- ex.: "sino,whatsapp"
+  enviado_em  timestamptz not null default now(),
+  primary key (turma, vendedor_id)
+);
+alter table public.diagnostico_turmas enable row level security;
+alter table public.diagnostico_avisos enable row level security;
+revoke all on public.diagnostico_turmas, public.diagnostico_avisos from anon, authenticated;

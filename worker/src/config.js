@@ -40,6 +40,10 @@ export const cfg = {
   auditTab: env.AUDIT_TAB || "Auditoria",
   messagesTab: env.MESSAGES_TAB || "Mensagens",
   sheetMessages: env.SHEET_MESSAGES !== "false",
+  // Aviso de diagnostico antes do workshop (so leitura). O codigo e o do painel do site; ficam como segredos da funcao, nunca no codigo.
+  diagnosticoCode: env.DIAGNOSTICO_CODE || "",
+  diagnosticoPlanilha: env.DIAGNOSTICO_PLANILHA_ID || "",
+  diagnosticoSite: (env.DIAGNOSTICO_SITE || "https://weevoedu.com").replace(/\/$/, ""),
 };
 
 export const dayOf = (iso, tz = cfg.tz) => new Intl.DateTimeFormat("sv-SE", { timeZone: tz }).format(new Date(iso));
