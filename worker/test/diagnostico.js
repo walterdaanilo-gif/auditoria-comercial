@@ -64,21 +64,28 @@ assert.equal(p.semSdr.length, 3, "D, E e I sem SDR identificado");
 function cenario({ envioConfigurado = true, sdr2Ativa = true, semLink = false } = {}) {
   const db = fakeSupa();
   db.tables.audit_settings = [{ id: 1, ...(envioConfigurado ? { instancia_envio_id: "inst-envio" } : {}) }];
-  db.tables.profiles = [{ id: "sdr1", nome: "Rafael Costa", funcao: "sdr", ativo: true }, { id: "sdr2", nome: "Bianca Dias", funcao: "sdr", ativo: sdr2Ativa }, { id: "closer1", nome: "Carlos Closer", funcao: "closer", ativo: true }];
+  db.tables.organizacoes = [{ id: "org-weevo", slug: "weevo", nome: "Weevo" }, { id: "org-carbone", slug: "carbone", nome: "Carbone" }];
+  db.tables.profiles = [
+    { id: "sdr1", nome: "Rafael Costa", funcao: "sdr", ativo: true, org_id: "org-weevo" }, { id: "sdr2", nome: "Bianca Dias", funcao: "sdr", ativo: sdr2Ativa, org_id: "org-weevo" },
+    { id: "closer1", nome: "Carlos Closer", funcao: "closer", ativo: true, org_id: "org-weevo" },
+    { id: "sdr-c", nome: "Carla Carbone", funcao: "sdr", ativo: true, org_id: "org-carbone" }, // SDR da Carbone: nunca recebe aviso da Weevo
+  ];
   db.tables.instancias_whatsapp = [{ vendedor_id: "sdr1", numero: "5584900000001" }]; // a SDR2 nao tem WhatsApp conectado
   const dia = new Date().toISOString().slice(0, 10);
   db.tables.conversas = [
-    { id: "c1", vendedor_id: "sdr1", contato: "5584988887777@s.whatsapp.net", telefone: "5584988887777", ultima_msg_em: "2026-11-05T12:00:00Z", data: dia, canal: "individual" },
-    { id: "c2", vendedor_id: "closer1", contato: "5584944443333@s.whatsapp.net", telefone: "5584944443333", ultima_msg_em: "2026-11-05T12:00:00Z", data: dia, canal: "individual" },
+    { id: "c1", vendedor_id: "sdr1", contato: "5584988887777@s.whatsapp.net", telefone: "5584988887777", ultima_msg_em: "2026-11-05T12:00:00Z", data: dia, canal: "individual", org_id: "org-weevo" },
+    { id: "c2", vendedor_id: "closer1", contato: "5584944443333@s.whatsapp.net", telefone: "5584944443333", ultima_msg_em: "2026-11-05T12:00:00Z", data: dia, canal: "individual", org_id: "org-weevo" },
+    { id: "c3", vendedor_id: "sdr-c", contato: "5584955554444@s.whatsapp.net", telefone: "5584955554444", ultima_msg_em: "2026-11-05T12:00:00Z", data: dia, canal: "individual", org_id: "org-carbone" }, // so a SDR da Carbone conversa com o Davi
   ];
   db.tables.crm_conversas = [
-    { id: "k1", vendedor_id: "sdr2", telefone: "84922221111", ultima_msg_em: "2026-11-04T12:00:00Z" },  // Gil: so a SDR2 conversa com ele, sem link
-    { id: "k2", vendedor_id: "sdr2", telefone: "84988887777", ultima_msg_em: "2026-11-05T18:00:00Z" },  // Ana: a SDR2 tambem conversa, e mais recente que a SDR1
+    { id: "k1", vendedor_id: "sdr2", telefone: "84922221111", ultima_msg_em: "2026-11-04T12:00:00Z", org_id: "org-weevo" },  // Gil: so a SDR2 conversa com ele, sem link
+    { id: "k2", vendedor_id: "sdr2", telefone: "84988887777", ultima_msg_em: "2026-11-05T18:00:00Z", org_id: "org-weevo" },
+    { id: "k3", vendedor_id: "sdr-c", telefone: "84988887777", ultima_msg_em: "2026-11-06T09:00:00Z", org_id: "org-carbone" }, // a SDR da Carbone tambem fala com a Ana, e mais recente: nao conta  // Ana: a SDR2 tambem conversa, e mais recente que a SDR1
   ];
   const LINK_MSG = "Faz o diagnostico: https://weevoedu.com/questionario/diagnostico/abc";
   db.tables.mensagens = [
-    ...(semLink ? [] : [{ id: "m1", conversa_id: "c1", vendedor_id: "sdr1", remetente: "vendedor", texto: LINK_MSG, enviada_em: new Date().toISOString() }]), // a SDR1 mandou o link para a Ana
-    { id: "m2", conversa_id: "c2", vendedor_id: "closer1", remetente: "vendedor", texto: LINK_MSG, enviada_em: new Date().toISOString() },            // o closer mandou o link para a Eva
+    ...(semLink ? [] : [{ id: "m1", conversa_id: "c1", vendedor_id: "sdr1", remetente: "vendedor", texto: LINK_MSG, enviada_em: new Date().toISOString(), org_id: "org-weevo" }]), // a SDR1 mandou o link para a Ana
+    { id: "m2", conversa_id: "c2", vendedor_id: "closer1", remetente: "vendedor", texto: LINK_MSG, enviada_em: new Date().toISOString(), org_id: "org-weevo" },            // o closer mandou o link para a Eva
   ];
   db.tables.crm_mensagens = [];
   return db;
@@ -156,6 +163,8 @@ try {
   assert.ok(por.sdr2.includes("Gil Alves"), "Gil, sem link, vai para a SDR2 (responsavel)");
   assert.ok(!db.tables.notificacoes.some(n => n.para === "closer1"), "o closer que mandou o link a Eva nao recebe aviso");
   assert.equal(db.tables.notificacoes.length, 2, "so quem enviou o link ou e responsavel recebe: nao vai para todos os SDRs");
+  assert.ok(!db.tables.notificacoes.some(n => n.para === "sdr-c"), "SDR da Carbone nunca recebe aviso da Weevo, mesmo conversando com o mesmo cliente");
+  assert.ok(!por.sdr1.includes("Davi Melo") && !por.sdr2.includes("Davi Melo"), "Davi so conversa com a Carbone: sem SDR na Weevo");
 
   // 5g2) ninguem mandou o link: vale o SDR responsavel (o da conversa mais recente)
   db = cenario({ semLink: true }); enviados = [];

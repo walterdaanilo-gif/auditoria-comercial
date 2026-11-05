@@ -87,14 +87,15 @@ async function lerSite(fetchImpl, caminho) {
   if (!r.ok) throw new Error(`site do diagnostico ${caminho}: HTTP ${r.status}`); // nunca inclui a resposta nem o codigo
   return r.json();
 }
-async function lerBases(db, R, desde, ativos) {
+async function lerBases(db, R, desde, ativos, org) {
+  const daWeevo = { org_id: `eq.${org}` }; // o site e a planilha sao da Weevo: conversas da Carbone nunca entram
   const [convs, crm] = await Promise.all([
-    db.selectAll("conversas", { select: "id,vendedor_id,contato,telefone,ultima_msg_em", filters: { data: `gte.${desde}`, canal: "neq.importada" } }),
-    db.selectAll("crm_conversas", { select: "id,vendedor_id,telefone,ultima_msg_em" }),
+    db.selectAll("conversas", { select: "id,vendedor_id,contato,telefone,ultima_msg_em", filters: { ...daWeevo, data: `gte.${desde}`, canal: "neq.importada" } }),
+    db.selectAll("crm_conversas", { select: "id,vendedor_id,telefone,ultima_msg_em", filters: daWeevo }),
   ]);
   const [msgs, crmMsgs] = await Promise.all([
-    db.selectAll("mensagens", { select: "conversa_id,vendedor_id,enviada_em", filters: { remetente: "eq.vendedor", texto: `ilike.*${LINK}*`, enviada_em: `gte.${desde}` } }),
-    db.selectAll("crm_mensagens", { select: "conversa_id,vendedor_id,enviada_em", filters: { direcao: "eq.outbound", nota_interna: "eq.false", texto: `ilike.*${LINK}*`, enviada_em: `gte.${desde}` } }),
+    db.selectAll("mensagens", { select: "conversa_id,vendedor_id,enviada_em", filters: { ...daWeevo, remetente: "eq.vendedor", texto: `ilike.*${LINK}*`, enviada_em: `gte.${desde}` } }),
+    db.selectAll("crm_mensagens", { select: "conversa_id,vendedor_id,enviada_em", filters: { ...daWeevo, direcao: "eq.outbound", nota_interna: "eq.false", texto: `ilike.*${LINK}*`, enviada_em: `gte.${desde}` } }),
   ]);
   const ehSdr = v => !!v && R.funcao.get(v) !== "closer" && ativos.has(v); // closer e perfil inativo nao recebem aviso
   const maisRecente = (mapa, k, v, quando) => { const q = Date.parse(quando) || 0, at = mapa.get(k); if (!at || q > at.q) mapa.set(k, { v, q }); };
@@ -127,10 +128,13 @@ export async function avisarDiagnosticos(db, { agora = Date.now(), fetchImpl = f
 
   const R = await carregarRegras(db);
   const s = R.bruto;
-  const perfisAtivos = new Set((await db.select("profiles", { select: "id", filters: { ativo: "eq.true" } })).map(p => p.id));
+  const [org] = await db.select("organizacoes", { select: "id", filters: { slug: "eq.weevo" } });
+  if (!org) return "aviso: empresa Weevo nao encontrada";
+  // so perfis ativos da Weevo podem receber o aviso (Matheus, Weslley e Josue sao da Carbone)
+  const perfisAtivos = new Set((await db.select("profiles", { select: "id", filters: { ativo: "eq.true", org_id: `eq.${org.id}` } })).map(p => p.id));
   const [leadsResp, diagResp, bases, insts] = await Promise.all([
     lerSite(fetchImpl, "/api/admin/dash"), lerSite(fetchImpl, "/api/diagnostico/list"),
-    lerBases(db, R, addDays(today(), -JANELA_DIAS), perfisAtivos),
+    lerBases(db, R, addDays(today(), -JANELA_DIAS), perfisAtivos, org.id),
     db.select("instancias_whatsapp", { select: "vendedor_id,numero" }),
   ]);
   const leads = leadsResp?.leads, diagnosticos = diagResp?.rows;
