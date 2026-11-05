@@ -69,6 +69,9 @@ function cenario({ envioConfigurado = true, sdr2Ativa = true, semLink = false } 
     { id: "sdr1", nome: "Rafael Costa", funcao: "sdr", ativo: true, org_id: "org-weevo" }, { id: "sdr2", nome: "Bianca Dias", funcao: "sdr", ativo: sdr2Ativa, org_id: "org-weevo" },
     { id: "closer1", nome: "Carlos Closer", funcao: "closer", ativo: true, org_id: "org-weevo" },
     { id: "sdr-c", nome: "Carla Carbone", funcao: "sdr", ativo: true, org_id: "org-carbone" }, // SDR da Carbone: nunca recebe aviso da Weevo
+    { id: "gestor1", nome: "Gestora Weevo", funcao: "gestao", papel: "gestor", ativo: true, org_id: "org-weevo" }, // gestao da Weevo: recebe os inscritos sem SDR
+    { id: "gestor-c", nome: "Gestor Carbone", funcao: "gestao", papel: "admin", ativo: true, org_id: "org-carbone" }, // gestao da Carbone: nunca
+    { id: "gestor-off", nome: "Gestor Inativo", funcao: "gestao", papel: "gestor", ativo: false, org_id: "org-weevo" },
   ];
   db.tables.instancias_whatsapp = [{ vendedor_id: "sdr1", numero: "5584900000001" }]; // a SDR2 nao tem WhatsApp conectado
   const dia = new Date().toISOString().slice(0, 10);
@@ -124,7 +127,14 @@ try {
   assert.ok(!txt.includes("Bia Lima") && !txt.includes("Caio Reis") && !txt.includes("Gil Alves") && !txt.includes("Fabio") && !txt.includes("Hugo"), "so os pendentes dela");
   assert.ok(txt.includes("cerca de 6h"), "tempo ate a turma");
   const sino = db.tables.notificacoes;
-  assert.equal(sino.length, 2, "sino para os dois SDRs");
+  assert.equal(sino.length, 3, "sino para os dois SDRs e para a gestao da Weevo");
+  const gest = sino.filter(n => n.para === "gestor1");
+  assert.equal(gest.length, 1, "a gestao da Weevo recebe um aviso (so ela: a Carbone e o inativo nao)");
+  assert.ok(gest[0].titulo.includes("sem SDR: 3 clientes da turma 09/11 às 18h"), gest[0].titulo);
+  for (const nome of ["Davi Melo", "Eva Dias", "Ivo Nunes"]) assert.ok(gest[0].texto.includes(nome), nome + " (sem SDR) aparece para a gestao");
+  assert.ok(!gest[0].texto.includes("Ana Souza") && !gest[0].texto.includes("Gil Alves"), "quem tem SDR nao vai para a gestao");
+  assert.ok(!sino.some(n => n.para === "gestor-c" || n.para === "gestor-off"), "gestao da Carbone e gestor inativo nao recebem");
+  assert.equal(enviados.length, 1, "a gestao recebe so no sistema: nenhum WhatsApp para ela");
   assert.ok(sino.every(n => n.categoria === "diagnostico"));
   assert.ok(sino.find(n => n.para === "sdr2").texto.includes("Gil Alves · (84) 92222-1111 · link ainda não enviado"));
   const av = db.tables.diagnostico_avisos;
@@ -135,12 +145,12 @@ try {
   // 5c) cinco minutos depois: nao repete
   r = await avisarDiagnosticos(db, { agora: ini - 5 * H - 25 * 60_000, fetchImpl: site(), envio });
   assert.equal(r, "nenhuma turma na janela de 6h");
-  assert.equal(enviados.length, 1); assert.equal(db.tables.notificacoes.length, 2, "nao repete o aviso");
+  assert.equal(enviados.length, 1); assert.equal(db.tables.notificacoes.length, 3, "nao repete o aviso (nem o da gestao)");
 
   // 5d) sem WhatsApp de envio configurado: so o sino
   db = cenario({ envioConfigurado: false }); enviados = [];
   r = await avisarDiagnosticos(db, { agora: ini - 3 * H, fetchImpl: site(), envio });
-  assert.equal(enviados.length, 0); assert.equal(db.tables.notificacoes.length, 2);
+  assert.equal(enviados.length, 0); assert.equal(db.tables.notificacoes.length, 3);
   assert.ok(db.tables.diagnostico_avisos.every(a => a.canais === "sino"));
 
   // 5e) o site falha: nada e marcado (tenta de novo no proximo ciclo) e o erro nao mostra o codigo
@@ -162,7 +172,7 @@ try {
   assert.ok(por.sdr1.includes("Ana Souza") && !por.sdr2.includes("Ana Souza"), "Ana vai para a SDR1, que mandou o link, apesar de a SDR2 ter conversa mais recente");
   assert.ok(por.sdr2.includes("Gil Alves"), "Gil, sem link, vai para a SDR2 (responsavel)");
   assert.ok(!db.tables.notificacoes.some(n => n.para === "closer1"), "o closer que mandou o link a Eva nao recebe aviso");
-  assert.equal(db.tables.notificacoes.length, 2, "so quem enviou o link ou e responsavel recebe: nao vai para todos os SDRs");
+  assert.equal(db.tables.notificacoes.filter(n => n.para.startsWith("sdr")).length, 2, "so quem enviou o link ou e responsavel recebe: nao vai para todos os SDRs");
   assert.ok(!db.tables.notificacoes.some(n => n.para === "sdr-c"), "SDR da Carbone nunca recebe aviso da Weevo, mesmo conversando com o mesmo cliente");
   assert.ok(!por.sdr1.includes("Davi Melo") && !por.sdr2.includes("Davi Melo"), "Davi so conversa com a Carbone: sem SDR na Weevo");
 
@@ -176,7 +186,8 @@ try {
   // 5h) SDR inativa nao e dona de ninguem: o cliente dela fica sem SDR e ela nao recebe aviso
   db = cenario({ sdr2Ativa: false }); enviados = [];
   r = await avisarDiagnosticos(db, { agora: ini - 3 * H, fetchImpl: site(), envio });
-  assert.deepEqual(db.tables.notificacoes.map(n => n.para), ["sdr1"]);
+  assert.deepEqual(db.tables.notificacoes.map(n => n.para), ["sdr1", "gestor1"], "a SDR inativa nao recebe; o cliente dela vai para a gestao");
+  assert.ok(db.tables.notificacoes[1].texto.includes("Gil Alves"), "Gil, da SDR inativa, aparece para a gestao");
   assert.ok(r.includes("1 SDR(s) avisado(s), 4 sem SDR identificado"), r);
 
   // 6) o codigo e os dados dos clientes nunca vao para o log
