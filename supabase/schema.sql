@@ -1124,6 +1124,3 @@ create table if not exists public.diagnostico_avisos (
 alter table public.diagnostico_turmas enable row level security;
 alter table public.diagnostico_avisos enable row level security;
 revoke all on public.diagnostico_turmas, public.diagnostico_avisos from anon, authenticated;
-
--- Aviso de diagnostico: quais SDRs recebem (ids de profiles). Vazio ou null = todos os SDRs ativos.
-alter table public.audit_settings add column if not exists diagnostico_sdrs uuid[];

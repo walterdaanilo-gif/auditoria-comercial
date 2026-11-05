@@ -8,7 +8,8 @@ import { notificar } from "./notificar.js";
 //   - turmas e horarios: abas da planilha "Controle de diagnosticos" ("WORKSHOP 09/11/26 18h"), lidas da pagina publica (htmlview)
 //   - turma de cada pessoa: relatorio de leads do site (/api/admin/dash, campo data_evento "09/11")
 //   - quem ja preencheu: painel de diagnosticos do site (/api/diagnostico/list), casando pelo telefone
-//   - SDR de cada cliente: a conversa mais recente dele (WhatsApp conectado ou CRM) com um SDR
+//   - quem recebe o aviso de cada cliente: o SDR que enviou o link do diagnostico; sem SDR que tenha enviado, o SDR responsavel
+//     (o da conversa mais recente, WhatsApp conectado ou CRM). So SDR ativo; closer nao recebe.
 // O codigo de acesso do site fica em DIAGNOSTICO_CODE (segredo da funcao) e nunca vai para o log nem para o codigo.
 const ANTECEDENCIA_MS = 6 * 3600_000;
 const JANELA_DIAS = 180;       // conversas e links olhados para tras
@@ -46,15 +47,13 @@ export const fone = t => { const d = digitos(t).replace(/^55(?=\d{10,11}$)/, "")
 // ---------- regra principal (sem rede nem banco) ----------
 // leads: relatorio do site. diagnosticos: linhas do painel. donos: telefone -> id do SDR. links: telefones que receberam o link de um SDR.
 const inscrito = l => !!l.data_evento && !!chave(l.whatsapp) && (l.status !== "lead" || !!l.paid_at || !!l.inscrito_direto_at); // quem so escolheu a data e nao se inscreveu fica de fora
-// destinatarios: SDRs escolhidos em Configuracoes. Lista vazia/ausente = cada pendente vai para o SDR dono dele.
-// Com lista, so eles recebem: o que era de outro SDR (ou de ninguem) e repartido entre eles, em rodizio.
-export function pendentesDaTurma(turma, { leads, diagnosticos, donos, links, destinatarios = null }) {
+// donos: telefone -> SDR que recebe o aviso daquele cliente (quem mandou o link; sem link de SDR, o SDR responsavel)
+export function pendentesDaTurma(turma, { leads, diagnosticos, donos, links }) {
   const preencheram = new Set();
   for (const r of diagnosticos) for (const campo of ["whatsapp", "p4_whatsapp"]) { const k = chave(r.variables?.[campo]); if (k) preencheram.add(k); }
   const doDia = leads.filter(l => inscrito(l) && l.data_evento === turma.ddmm);
   const porSdr = new Map(), semSdr = [];
-  const escolhidos = Array.isArray(destinatarios) && destinatarios.length ? [...destinatarios] : null;
-  let preenchidos = 0, rodizio = 0;
+  let preenchidos = 0;
   const vistos = new Set();
   for (const l of doDia) {
     const k = chave(l.whatsapp);
@@ -62,8 +61,7 @@ export function pendentesDaTurma(turma, { leads, diagnosticos, donos, links, des
     vistos.add(k);
     if (preencheram.has(k)) { preenchidos++; continue; }
     const item = { nome: String(l.nome || "").trim(), telefone: l.whatsapp, linkEnviado: links.has(k) };
-    let sdr = donos.get(k);
-    if (escolhidos && !escolhidos.includes(sdr)) sdr = escolhidos[rodizio++ % escolhidos.length];
+    const sdr = donos.get(k);
     if (sdr) porSdr.set(sdr, [...(porSdr.get(sdr) || []), item]); else semSdr.push(item);
   }
   const pend = [...porSdr.values()].reduce((n, l) => n + l.length, 0) + semSdr.length;
@@ -89,28 +87,30 @@ async function lerSite(fetchImpl, caminho) {
   if (!r.ok) throw new Error(`site do diagnostico ${caminho}: HTTP ${r.status}`); // nunca inclui a resposta nem o codigo
   return r.json();
 }
-async function lerBases(db, R, desde, ativos) {
+async function lerBases(db, R, desde, ativos, org) {
+  const daWeevo = { org_id: `eq.${org}` }; // o site e a planilha sao da Weevo: conversas da Carbone nunca entram
   const [convs, crm] = await Promise.all([
-    db.selectAll("conversas", { select: "id,vendedor_id,contato,telefone,ultima_msg_em", filters: { data: `gte.${desde}`, canal: "neq.importada" } }),
-    db.selectAll("crm_conversas", { select: "id,vendedor_id,telefone,ultima_msg_em" }),
+    db.selectAll("conversas", { select: "id,vendedor_id,contato,telefone,ultima_msg_em", filters: { ...daWeevo, data: `gte.${desde}`, canal: "neq.importada" } }),
+    db.selectAll("crm_conversas", { select: "id,vendedor_id,telefone,ultima_msg_em", filters: daWeevo }),
   ]);
   const [msgs, crmMsgs] = await Promise.all([
-    db.selectAll("mensagens", { select: "conversa_id", filters: { remetente: "eq.vendedor", texto: `ilike.*${LINK}*`, enviada_em: `gte.${desde}` } }),
-    db.selectAll("crm_mensagens", { select: "conversa_id", filters: { direcao: "eq.outbound", nota_interna: "eq.false", texto: `ilike.*${LINK}*`, enviada_em: `gte.${desde}` } }),
+    db.selectAll("mensagens", { select: "conversa_id,vendedor_id,enviada_em", filters: { ...daWeevo, remetente: "eq.vendedor", texto: `ilike.*${LINK}*`, enviada_em: `gte.${desde}` } }),
+    db.selectAll("crm_mensagens", { select: "conversa_id,vendedor_id,enviada_em", filters: { ...daWeevo, direcao: "eq.outbound", nota_interna: "eq.false", texto: `ilike.*${LINK}*`, enviada_em: `gte.${desde}` } }),
   ]);
-  // dono: o SDR da conversa mais recente com o cliente (closer nao conta)
-  const melhor = new Map();
-  const ver = (v, tel, quando) => {
-    const k = chave(tel);
-    if (!v || !k || R.funcao.get(v) === "closer" || !ativos.has(v)) return; // closer e perfil inativo nao sao donos
-    const q = Date.parse(quando) || 0, at = melhor.get(k);
-    if (!at || q > at.q) melhor.set(k, { v, q });
-  };
-  for (const c of convs) ver(c.vendedor_id, c.telefone || c.contato, c.ultima_msg_em);
-  for (const c of crm) ver(c.vendedor_id, c.telefone, c.ultima_msg_em);
-  const donos = new Map([...melhor].map(([k, x]) => [k, x.v]));
+  const ehSdr = v => !!v && R.funcao.get(v) !== "closer" && ativos.has(v); // closer e perfil inativo nao recebem aviso
+  const maisRecente = (mapa, k, v, quando) => { const q = Date.parse(quando) || 0, at = mapa.get(k); if (!at || q > at.q) mapa.set(k, { v, q }); };
+  // SDR responsavel: o da conversa mais recente com o cliente
+  const responsavel = new Map();
+  for (const c of convs) { const k = chave(c.telefone || c.contato); if (k && ehSdr(c.vendedor_id)) maisRecente(responsavel, k, c.vendedor_id, c.ultima_msg_em); }
+  for (const c of crm) { const k = chave(c.telefone); if (k && ehSdr(c.vendedor_id)) maisRecente(responsavel, k, c.vendedor_id, c.ultima_msg_em); }
   const porId = new Map([...convs.map(c => [c.id, chave(c.telefone || c.contato)]), ...crm.map(c => [c.id, chave(c.telefone)])]);
+  // SDR que enviou o link do diagnostico: o da mensagem mais recente com o link
+  const enviou = new Map();
+  for (const m of [...msgs, ...crmMsgs]) { const k = porId.get(m.conversa_id); if (k && ehSdr(m.vendedor_id)) maisRecente(enviou, k, m.vendedor_id, m.enviada_em); }
   const links = new Set([...msgs, ...crmMsgs].map(m => porId.get(m.conversa_id)).filter(Boolean));
+  // quem recebe o aviso do cliente: o SDR que enviou o link; se nenhum SDR enviou, o SDR responsavel
+  const donos = new Map([...responsavel].map(([k, x]) => [k, x.v]));
+  for (const [k, x] of enviou) donos.set(k, x.v);
   return { donos, links };
 }
 
@@ -128,13 +128,13 @@ export async function avisarDiagnosticos(db, { agora = Date.now(), fetchImpl = f
 
   const R = await carregarRegras(db);
   const s = R.bruto;
-  const perfisAtivos = new Set((await db.select("profiles", { select: "id", filters: { ativo: "eq.true" } })).map(p => p.id));
-  // quem recebe: os SDRs marcados em Configuracoes (ativos e nao closer); sem ninguem marcado, todos os SDRs ativos donos de cliente
-  const marcados = (Array.isArray(s.diagnostico_sdrs) ? s.diagnostico_sdrs : []).filter(id => perfisAtivos.has(id) && R.funcao.get(id) !== "closer");
-  if (Array.isArray(s.diagnostico_sdrs) && s.diagnostico_sdrs.length && !marcados.length) return "aviso: nenhum dos SDRs marcados em Configuracoes esta ativo; nada enviado";
+  const [org] = await db.select("organizacoes", { select: "id", filters: { slug: "eq.weevo" } });
+  if (!org) return "aviso: empresa Weevo nao encontrada";
+  // so perfis ativos da Weevo podem receber o aviso (Matheus, Weslley e Josue sao da Carbone)
+  const perfisAtivos = new Set((await db.select("profiles", { select: "id", filters: { ativo: "eq.true", org_id: `eq.${org.id}` } })).map(p => p.id));
   const [leadsResp, diagResp, bases, insts] = await Promise.all([
     lerSite(fetchImpl, "/api/admin/dash"), lerSite(fetchImpl, "/api/diagnostico/list"),
-    lerBases(db, R, addDays(today(), -JANELA_DIAS), perfisAtivos),
+    lerBases(db, R, addDays(today(), -JANELA_DIAS), perfisAtivos, org.id),
     db.select("instancias_whatsapp", { select: "vendedor_id,numero" }),
   ]);
   const leads = leadsResp?.leads, diagnosticos = diagResp?.rows;
@@ -143,7 +143,7 @@ export async function avisarDiagnosticos(db, { agora = Date.now(), fetchImpl = f
 
   const resumo = [];
   for (const turma of devidas) {
-    const p = pendentesDaTurma(turma, { leads, diagnosticos, ...bases, destinatarios: marcados });
+    const p = pendentesDaTurma(turma, { leads, diagnosticos, ...bases });
     const horas = Math.max(1, Math.round((turma.inicio - agora) / 3600_000));
     const jaAvisados = new Set((await db.select("diagnostico_avisos", { select: "vendedor_id", filters: { turma: `eq.${turma.chave}` } })).map(a => a.vendedor_id));
     let enviados = 0;
