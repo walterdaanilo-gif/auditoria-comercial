@@ -151,7 +151,7 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
                 </div>
               );
             })}
-            {!sdrs.length && <p className="text-[0.85em] text-mute">Nenhum vendedor ainda. Cadastre na aba WhatsApp (nome, função e conexão).</p>}
+            {!sdrs.length && <p className="text-[0.85em] text-mute">Nenhum vendedor ainda. Cadastre na aba Usuários (nome, função e conexão de WhatsApp).</p>}
           </div>
         </Painel>
   );

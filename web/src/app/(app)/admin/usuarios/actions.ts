@@ -40,6 +40,11 @@ export async function criarUsuario(_: Resultado, fd: FormData): Promise<Resultad
   const { data, error } = await admin.auth.admin.createUser({ email, password: senha, email_confirm: true, user_metadata: { nome, papel } });
   if (error || !data.user) return { ok: false, erro: erroAdmin(error, "Não foi possível criar o usuário.") };
   await admin.from("profiles").upsert({ id: data.user.id, nome, email, papel, funcao, ativo: true, ...orgs });
+  // opcional: ja cria a conexao de WhatsApp da pessoa (o QR Code aparece no cartao dela)
+  if (fd.get("whatsapp") === "on") {
+    const { error: eW } = await admin.from("instancias_whatsapp").insert({ vendedor_id: data.user.id, nome: `WhatsApp de ${nome}`, status: "aguardando" });
+    if (eW) return { ok: false, erro: "Usuário criado, mas não consegui criar o WhatsApp: " + eW.message };
+  }
   revalidatePath("/admin/usuarios");
   revalidatePath("/configuracoes");
   return { ok: true };

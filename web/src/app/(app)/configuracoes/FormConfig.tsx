@@ -303,10 +303,10 @@ function Card({ id, titulo, resumo, ok, recomendado, aberto, alternar, children 
 }
 
 // ---------- tela ----------
-export default function FormConfig({ inicial, agenda, retornoAgenda, empresa = "Weevo" }: { inicial: Estado; agenda: StatusAgenda | null; retornoAgenda?: string; empresa?: string }) {
+export default function FormConfig({ inicial, agenda, retornoAgenda, empresa = "Weevo", roteiro, roteiroOk = false, abrir }: { inicial: Estado; agenda: StatusAgenda | null; retornoAgenda?: string; empresa?: string; roteiro?: ReactNode; roteiroOk?: boolean; abrir?: string }) {
   const [base, setBase] = useState(inicial);
   const [e, setE] = useState(inicial);
-  const [abertos, setAbertos] = useState<string[]>([]);
+  const [abertos, setAbertos] = useState<string[]>(abrir ? [abrir] : []);
   const [pend, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; erros?: string[] } | null>(null);
   const [slaHoras, setSlaHoras] = useState(inicial.settings.sla_primeira_resposta_min % 60 === 0 && inicial.settings.sla_primeira_resposta_min >= 60);
@@ -394,9 +394,9 @@ export default function FormConfig({ inicial, agenda, retornoAgenda, empresa = "
               </div>
             );
           })}
-          {!e.vendedores.length && <p className="px-4 py-3 text-sm text-mute">Nenhum vendedor ainda. Cadastre ao criar a conexão em WhatsApp.</p>}
+          {!e.vendedores.length && <p className="px-4 py-3 text-sm text-mute">Nenhum vendedor ainda. Cadastre em Usuários, junto com a conexão de WhatsApp.</p>}
         </div>
-        <p className="mt-2 text-xs text-mute">Clique no círculo para colocar a foto de perfil (JPG, PNG ou WEBP, até 2 MB); ela aparece nos perfis das Conversas. Vendedores e função (SDR ou Closer) são cadastrados e alterados na aba <Link href="/instancias" className="font-semibold text-brand hover:underline">WhatsApp</Link>, junto com a conexão.</p>
+        <p className="mt-2 text-xs text-mute">Clique no círculo para colocar a foto de perfil (JPG, PNG ou WEBP, até 2 MB); ela aparece nos perfis das Conversas. Vendedores e função (SDR ou Closer) são cadastrados e alterados na aba <Link href="/admin/usuarios" className="font-semibold text-brand hover:underline">Usuários</Link>, junto com a conexão de WhatsApp.</p>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border border-line p-4">
             <div className="label mb-1">Metas diárias do SDR</div>
@@ -603,6 +603,12 @@ export default function FormConfig({ inicial, agenda, retornoAgenda, empresa = "
             <EditorRubrica lista={e.rubricas.personalizada} onChange={(l) => setEst({ rubricas: { ...e.rubricas, personalizada: l } })} /></div>
         )}
       </Card>
+
+      {roteiro && (
+        <Card id="roteiro" ok={roteiroOk} aberto={abertos.includes("roteiro")} alternar={alternar} titulo="Roteiro da auditoria" resumo={roteiroOk ? "A régua que a IA usa para dar a nota · lido a cada auditoria" : "Escreva o roteiro: sem ele a IA audita só pela rubrica"}>
+          {roteiro}
+        </Card>
+      )}
 
       <Card {...cardProps("vendas")} titulo="Detecção de vendas" resumo={`${regras(linhas(s.venda_conta), "conta")} · ${regras(linhas(s.venda_nao_conta), "não conta")}`}>
         <p className="mb-3 text-sm text-mute">Padrão: SDR vende quando o lead se inscreve no workshop (cupom de R$ 0 também conta, com o valor registrado). Closer vende só quando a imersão fecha. Reunião marcada nunca é venda. Use as listas para não inflar o número de vendas.</p>

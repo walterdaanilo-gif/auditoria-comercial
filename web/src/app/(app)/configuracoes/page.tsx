@@ -4,16 +4,18 @@ import type { Criterio, Estado, Numero, Settings, Vendedor } from "@/lib/configu
 import Link from "next/link";
 import { MessageSquareText } from "lucide-react";
 import FormConfig, { type StatusAgenda } from "./FormConfig";
+import RoteiroForm from "./RoteiroForm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Configurações · Cabueta do Elon Musk" };
 
 // Configuracoes do Auditor: so gestor e admin entram (a RLS das tabelas tambem exige gestor)
-export default async function Configuracoes({ searchParams: spP }: { searchParams: Promise<{ agenda?: string }> }) {
+export default async function Configuracoes({ searchParams: spP }: { searchParams: Promise<{ agenda?: string; abrir?: string; roteiro_ok?: string; roteiro_erro?: string }> }) {
   const sp = await spP;
-  const { atual } = await empresas(await exigirGestor());
+  const perfil = await exigirGestor();
+  const { atual } = await empresas(perfil);
   const db = await createClient();
-  const [rCfg, rCrit, rIgn, rAl, rPerf, rInst, rAg] = await Promise.all([
+  const [rCfg, rCrit, rIgn, rAl, rPerf, rInst, rAg, rRot] = await Promise.all([
     db.from("audit_settings").select("*").maybeSingle(), // a RLS devolve so a linha da empresa aberta
     db.from("criterios_rubrica").select("rubrica,chave,nome,descricao,peso,ativo,posicao").order("posicao"),
     db.from("numeros_ignorados").select("telefone").order("criado_em"),
@@ -21,7 +23,9 @@ export default async function Configuracoes({ searchParams: spP }: { searchParam
     db.from("profiles").select("id,nome,funcao,ativo,foto_url").order("nome"),
     db.from("instancias_whatsapp").select("id,vendedor_id,nome,numero,status,horario").order("nome"),
     db.rpc("status_agenda"),
+    db.from("config_auditoria").select("roteiro").maybeSingle(), // roteiro da auditoria (a RLS devolve so a empresa aberta)
   ]);
+  const roteiroTexto = (rRot.data as { roteiro: string | null } | null)?.roteiro ?? "";
   if (rCfg.error || !rCfg.data) return <p className="aviso">Não foi possível carregar as configurações: {rCfg.error?.message ?? "linha de configuração não encontrada"}.</p>;
 
   const crit = (rCrit.data ?? []) as (Criterio & { rubrica: string })[];
@@ -44,7 +48,9 @@ export default async function Configuracoes({ searchParams: spP }: { searchParam
           <span className="block text-sm text-mute">Edite os textos que o sistema manda para você e para os vendedores (resumos, alertas, follow-up)</span></span>
         <span className="text-mute">›</span>
       </Link>
-      <FormConfig empresa={atual?.nome ?? "Weevo"} inicial={inicial} agenda={((rAg.data ?? []) as StatusAgenda[])[0] ?? null} retornoAgenda={sp.agenda} />
+      <FormConfig empresa={atual?.nome ?? "Weevo"} inicial={inicial} agenda={((rAg.data ?? []) as StatusAgenda[])[0] ?? null} retornoAgenda={sp.agenda}
+        abrir={sp.abrir === "roteiro" ? "roteiro" : undefined} roteiroOk={roteiroTexto.trim().length >= 20}
+        roteiro={<RoteiroForm roteiro={roteiroTexto} podeEditar={perfil.papel === "admin"} ok={!!sp.roteiro_ok} erro={sp.roteiro_erro} />} />
     </>
   );
 }

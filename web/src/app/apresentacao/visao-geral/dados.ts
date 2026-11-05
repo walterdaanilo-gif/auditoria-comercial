@@ -1,14 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { duracao, hojeBR, nota, um } from "@/lib/format";
+import { duracao, nota } from "@/lib/format";
 import { diasUteis } from "@/lib/metas";
 import { diasEntre, type Periodo } from "@/lib/periodo";
 import { resolverQuadros } from "@/lib/quadrosTv";
+import { contaNoFaturamento, listarResultados } from "@/lib/resultados";
 import { inteiro, tomPorDiferenca, type Kpi, type Pessoa, type VisaoGeralDados } from "./calc";
 
 // Tela fixa da TV com dados REAIS do mes atual. So leitura. Dado que o Cabueta nao mede nao entra na tela.
 type Perfil = { id: string; nome: string; funcao: string | null; ativo: boolean; foto_url: string | null };
 type Linha = { vendedor_id: string; respostas: number; marcacoes: number; ligacoes: number; ligacoes_atendidas: number; auditadas: number; nota_soma: number };
-type Venda = { vendedor_id: string; venda_tipo: string | null; venda_valor: number | null; venda_cupom: boolean; conversas: { data: string } | { data: string }[] | null };
 type Tempos = { vendedor_id: string; primeira_resposta_seg: number | null; tempo_medio_resposta_seg: number | null; respostas_sdr: number | null };
 
 const n = (x: unknown) => Number(x) || 0;
@@ -28,12 +28,13 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const ritmoPct = (Math.max(diaUtil, 1) / diasUteisMes) * 100;
   const db = createAdminClient();
 
-  const [rRes, rPerf, rInst, rCfg, rVen, rTem, rSem] = await Promise.all([
+  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem] = await Promise.all([
     db.rpc("resumo_sdr2", { p_from: ini, p_to: hoje }),
     db.from("profiles").select("id,nome,funcao,ativo,foto_url").order("nome"),
     db.from("instancias_whatsapp").select("vendedor_id").eq("org_id", org),
     db.from("audit_settings").select("*").eq("org_id", org).maybeSingle(),
-    db.from("auditorias").select("vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(data,canal)").eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", ini).lte("conversas.data", hoje).limit(5000),
+    // vendas em dinheiro = a mesma lista da aba Resultados (vendas da IA com ajustes + vendas manuais)
+    listarResultados(db, org, ini, hoje),
     // mesma conta do painel de atendimento: tempos de resposta das conversas auditadas
     db.from("auditorias").select("vendedor_id,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,conversas!inner(data,canal)").eq("org_id", org).neq("conversas.canal", "importada").gte("conversas.data", ini).lte("conversas.data", hoje).limit(5000),
     db.rpc("conversas_sem_retorno", { p_from: ini, p_to: hoje, p_min: 15 }),
@@ -45,14 +46,14 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const closers = time.filter((p) => p.funcao === "closer");
   const ids = new Set(time.map((p) => p.id)), sdrIds = new Set(sdrs.map((p) => p.id));
   const linhas = ((rRes.data ?? []) as Linha[]).filter((l) => ids.has(l.vendedor_id));
-  const vendas = ((rVen.data ?? []) as unknown as Venda[]).filter((v) => ids.has(v.vendedor_id));
+  // vendas da IA: so de quem e do time; vendas manuais entram todas (mesmo sem vendedor)
+  const vendas = resultados.linhas.filter((r) => contaNoFaturamento(r) && (r.origem === "manual" || (r.vendedorId != null && ids.has(r.vendedorId))));
   const tempos = ((rTem.data ?? []) as unknown as Tempos[]).filter((t) => ids.has(t.vendedor_id));
   const cfg = (rCfg.data ?? {}) as Record<string, unknown>;
 
-  // ---- faturamento: so Workshop pago e Imersao (unicos com valor no Cabueta) ----
-  const valorV = (v: Venda) => (v.venda_tipo === "imersao" || !v.venda_cupom ? n(v.venda_valor) : 0);
+  // ---- faturamento: soma da aba Resultados (vendas da IA com ajustes + manuais) ----
   const porDia = new Map<string, number>();
-  for (const v of vendas) { const d = um(v.conversas)?.data; if (d) porDia.set(d, (porDia.get(d) ?? 0) + valorV(v)); }
+  for (const v of vendas) porDia.set(v.data, (porDia.get(v.data) ?? 0) + (v.valor ?? 0));
   const serie: { du: number; real: number; data: string }[] = [];
   let acc = 0, du = 0;
   for (const d of diasEntre(ini, hoje)) {
@@ -67,12 +68,12 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const metaConvDia = n(cfg.meta_sdr_conversas ?? 25), metaMarcDia = n(cfg.meta_sdr_marcacoes ?? 6);
   const metaConv = metaConvDia * diasUteisMes, metaMarc = metaMarcDia * diasUteisMes;
   const pessoa = (p: Perfil, tipo: "sdr" | "closer"): Pessoa => {
-    const vs = vendas.filter((v) => v.vendedor_id === p.id && valorV(v) > 0), t = somaDe(p.id);
+    const vs = vendas.filter((v) => v.vendedorId === p.id), t = somaDe(p.id);
     return {
       id: p.id, nome: p.nome, sigla: sigla(p.nome), foto: p.foto_url, tipo,
       conversas: tipo === "sdr" ? { v: t.respostas, meta: metaConv } : null,
       marcacoes: tipo === "sdr" ? { v: t.marcacoes, meta: metaMarc } : null,
-      vendasValor: vs.reduce((s, v) => s + valorV(v), 0), vendasN: vs.length,
+      vendasValor: vs.reduce((s, v) => s + (v.valor ?? 0), 0), vendasN: vs.length,
     };
   };
 
@@ -104,7 +105,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     ligacoes: { valor: inteiro(tot.atend), sub: `de ${inteiro(tot.lig)} ligações no período`, tom: "neutro" },
     conversas_time: contraMeta(conversasTime, metaConvDia),
     marcacoes_time: contraMeta(marcacoesTime, metaMarcDia),
-    convites: { valor: inteiro(vendas.filter((v) => v.venda_tipo !== "imersao" && v.venda_cupom).length), sub: "cupom 100% ou Carbone · R$ 0", tom: "neutro" },
+    convites: { valor: inteiro(resultados.convites.filter((id) => ids.has(id)).length), sub: "cupom 100% ou Carbone · R$ 0", tom: "neutro" },
   };
 
   return {

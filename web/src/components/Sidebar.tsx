@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, ChevronsLeft, ChevronsRight, FileText, FlaskConical, MessagesSquare, Phone, Settings, Smartphone, Target, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, ChevronsLeft, ChevronsRight, MessagesSquare, Phone, Receipt, Settings, Target, Users, type LucideIcon } from "lucide-react";
 import type { Papel } from "@/lib/types";
 import Marca from "./Marca";
 
@@ -14,9 +14,8 @@ export function itensMenu(papel: Papel, funcao?: string): Item[] {
     ...(papel !== "vendedor" || funcao === "closer" ? [{ href: "/closer", texto: "Closer", icone: Target }] : []),
     { href: "/conversas", texto: "Conversas", icone: MessagesSquare },
     { href: "/ligacoes", texto: "Ligações", icone: Phone },
-    ...(papel !== "vendedor" ? [{ href: "/instancias", texto: "WhatsApp", icone: Smartphone }] : []),
-    ...(papel === "admin" ? [{ href: "/admin/usuarios", texto: "Usuários", icone: Users }, { href: "/admin/roteiro", texto: "Roteiro", icone: FileText }, { href: "/admin/testar-auditor", texto: "Testar Cabueta", icone: FlaskConical }] : []),
-    ...(papel !== "vendedor" ? [{ href: "/configuracoes", texto: "Configurações", icone: Settings }] : []),
+    // Usuarios agora inclui a conexao de WhatsApp de cada pessoa; o Roteiro fica em Configuracoes; Resultados = vendas
+    ...(papel !== "vendedor" ? [{ href: "/resultados", texto: "Resultados", icone: Receipt }, { href: "/admin/usuarios", texto: "Usuários", icone: Users }, { href: "/configuracoes", texto: "Configurações", icone: Settings }] : []),
   ];
 }
 

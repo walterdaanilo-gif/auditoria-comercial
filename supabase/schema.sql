@@ -1069,3 +1069,33 @@ alter table public.audit_settings
 -- Quadros da tela da TV (Apresentacao): lista em ordem, cada item {id, titulo?, itens?}. null = quadros padrao.
 -- Rodar ANTES de publicar a versao com "Quadros da TV" nas Configuracoes.
 alter table public.audit_settings add column if not exists tv_quadros jsonb;
+
+-- =====================================================================
+-- Resultados (vendas): vendas manuais e ajustes das vendas que a IA detectou. Alimenta o faturamento da TV.
+-- manual: auditoria_id null. ajuste: auditoria_id preenchido (campos nulos = vale o que a IA leu; excluida = tirada do faturamento).
+-- Rodar ANTES de publicar a versao com a aba Resultados.
+-- =====================================================================
+create table if not exists public.resultados_vendas (
+  id              uuid primary key default gen_random_uuid(),
+  org_id          uuid not null,
+  data            date not null,
+  vendedor_id     uuid references public.profiles(id) on delete set null,
+  cliente         text,
+  empresa         text,
+  produto         text check (produto in ('workshop','imersao','incompany','plataforma','outro')),
+  forma_pagamento text check (forma_pagamento in ('pix','cartao','boleto','transferencia','dinheiro','outro')),
+  valor           numeric(12,2) check (valor is null or valor >= 0),
+  auditoria_id    uuid unique references public.auditorias(id) on delete cascade,
+  excluida        boolean not null default false,
+  criado_por      uuid references public.profiles(id) on delete set null,
+  criado_em       timestamptz not null default now(),
+  atualizado_em   timestamptz not null default now()
+);
+create index if not exists ix_resv_org_data on public.resultados_vendas(org_id, data);
+alter table public.resultados_vendas enable row level security;
+do $$ begin
+  create policy resv_gestor on public.resultados_vendas for all to authenticated
+    using (public.eh_gestor() and org_id = public.org_atual())
+    with check (public.eh_gestor() and org_id = public.org_atual());
+exception when duplicate_object then null; end $$;
+revoke all on public.resultados_vendas from anon;
