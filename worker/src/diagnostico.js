@@ -140,6 +140,8 @@ export async function avisarDiagnosticos(db, { agora = Date.now(), fetchImpl = f
   const leads = leadsResp?.leads, diagnosticos = diagResp?.rows;
   if (!Array.isArray(leads) || !Array.isArray(diagnosticos)) throw new Error("o site do diagnostico devolveu um formato inesperado");
   const numeroDe = new Map(insts.filter(i => i.numero).map(i => [i.vendedor_id, i.numero]));
+  // gestao da Weevo (admin e gestor ativos): recebe no sistema (sino) os inscritos que nenhum SDR da Weevo atende
+  const gestao = (await db.select("profiles", { select: "id", filters: { papel: "in.(admin,gestor)", ativo: "eq.true", org_id: `eq.${org.id}` } })).map(g => g.id);
 
   const resumo = [];
   for (const turma of devidas) {
@@ -159,6 +161,7 @@ export async function avisarDiagnosticos(db, { agora = Date.now(), fetchImpl = f
       await db.insert("diagnostico_avisos", [{ turma: turma.chave, vendedor_id: v, qtd: itens.length, canais: canais.join(",") }], { onConflict: "turma,vendedor_id", ignoreDuplicates: true, returning: false });
       enviados++;
     }
+    if (p.semSdr.length) await notificar(db, gestao, { categoria: "diagnostico", titulo: `Diagnóstico pendente sem SDR: ${p.semSdr.length} ${p.semSdr.length === 1 ? "cliente" : "clientes"} da turma ${rotuloTurma(turma)}`, texto: ["Nenhum SDR da Weevo conversa com estes inscritos:", ...lista(p.semSdr)].join("\n") });
     await db.insert("diagnostico_turmas", [{ turma: turma.chave, nome: turma.nome, inscritos: p.inscritos, pendentes: p.pendentes, sem_sdr: p.semSdr.length }], { onConflict: "turma", ignoreDuplicates: true, returning: false });
     resumo.push(`${turma.nome}: ${p.inscritos} inscritos, ${p.pendentes} sem diagnostico, ${enviados} SDR(s) avisado(s)${p.semSdr.length ? `, ${p.semSdr.length} sem SDR identificado` : ""}`);
   }
