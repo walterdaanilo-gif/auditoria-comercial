@@ -130,7 +130,17 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
               <span className="mu" style={{ position: "absolute", left: `calc(${r.ritmoPct}% - 70px)`, bottom: 0, width: 140, textAlign: "center", fontSize: 17 }}>ritmo {Math.round(r.ritmoPct)}%</span>
             </div>
           </>
-        ) : <span className="mu" style={{ fontSize: 22 }}>{periodo.mensal ? "Meta do mês não cadastrada (Configurações → Apresentação (TV) → Quadros da TV)" : "A meta de faturamento do mês vale só para o período \"Mês atual\""}</span>}
+        ) : (
+          <>
+            <span className="mu nw" style={{ fontSize: 22 }}>{periodo.mensal ? "Meta do mês não cadastrada" : "A meta de faturamento do mês vale só para o período \"Mês atual\""}</span>
+            {/* barra de progresso vazia: so enche quando ha meta do mes (Mes atual) */}
+            <div style={{ paddingBottom: 26, marginTop: 4 }}>
+              <div role="progressbar" aria-label="Progresso do faturamento contra a meta" aria-valuetext="sem meta cadastrada" style={{ height: 34, borderRadius: 17, border: `2px dashed #b3c4c1`, background: C.trilho, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span className="mu nw" style={{ fontSize: 17 }}>{periodo.mensal ? "Cadastre a meta em Configurações → Apresentação (TV) para ver o progresso" : "Troque para \"Mês atual\" para ver o progresso da meta"}</span>
+              </div>
+            </div>
+          </>
+        )}
         <div style={{ flex: 1 }} />
         <div style={{ display: "grid", gridTemplateColumns: fat.meta && comPrecisa && comProjecao ? "repeat(2,minmax(0,1fr))" : "1fr", gap: 14 }}>
           {fat.meta && comPrecisa && (
