@@ -20,7 +20,7 @@ export default async function Apresentacao({ searchParams: spP }: { searchParams
   // ?demo=1 mostra numeros ficticios. Se a busca falhar, cai na apresentacao antiga abaixo.
   if (atual?.slug === "weevo") {
     if (sp.demo === "1") return <VisaoGeral dados={visaoGeralDemo} />;
-    try { return <VisaoGeral dados={await montarVisaoGeral(org)} />; } catch { /* segue para a apresentacao antiga */ }
+    try { return <VisaoGeral dados={await montarVisaoGeral(org, lerPeriodo(sp, "mes"))} />; } catch { /* segue para a apresentacao antiga */ }
   }
   const periodo = lerPeriodo(sp, "semana");
   const { de, ate } = periodo;

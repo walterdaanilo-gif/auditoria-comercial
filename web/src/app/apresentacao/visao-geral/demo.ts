@@ -9,7 +9,7 @@ const serie = [9.6, 24.2, 33.4, 45.4, 60.4, 74.5, 87.6, 103.7, 121.8, 138.9, 152
 export const visaoGeralDemo: VisaoGeralDados = {
   demo: true,
   atualizadoEm: "11:34",
-  periodo: { rotulo: "Mês atual", intervalo: "01 a 30/11", diaUtil: 12, diasUteisMes: 20 },
+  periodo: { p: "mes", de: "2025-11-01", ate: "2025-11-12", mensal: true, rotulo: "Mês atual", intervalo: "01 a 30/11", diaUtil: 12, diasUteisMes: 20 },
   fat: { real: 174600, meta: 315000, serie, datasUteis: datas },
   pessoas: [
     { id: "s1", nome: "SDR 1", sigla: "S1", foto: null, tipo: "sdr", conversas: { v: 330, meta: 300 }, marcacoes: { v: 71, meta: 72 }, vendasValor: 6900, vendasN: 35 },
@@ -20,10 +20,10 @@ export const visaoGeralDemo: VisaoGeralDados = {
   quadros: PADRAO_QUADROS,
   kpis: {
     semretorno: { valor: "7", sub: "o lead escreveu e ficou mais de 15 min sem resposta", tom: "bad" },
-    primeira: { valor: "5min", sub: "média do mês", tom: "ok", selo: "dentro de 15 min" },
-    nota: { valor: "5,3", sub: "186 auditadas no mês", tom: "warn" },
-    tempo_medio: { valor: "12min", sub: "a cada vez que o lead escreve · média do mês", tom: "warn" },
-    ligacoes: { valor: "79", sub: "de 120 ligações no mês", tom: "neutro" },
+    primeira: { valor: "5min", sub: "média do período", tom: "ok", selo: "dentro de 15 min" },
+    nota: { valor: "5,3", sub: "186 auditadas no período", tom: "warn" },
+    tempo_medio: { valor: "12min", sub: "a cada vez que o lead escreve · média do período", tom: "warn" },
+    ligacoes: { valor: "79", sub: "de 120 ligações no período", tom: "neutro" },
     conversas_time: { valor: "620", sub: "de 600 · 103% da meta", tom: "ok", selo: "no ritmo", pct: 103 },
     marcacoes_time: { valor: "123", sub: "de 144 · 85% da meta", tom: "ok", selo: "no ritmo", pct: 85 },
     convites: { valor: "74", sub: "cupom 100% ou Carbone · R$ 0", tom: "neutro" },
