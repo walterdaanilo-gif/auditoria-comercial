@@ -52,8 +52,6 @@ export type Settings = {
   meta_closer_vendas: number | null;
   // metas de faturamento do mes em R$ (slide 1 da Apresentacao); null = sem meta
   meta_fat_mes?: number | null;
-  // SDRs que recebem o aviso de diagnostico pendente (6h antes de cada turma); vazio ou ausente = todos os SDRs ativos
-  diagnostico_sdrs?: string[] | null;
   // quadros da tela da TV (ordem = ordem na lista); ausente ou null = quadros padrao
   tv_quadros?: QuadroCfg[] | null;
 };
@@ -166,7 +164,6 @@ export function validar(e: Estado): string[] {
   for (const m of [s.meta_closer_reunioes, s.meta_closer_vendas]) if (m !== null && !inteiro(m, 0, 1000)) erros.push("Metas do closer: use números de 0 a 1000.");
   if (s.meta_fat_mes != null && !inteiro(s.meta_fat_mes, 0, 100000000)) erros.push("Meta de faturamento: use um valor em reais de 0 a 100.000.000.");
   erros.push(...validarQuadros(s.tv_quadros));
-  if (s.diagnostico_sdrs != null && (!Array.isArray(s.diagnostico_sdrs) || s.diagnostico_sdrs.length > 50 || s.diagnostico_sdrs.some((id) => !/^[0-9a-f-]{36}$/i.test(String(id))))) erros.push("Aviso de diagnóstico: escolha SDRs da lista.");
   for (const v of e.vendedores) if (!["sdr", "closer"].includes(v.funcao)) erros.push(`Função inválida para ${v.nome}.`);
   const rubricas: [string, Criterio[]][] = s.rubrica_modo === "personalizada" ? [["personalizada", e.rubricas.personalizada]] : [["do SDR", e.rubricas.sdr], ["do Closer", e.rubricas.closer]];
   for (const [nome, l] of rubricas) {

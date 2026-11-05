@@ -61,9 +61,9 @@ assert.equal(p.porSdr.get("sdr1")[0].linkEnviado, true); assert.equal(p.porSdr.g
 assert.equal(p.semSdr.length, 3, "D, E e I sem SDR identificado");
 
 // 5) tarefa completa
-function cenario({ envioConfigurado = true, sdrs = undefined, sdr2Ativa = true } = {}) {
+function cenario({ envioConfigurado = true, sdr2Ativa = true, semLink = false } = {}) {
   const db = fakeSupa();
-  db.tables.audit_settings = [{ id: 1, ...(envioConfigurado ? { instancia_envio_id: "inst-envio" } : {}), ...(sdrs ? { diagnostico_sdrs: sdrs } : {}) }];
+  db.tables.audit_settings = [{ id: 1, ...(envioConfigurado ? { instancia_envio_id: "inst-envio" } : {}) }];
   db.tables.profiles = [{ id: "sdr1", nome: "Rafael Costa", funcao: "sdr", ativo: true }, { id: "sdr2", nome: "Bianca Dias", funcao: "sdr", ativo: sdr2Ativa }, { id: "closer1", nome: "Carlos Closer", funcao: "closer", ativo: true }];
   db.tables.instancias_whatsapp = [{ vendedor_id: "sdr1", numero: "5584900000001" }]; // a SDR2 nao tem WhatsApp conectado
   const dia = new Date().toISOString().slice(0, 10);
@@ -71,8 +71,15 @@ function cenario({ envioConfigurado = true, sdrs = undefined, sdr2Ativa = true }
     { id: "c1", vendedor_id: "sdr1", contato: "5584988887777@s.whatsapp.net", telefone: "5584988887777", ultima_msg_em: "2026-11-05T12:00:00Z", data: dia, canal: "individual" },
     { id: "c2", vendedor_id: "closer1", contato: "5584944443333@s.whatsapp.net", telefone: "5584944443333", ultima_msg_em: "2026-11-05T12:00:00Z", data: dia, canal: "individual" },
   ];
-  db.tables.crm_conversas = [{ id: "k1", vendedor_id: "sdr2", telefone: "84922221111", ultima_msg_em: "2026-11-04T12:00:00Z" }];
-  db.tables.mensagens = [{ id: "m1", conversa_id: "c1", remetente: "vendedor", texto: "Faz o diagnostico: https://weevoedu.com/questionario/diagnostico/abc", enviada_em: new Date().toISOString() }];
+  db.tables.crm_conversas = [
+    { id: "k1", vendedor_id: "sdr2", telefone: "84922221111", ultima_msg_em: "2026-11-04T12:00:00Z" },  // Gil: so a SDR2 conversa com ele, sem link
+    { id: "k2", vendedor_id: "sdr2", telefone: "84988887777", ultima_msg_em: "2026-11-05T18:00:00Z" },  // Ana: a SDR2 tambem conversa, e mais recente que a SDR1
+  ];
+  const LINK_MSG = "Faz o diagnostico: https://weevoedu.com/questionario/diagnostico/abc";
+  db.tables.mensagens = [
+    ...(semLink ? [] : [{ id: "m1", conversa_id: "c1", vendedor_id: "sdr1", remetente: "vendedor", texto: LINK_MSG, enviada_em: new Date().toISOString() }]), // a SDR1 mandou o link para a Ana
+    { id: "m2", conversa_id: "c2", vendedor_id: "closer1", remetente: "vendedor", texto: LINK_MSG, enviada_em: new Date().toISOString() },            // o closer mandou o link para a Eva
+  ];
   db.tables.crm_mensagens = [];
   return db;
 }
@@ -141,31 +148,27 @@ try {
   assert.match(await avisarDiagnosticos(cenario(), { agora: ini - 3 * H, fetchImpl: site(), envio }), /^desligado/);
   [cfg.diagnosticoCode, cfg.diagnosticoPlanilha] = salvo;
 
-  // 5g) so o SDR escolhido em Configuracoes recebe, e recebe tudo (o que era de outro SDR ou de ninguem tambem)
-  db = cenario({ sdrs: ["sdr1"] }); enviados = [];
-  r = await avisarDiagnosticos(db, { agora: ini - 3 * H, fetchImpl: site(), envio });
-  assert.ok(r.includes("5 sem diagnostico, 1 SDR(s) avisado(s)"), r);
-  assert.equal(enviados.length, 1); assert.equal(enviados[0].numero, "5584900000001");
-  for (const nome of ["Ana Souza", "Davi Melo", "Eva Dias", "Gil Alves", "Ivo Nunes"]) assert.ok(enviados[0].texto.includes(nome), nome + " entra na lista do SDR escolhido");
-  assert.ok(!enviados[0].texto.includes("Bia Lima"), "quem ja preencheu continua fora");
-  assert.deepEqual(db.tables.notificacoes.map(n => n.para), ["sdr1"], "a outra SDR nao recebe nada");
-  assert.deepEqual(db.tables.diagnostico_avisos.map(a => a.vendedor_id), ["sdr1"]);
+  // 5g) quem recebe o aviso do cliente: o SDR que enviou o link (mesmo que outro SDR tenha conversa mais recente); closer nunca recebe
+  db = cenario(); enviados = [];
+  await avisarDiagnosticos(db, { agora: ini - 3 * H, fetchImpl: site(), envio });
+  let por = Object.fromEntries(db.tables.notificacoes.map(n => [n.para, n.texto]));
+  assert.ok(por.sdr1.includes("Ana Souza") && !por.sdr2.includes("Ana Souza"), "Ana vai para a SDR1, que mandou o link, apesar de a SDR2 ter conversa mais recente");
+  assert.ok(por.sdr2.includes("Gil Alves"), "Gil, sem link, vai para a SDR2 (responsavel)");
+  assert.ok(!db.tables.notificacoes.some(n => n.para === "closer1"), "o closer que mandou o link a Eva nao recebe aviso");
+  assert.equal(db.tables.notificacoes.length, 2, "so quem enviou o link ou e responsavel recebe: nao vai para todos os SDRs");
+
+  // 5g2) ninguem mandou o link: vale o SDR responsavel (o da conversa mais recente)
+  db = cenario({ semLink: true }); enviados = [];
+  await avisarDiagnosticos(db, { agora: ini - 3 * H, fetchImpl: site(), envio });
+  por = Object.fromEntries(db.tables.notificacoes.map(n => [n.para, n.texto]));
+  assert.ok(por.sdr2.includes("Ana Souza") && por.sdr2.includes("Gil Alves") && !por.sdr1, "sem link de SDR, a Ana vai para a SDR2 (conversa mais recente) e a SDR1 nao recebe nada");
+  assert.ok(por.sdr2.includes("Ana Souza · (84) 98888-7777 · link ainda não enviado"));
 
   // 5h) SDR inativa nao e dona de ninguem: o cliente dela fica sem SDR e ela nao recebe aviso
   db = cenario({ sdr2Ativa: false }); enviados = [];
   r = await avisarDiagnosticos(db, { agora: ini - 3 * H, fetchImpl: site(), envio });
   assert.deepEqual(db.tables.notificacoes.map(n => n.para), ["sdr1"]);
   assert.ok(r.includes("1 SDR(s) avisado(s), 4 sem SDR identificado"), r);
-
-  // 5i) marcou so quem esta inativo: nao cai em todo mundo; avisa e nao envia nem marca a turma (tenta de novo depois)
-  db = cenario({ sdrs: ["sdr2"], sdr2Ativa: false }); enviados = [];
-  r = await avisarDiagnosticos(db, { agora: ini - 3 * H, fetchImpl: site(), envio });
-  assert.match(r, /^aviso: nenhum dos SDRs marcados/); assert.equal(enviados.length, 0);
-  assert.equal((db.tables.notificacoes || []).length, 0); assert.equal((db.tables.diagnostico_turmas || []).length, 0);
-
-  // 5j) regra pura: com dois escolhidos, o que nao era deles e repartido em rodizio
-  const rr = pendentesDaTurma(t[111], { leads: LEADS, diagnosticos: DIAGS, donos: new Map(), links: new Set(), destinatarios: ["sdr1", "sdr2"] });
-  assert.deepEqual([rr.porSdr.get("sdr1").length, rr.porSdr.get("sdr2").length, rr.semSdr.length], [3, 2, 0], "5 pendentes em rodizio entre 2 SDRs");
 
   // 6) o codigo e os dados dos clientes nunca vao para o log
   const todo = logs.join("\n");
