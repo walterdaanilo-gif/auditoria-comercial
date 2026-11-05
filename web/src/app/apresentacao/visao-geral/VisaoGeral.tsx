@@ -3,6 +3,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import AutoRefresh from "@/components/AutoRefresh";
 import { duracao } from "@/lib/format";
+import PeriodoSeletor from "./PeriodoSeletor";
 import { CATALOGO, temItem, tituloDe, type QuadroCfg } from "@/lib/quadrosTv";
 import { calcularRitmo, eixoY, inteiro, moeda, tomPorDiferenca, type Kpi, type Pessoa, type Tom, type VisaoGeralDados } from "./calc";
 
@@ -25,6 +26,8 @@ const CSS = `
 .vg .row{display:flex;align-items:center;gap:12px;min-width:0}
 .vg .st{font-weight:700;font-size:16px;border-radius:999px;padding:5px 14px;white-space:nowrap}
 .vg .nw{white-space:nowrap}
+.vg select,.vg input[type=date]{font-family:inherit;color:${C.texto};background:transparent;border:0;outline:none}
+.vg select:focus-visible,.vg input[type=date]:focus-visible{outline:2px solid ${C.label}}
 `;
 
 function Selo({ tom, children }: { tom: Tom; children: ReactNode }) {
@@ -46,11 +49,16 @@ function Cabecalho({ d }: { d: VisaoGeralDados }) {
       <span className="mu nw">Atualizado às {d.atualizadoEm}</span>
       <div style={{ flex: 1 }} />
       {d.demo && <span className="st nw" style={{ background: "#e6eeed", color: "#3d5250" }}>EXEMPLO · NÚMEROS FICTÍCIOS</span>}
-      <div className="row cd" style={{ borderRadius: 999, padding: "10px 24px", gap: 14 }}>
-        <span className="lb nw" style={{ fontSize: 15 }}>Período</span>
-        <span className="nw" style={{ fontWeight: 700, fontSize: 21 }}>{d.periodo.rotulo}</span>
-        <span className="mu nw">{d.periodo.intervalo} · dia útil {d.periodo.diaUtil} de {d.periodo.diasUteisMes}</span>
-      </div>
+      {(() => {
+        const detalhe = d.periodo.mensal ? `${d.periodo.intervalo} · dia útil ${d.periodo.diaUtil} de ${d.periodo.diasUteisMes}` : `${d.periodo.intervalo} · ${d.periodo.diaUtil} dia${d.periodo.diaUtil === 1 ? "" : "s"} útil${d.periodo.diaUtil === 1 ? "" : "eis"}`;
+        return d.demo ? (
+          <div className="row cd" style={{ borderRadius: 999, padding: "10px 24px", gap: 14 }}>
+            <span className="lb nw" style={{ fontSize: 15 }}>Período</span>
+            <span className="nw" style={{ fontWeight: 700, fontSize: 21 }}>{d.periodo.rotulo}</span>
+            <span className="mu nw">{detalhe}</span>
+          </div>
+        ) : <PeriodoSeletor p={d.periodo.p} de={d.periodo.de} ate={d.periodo.ate} detalhe={detalhe} />;
+      })()}
     </div>
   );
 }
@@ -101,7 +109,7 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
 }
 
 function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
-  const comGrafico = temItem(q, "grafico"), comPrecisa = temItem(q, "precisa"), comProjecao = temItem(q, "projecao");
+  const comGrafico = temItem(q, "grafico"), comPrecisa = temItem(q, "precisa"), comProjecao = temItem(q, "projecao") && d.periodo.mensal;
   const { fat, periodo } = d;
   const r = calcularRitmo(fat.real, fat.meta, periodo.diaUtil, periodo.diasUteisMes);
   const caixa: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, background: "#eef6f4", borderRadius: 14, padding: "12px 20px", minWidth: 0 };
@@ -122,7 +130,7 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
               <span className="mu" style={{ position: "absolute", left: `calc(${r.ritmoPct}% - 70px)`, bottom: 0, width: 140, textAlign: "center", fontSize: 17 }}>ritmo {Math.round(r.ritmoPct)}%</span>
             </div>
           </>
-        ) : <span className="mu" style={{ fontSize: 22 }}>Meta do mês não cadastrada (Configurações → Equipe e metas)</span>}
+        ) : <span className="mu" style={{ fontSize: 22 }}>{periodo.mensal ? "Meta do mês não cadastrada (Configurações → Apresentação (TV) → Quadros da TV)" : "A meta de faturamento do mês vale só para o período \"Mês atual\""}</span>}
         <div style={{ flex: 1 }} />
         <div style={{ display: "grid", gridTemplateColumns: fat.meta && comPrecisa && comProjecao ? "repeat(2,minmax(0,1fr))" : "1fr", gap: 14 }}>
           {fat.meta && comPrecisa && (
@@ -177,7 +185,7 @@ function PorPessoa({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
   const ritmoPct = (Math.max(d.periodo.diaUtil, 1) / d.periodo.diasUteisMes) * 100;
   return (
     <div className="cd" style={{ padding: "16px 24px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
-      <div className="row" style={{ gap: 16 }}><span className="lb nw" style={{ fontSize: 18 }}>{tituloDe(q)}</span><span className="mu nw">real / meta do mês</span></div>
+      <div className="row" style={{ gap: 16 }}><span className="lb nw" style={{ fontSize: 18 }}>{tituloDe(q)}</span><span className="mu nw">real / meta do período</span></div>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(d.pessoas.length, 1)},minmax(0,1fr))`, gridTemplateRows: "minmax(0,1fr)", columnGap: 14, flex: 1, minHeight: 0 }}>
         {d.pessoas.map((p) => <Cartao key={p.id} p={p} ritmoPct={ritmoPct} q={q} />)}
         {!d.pessoas.length && <span className="mu" style={{ gridColumn: "1 / -1" }}>Nenhum vendedor cadastrado na aba WhatsApp.</span>}

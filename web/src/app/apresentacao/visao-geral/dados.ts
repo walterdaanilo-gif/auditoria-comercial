@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { duracao, hojeBR, nota, um } from "@/lib/format";
 import { diasUteis } from "@/lib/metas";
-import { diasEntre } from "@/lib/periodo";
+import { diasEntre, type Periodo } from "@/lib/periodo";
 import { resolverQuadros } from "@/lib/quadrosTv";
 import { inteiro, tomPorDiferenca, type Kpi, type Pessoa, type VisaoGeralDados } from "./calc";
 
@@ -18,12 +18,13 @@ const sigla = (nome: string) => nome.split(/\s+/).filter(Boolean).slice(0, 2).ma
 const horaBR = () => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
 const seloRitmo = (difPts: number) => (difPts >= 0 ? "no ritmo" : `${Math.round(-difPts)} pts abaixo`);
 
-export async function montarVisaoGeral(org: string): Promise<VisaoGeralDados> {
-  const hoje = hojeBR();
-  const ini = hoje.slice(0, 8) + "01";
+// Periodo escolhido na tela (mes atual, semana atual, hoje ou datas livres). So no mes atual valem meta do mes, ritmo e projecao.
+export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<VisaoGeralDados> {
+  const ini = periodo.de, hoje = periodo.ate; // hoje = ultimo dia do periodo (nunca depois de hoje)
+  const mensal = periodo.p === "mes";
   const ano = Number(hoje.slice(0, 4)), mes = Number(hoje.slice(5, 7));
-  const fim = `${hoje.slice(0, 8)}${String(new Date(Date.UTC(ano, mes, 0)).getUTCDate()).padStart(2, "0")}`;
-  const diaUtil = diasUteis(ini, hoje), diasUteisMes = diasUteis(ini, fim);
+  const fim = mensal ? `${hoje.slice(0, 8)}${String(new Date(Date.UTC(ano, mes, 0)).getUTCDate()).padStart(2, "0")}` : hoje;
+  const diaUtil = diasUteis(ini, hoje), diasUteisMes = mensal ? diasUteis(ini, fim) : diaUtil;
   const ritmoPct = (Math.max(diaUtil, 1) / diasUteisMes) * 100;
   const db = createAdminClient();
 
@@ -95,12 +96,12 @@ export async function montarVisaoGeral(org: string): Promise<VisaoGeralDados> {
   const kpis: VisaoGeralDados["kpis"] = {
     semretorno: semRetorno === null ? { valor: null, sub: "não foi possível ler agora", tom: "neutro" }
       : { valor: semRetorno >= 100 ? "100+" : String(semRetorno), sub: "o lead escreveu e ficou mais de 15 min sem resposta", tom: semRetorno > 0 ? "bad" : "ok" },
-    primeira: priMedia === null ? { valor: null, sub: "sem conversas auditadas no mês", tom: "neutro" }
-      : { valor: duracao(priMedia), sub: "média do mês", tom: priMedia / 60 <= sla ? "ok" : "bad", selo: priMedia / 60 <= sla ? `dentro de ${sla} min` : `acima de ${sla} min` },
-    nota: tot.aud ? { valor: nota(tot.nota / tot.aud), sub: `${inteiro(tot.aud)} auditadas no mês`, tom: tot.nota / tot.aud >= 7 ? "ok" : tot.nota / tot.aud >= 4 ? "warn" : "bad" } : { valor: null, sub: "sem auditorias no mês", tom: "neutro" },
-    tempo_medio: medio === null ? { valor: null, sub: "sem conversas auditadas no mês", tom: "neutro" }
-      : { valor: duracao(medio), sub: "a cada vez que o lead escreve · média do mês", tom: medio <= 300 ? "ok" : medio <= 1800 ? "warn" : "bad" },
-    ligacoes: { valor: inteiro(tot.atend), sub: `de ${inteiro(tot.lig)} ligações no mês`, tom: "neutro" },
+    primeira: priMedia === null ? { valor: null, sub: "sem conversas auditadas no período", tom: "neutro" }
+      : { valor: duracao(priMedia), sub: "média do período", tom: priMedia / 60 <= sla ? "ok" : "bad", selo: priMedia / 60 <= sla ? `dentro de ${sla} min` : `acima de ${sla} min` },
+    nota: tot.aud ? { valor: nota(tot.nota / tot.aud), sub: `${inteiro(tot.aud)} auditadas no período`, tom: tot.nota / tot.aud >= 7 ? "ok" : tot.nota / tot.aud >= 4 ? "warn" : "bad" } : { valor: null, sub: "sem auditorias no período", tom: "neutro" },
+    tempo_medio: medio === null ? { valor: null, sub: "sem conversas auditadas no período", tom: "neutro" }
+      : { valor: duracao(medio), sub: "a cada vez que o lead escreve · média do período", tom: medio <= 300 ? "ok" : medio <= 1800 ? "warn" : "bad" },
+    ligacoes: { valor: inteiro(tot.atend), sub: `de ${inteiro(tot.lig)} ligações no período`, tom: "neutro" },
     conversas_time: contraMeta(conversasTime, metaConvDia),
     marcacoes_time: contraMeta(marcacoesTime, metaMarcDia),
     convites: { valor: inteiro(vendas.filter((v) => v.venda_tipo !== "imersao" && v.venda_cupom).length), sub: "cupom 100% ou Carbone · R$ 0", tom: "neutro" },
@@ -109,8 +110,8 @@ export async function montarVisaoGeral(org: string): Promise<VisaoGeralDados> {
   return {
     demo: false,
     atualizadoEm: horaBR(),
-    periodo: { rotulo: "Mês atual", intervalo: `01 a ${fim.slice(8)}/${fim.slice(5, 7)}`, diaUtil, diasUteisMes },
-    fat: { real: acc, meta: cfg.meta_fat_mes == null ? null : Number(cfg.meta_fat_mes), serie, datasUteis: diasEntre(ini, fim).filter(util).map(ddmm) },
+    periodo: { p: periodo.p, de: ini, ate: hoje, mensal, rotulo: periodo.rotulo, intervalo: mensal ? `01 a ${fim.slice(8)}/${fim.slice(5, 7)}` : ini === hoje ? ddmm(ini) : `${ddmm(ini)} a ${ddmm(hoje)}`, diaUtil, diasUteisMes },
+    fat: { real: acc, meta: mensal && cfg.meta_fat_mes != null ? Number(cfg.meta_fat_mes) : null, serie, datasUteis: diasEntre(ini, fim).filter(util).map(ddmm) },
     pessoas: [...sdrs.map((p) => pessoa(p, "sdr")), ...closers.map((p) => pessoa(p, "closer"))],
     quadros: resolverQuadros(cfg.tv_quadros),
     kpis,
