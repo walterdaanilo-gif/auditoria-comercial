@@ -8,7 +8,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const API = "https://api.grupoquatro5.com/public/v1";
-const LIMITE_MS = 120_000, POR_RODADA = 300, REVER_HORAS = 6, PAGINAS_CRM = 40;
+const LIMITE_MS = 120_000, POR_RODADA = 300, REVER_HORAS = 6, PAGINAS_CRM = 40, RELER_ABERTO_MIN = 12;
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const primeiro = (n: unknown) => String(n ?? "").trim().split(/\s+/)[0]?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() || "";
@@ -57,7 +57,7 @@ async function importarEmpresa(org: { id: string; slug: string; crm_segredo: str
   // 2) contatos das conversas do CRM: primeiro os nunca lidos, os que mudaram e os lidos ha mais de REVER_HORAS
   const convs = await todas("crm_conversas", "id,telefone,contato_nome,vendedor_id,raw", org.id);
   const { data: perfis } = await sb.from("profiles").select("id,nome,org_id,ativo").limit(1000);
-  const lidas = await todas("crm_vendas", "deal_id,chat_id,status,valor_cents,produto,produtos,campos", org.id);
+  const lidas = await todas("crm_vendas", "deal_id,chat_id,contato_crm_id,telefone,cliente,status,valor_cents,produto,produtos,campos", org.id);
   const contatosLidos = await todas("crm_contatos_lidos", "contato_crm_id,lido_em", org.id);
   const daEmpresa = (perfis ?? []).filter((p: any) => p.org_id === org.id && p.ativo !== false);
   const porPrimeiroNome = (n: unknown) => { const k = primeiro(n); return k ? daEmpresa.filter((p: any) => primeiro(p.nome) === k) : []; };
@@ -97,9 +97,13 @@ async function importarEmpresa(org: { id: string; slug: string; crm_segredo: str
     await espera(100);
   }
 
+  // cliente com negocio em aberto e relido a cada rodada: e o negocio que vira venda (e o CRM nem sempre avisa que mudou)
+  const comAberto = new Set((lidas ?? []).filter((l: any) => l.status === "open" && l.contato_crm_id).map((l: any) => l.contato_crm_id));
+  for (const id of comAberto) if (!contatos.has(id)) contatos.set(id, { telefone: null, nome: null, mudou: 0, chats: new Map() });
+  const rodada = Date.now() - RELER_ABERTO_MIN * 60_000;
   const rever = Date.now() - REVER_HORAS * 3600_000;
   const fila = [...contatos].map(([id, o]) => ({ id, o, lido: lidoEm.get(id) ?? 0 }))
-    .filter((x) => !x.lido || x.o.mudou > x.lido || x.lido < rever)
+    .filter((x) => !x.lido || x.o.mudou > x.lido || x.lido < rever || (comAberto.has(x.id) && x.lido < rodada))
     .sort((a, b) => Number(b.o.mudou > b.lido) - Number(a.o.mudou > a.lido) || a.lido - b.lido).slice(0, POR_RODADA);
 
   let lidos = 0, gravados = 0;
@@ -127,7 +131,7 @@ async function importarEmpresa(org: { id: string; slug: string; crm_segredo: str
       const peloCampo = [campos.closer, campos.sdr].map((n) => porPrimeiroNome(n)).find((l) => l.length === 1)?.[0]?.id ?? null;
       linhas.push({
         deal_id: d.id, org_id: org.id, chat_id: d.chat_id || null, contato_crm_id: contato,
-        telefone: o.telefone, cliente: o.nome, status: d.status || null, valor_cents: d.value_cents ?? null,
+        telefone: o.telefone ?? salvo.get(d.id)?.telefone ?? null, cliente: o.nome ?? salvo.get(d.id)?.cliente ?? null, status: d.status || null, valor_cents: d.value_cents ?? null,
         aberto_em: d.opened_at || null, ganho_em: d.won_at || null, dono_crm_id: d.owner_user_id || null,
         vendedor_id: daConversa || peloCampo, sdr: typeof campos.sdr === "string" ? campos.sdr : null, closer: typeof campos.closer === "string" ? campos.closer : null,
         produto, tipo: tipoDe(produto), produtos: itens, campos: { ...campos, instancia: d.instance_name ?? campos.instancia ?? null }, sincronizado_em: new Date().toISOString(),
