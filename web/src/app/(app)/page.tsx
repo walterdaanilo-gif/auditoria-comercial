@@ -14,6 +14,7 @@ import { corDuracao, corNota, duracao, fmtHora, nota, pct, telefone, um } from "
 import { METAS, corSdr, diasUteis, type ChaveMeta } from "@/lib/metas";
 import { diasEntre, lerPeriodo } from "@/lib/periodo";
 import { GATILHOS } from "@/lib/types";
+import { contaNoFaturamento, listarResultados } from "@/lib/resultados";
 
 export const dynamic = "force-dynamic";
 
@@ -58,8 +59,11 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
   const periodo = lerPeriodo(sp);
   const { de, ate } = periodo;
   const supabase = await createClient();
+  const { data: org } = await supabase.rpc("org_atual");
 
-  const [rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt, rMetas] = await Promise.all([
+  const [resultados, rDia, rAud, rPerf, rAtiv, rInst, rFeed, rSem, rAlerta, rAnalise, rPend, rUlt, rMetas] = await Promise.all([
+    // vendas em dinheiro: a mesma lista da aba Resultados e da TV (CRM + conversas + manuais, sem duplicar, no dia da venda)
+    listarResultados(supabase, (org as string) ?? "", de, ate),
     supabase.rpc("resumo_sdr2", { p_from: de, p_to: ate }),
     supabase.from("auditorias").select("vendedor_id,gatilhos,etapa,objecoes,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,venda,venda_tipo,venda_valor,venda_cupom,venda_convite_origem,oportunidade,conversas!inner(data,canal)").neq("conversas.canal", "importada").gte("conversas.data", de).lte("conversas.data", ate).limit(5000),
     supabase.from("profiles").select("id,nome,papel,ativo,funcao,foto_url").order("nome"),
@@ -122,13 +126,18 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
     if (k) obj[k] = (obj[k] || 0) + 1;
   }
   const tTime = tempos(auds);
-  // Vendas detectadas pela auditoria: workshop pago, workshop por convite (cupom 100% ou membro Carbone, R$ 0) e imersao; mais oportunidades
-  const vendas = (l: Aud[]) => {
-    const w = l.filter((a) => a.venda && a.venda_tipo !== "imersao"), im = l.filter((a) => a.venda && a.venda_tipo === "imersao");
-    const pagos = w.filter((a) => !a.venda_cupom);
-    return { wPagos: pagos.length, wPagosValor: pagos.reduce((x, a) => x + Number(a.venda_valor || 0), 0), wCupom: w.length - pagos.length, wCarbone: w.filter((a) => a.venda_cupom && a.venda_convite_origem === "carbone").length, imersao: im.length, imersaoValor: im.reduce((x, a) => x + Number(a.venda_valor || 0), 0), oport: l.filter((a) => a.oportunidade).length };
+  // Vendas em dinheiro: a lista da aba Resultados (CRM + conversas + manuais, sem duplicar, no dia da venda).
+  // Convites (cupom 100% ou membro Carbone, R$ 0) e oportunidades continuam vindo da auditoria das conversas.
+  const pagas = resultados.linhas.filter((r) => contaNoFaturamento(r) && (!filtroV || r.vendedorId === filtroV));
+  const vendas = (vid: string | null | undefined, l: Aud[]) => {
+    const v = vid === undefined ? pagas : pagas.filter((r) => (r.vendedorId ?? null) === vid);
+    const de = (p: string[]) => { const x = v.filter((r) => p.includes(r.produto ?? "outro")); return { n: x.length, valor: x.reduce((t, r) => t + (r.valor ?? 0), 0) }; };
+    const w = l.filter((a) => a.venda && a.venda_tipo !== "imersao" && a.venda_cupom);
+    return { workshop: de(["workshop"]), imersao: de(["imersao"]), plataforma: de(["plataforma", "incompany", "outro"]), total: v.reduce((t, r) => t + (r.valor ?? 0), 0),
+      wCupom: w.length, wCarbone: w.filter((a) => a.venda_convite_origem === "carbone").length, oport: l.filter((a) => a.oportunidade).length };
   };
-  const vTime = vendas(auds);
+  const vTime = vendas(undefined, auds);
+  const semVendedor = filtroV ? null : vendas(null, []);
   const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
   const tSdr = new Map(sdrs.map((s) => [s.id, tempos(auds.filter((a) => a.vendedor_id === s.id))]));
   const topObj = Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 8);
@@ -327,19 +336,23 @@ export default async function Painel({ searchParams: searchParamsP }: { searchPa
       <section className="card overflow-x-auto">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xl font-bold">Vendas e oportunidades</h2>
-          <span className="text-sm text-mute">Detectadas pela auditoria nas conversas do período</span>
+          <span className="text-sm text-mute">Vendas do CRM e das conversas, cada uma contada uma vez, no dia da venda · <Link href="/resultados" className="text-brand hover:underline">ver a lista</Link></span>
         </div>
-        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-line p-4"><div className="label">Workshop pago</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.wPagos}</div><div className="text-sm text-mute">{brl(vTime.wPagosValor)}</div></div>
-          <div className="rounded-2xl border border-line p-4"><div className="label">Workshop por convite</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.wCupom}</div><div className="text-sm text-mute">cupom 100% ou Carbone · {brl(0)}{vTime.wCarbone ? ` · ${vTime.wCarbone} Carbone` : ""}</div></div>
-          <div className="rounded-2xl border border-line p-4"><div className="label">Imersão fechada</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.imersao}</div><div className="text-sm text-mute">{brl(vTime.imersaoValor)}</div></div>
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="rounded-2xl border border-brand/40 bg-brand/5 p-4"><div className="label">Faturamento</div><div className="mt-1 text-3xl font-bold tabular-nums">{brl(vTime.total)}</div><div className="text-sm text-mute">{pagas.length} venda{pagas.length === 1 ? "" : "s"}</div></div>
+          <div className="rounded-2xl border border-line p-4"><div className="label">Workshop pago</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.workshop.n}</div><div className="text-sm text-mute">{brl(vTime.workshop.valor)} · {vTime.wCupom} por convite (R$ 0){vTime.wCarbone ? `, ${vTime.wCarbone} Carbone` : ""}</div></div>
+          <div className="rounded-2xl border border-line p-4"><div className="label">Imersão</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.imersao.n}</div><div className="text-sm text-mute">{brl(vTime.imersao.valor)}</div></div>
+          <div className="rounded-2xl border border-line p-4"><div className="label">Plataforma e In-Company</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.plataforma.n}</div><div className="text-sm text-mute">{brl(vTime.plataforma.valor)}</div></div>
           <div className="rounded-2xl border border-line p-4"><div className="label">Oportunidades</div><div className="mt-1 text-3xl font-bold tabular-nums">{vTime.oport}</div><div className="text-sm text-mute">interesse ou reunião marcada</div></div>
         </div>
-        <table className="w-full"><thead><tr><th className="th">Vendedor</th><th className="th">Workshop pago</th><th className="th">Workshop convite</th><th className="th">Imersão</th><th className="th">Valor total</th><th className="th">Oportunidades</th></tr></thead>
+        <table className="w-full"><thead><tr><th className="th">Vendedor</th><th className="th">Workshop pago</th><th className="th">Workshop convite</th><th className="th">Imersão</th><th className="th">Plataforma e In-Company</th><th className="th">Valor total</th><th className="th">Oportunidades</th></tr></thead>
           <tbody>{sdrs.map((s) => {
-            const v = vendas(auds.filter((a) => a.vendedor_id === s.id));
-            return <tr key={s.id}><td className="td"><span className="flex items-center gap-2 font-semibold"><Bolinha id={s.id} />{s.nome}</span></td><td className="td">{v.wPagos}</td><td className="td">{v.wCupom}{v.wCarbone ? <span className="ml-1 text-xs text-mute">({v.wCarbone} Carbone)</span> : null}</td><td className="td">{v.imersao}</td><td className="td font-semibold">{brl(v.wPagosValor + v.imersaoValor)}</td><td className="td">{v.oport}</td></tr>;
-          })}{!sdrs.length && <tr><td className="td text-mute" colSpan={6}>Sem vendedores.</td></tr>}</tbody></table>
+            const v = vendas(s.id, auds.filter((a) => a.vendedor_id === s.id));
+            return <tr key={s.id}><td className="td"><span className="flex items-center gap-2 font-semibold"><Bolinha id={s.id} />{s.nome}</span></td><td className="td">{v.workshop.n}</td><td className="td">{v.wCupom}{v.wCarbone ? <span className="ml-1 text-xs text-mute">({v.wCarbone} Carbone)</span> : null}</td><td className="td">{v.imersao.n}</td><td className="td">{v.plataforma.n}</td><td className="td font-semibold">{brl(v.total)}</td><td className="td">{v.oport}</td></tr>;
+          })}
+          {semVendedor && semVendedor.total > 0 && <tr><td className="td text-mute">Sem vendedor no CRM</td><td className="td">{semVendedor.workshop.n}</td><td className="td">—</td><td className="td">{semVendedor.imersao.n}</td><td className="td">{semVendedor.plataforma.n}</td><td className="td font-semibold">{brl(semVendedor.total)}</td><td className="td">—</td></tr>}
+          {!sdrs.length && <tr><td className="td text-mute" colSpan={7}>Sem vendedores.</td></tr>}</tbody></table>
+        {semVendedor && semVendedor.total > 0 && <p className="mt-2 text-xs text-mute">Venda sem vendedor: o negócio no CRM está sem closer e sem SDR. Preencha no CRM e ela vai para a pessoa certa na próxima leitura (15 min).</p>}
       </section>
 
       {/* Tabela por SDR */}
