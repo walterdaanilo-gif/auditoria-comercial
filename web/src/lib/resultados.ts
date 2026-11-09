@@ -35,6 +35,7 @@ export type Resultado = {
   duplicada: string | null;         // a mesma venda ja esta em outra linha (o motivo); nao soma
   naoLancada: boolean;              // venda alta so na conversa, empresa com CRM ligado: nao soma ate lancar no CRM
   naConversa: boolean;              // venda do CRM que tambem foi vista na conversa
+  indicadoPor?: string;             // so na venda do CRM: "Indicado por" do negocio (vazio = nao foi indicado ou nao informado)
 };
 
 type Ajuste = { id: string; data: string; vendedor_id: string | null; cliente: string | null; empresa: string | null; produto: string | null; forma_pagamento: string | null; valor: number | string | null; auditoria_id: string | null; excluida: boolean };
@@ -89,6 +90,7 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
       cliente: v.cliente?.trim() ?? "", empresa: typeof v.campos?.["nome-da-empresa"] === "string" ? v.campos["nome-da-empresa"] : "",
       produto: PRODUTOS.some(([k]) => k === v.tipo) ? v.tipo : "outro", forma: null, valor: v.valor_cents != null ? v.valor_cents / 100 : null,
       valorIA: null, ajustada: false, excluida: false, duplicada: v.repetidaDe ? "produtos já contados em outro negócio do cliente" : null, naoLancada: false, naConversa: !!v.vista,
+      indicadoPor: indicadorDoCrm(v.campos),
     });
   }
   const doWorkshop = ((rCfg.error ? null : rCfg.data) as { vendedor_workshop: string | null } | null)?.vendedor_workshop ?? null;
@@ -96,6 +98,13 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
   const noPeriodo = linhas.filter((r) => r.data >= de && r.data <= ate).map(({ ...r }) => { delete (r as { fone?: string }).fone; return r as Resultado; });
   noPeriodo.sort((x, y) => y.data.localeCompare(x.data) || (y.valor ?? -1) - (x.valor ?? -1));
   return { linhas: noPeriodo, convites, tabelaOk, erro: rAud.error?.message ?? null };
+}
+
+// Quem indicou o cliente, pelos campos do negocio no CRM ("Indicado por" ou "Indicação"); "Foi indicado? Não" = ninguem
+export function indicadorDoCrm(campos: Record<string, unknown> | null | undefined): string {
+  if (!campos || /^n[aã]o$/i.test(String(campos["foi-indicado"] ?? "").trim())) return "";
+  const t = (k: string) => (typeof campos[k] === "string" ? (campos[k] as string).trim() : "");
+  return t("indicado-por") || t("indicacao");
 }
 
 // ---------- cruzamento ----------
