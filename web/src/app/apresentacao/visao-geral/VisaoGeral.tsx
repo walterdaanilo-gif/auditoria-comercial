@@ -113,13 +113,14 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
   const comGrafico = temItem(q, "grafico"), comPrecisa = temItem(q, "precisa"), comProjecao = temItem(q, "projecao") && d.periodo.mensal;
   const { fat, periodo } = d;
   const r = calcularRitmo(fat.real, fat.meta, periodo.diaUtil, periodo.diasUteisMes);
-  const caixa: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, background: "#eef6f4", borderRadius: 14, padding: "12px 20px", minWidth: 0 };
+  const compacto = !!fat.porProduto?.length; // com a faixa de produtos, o resto encolhe para caber na mesma altura
+  const caixa: CSSProperties = { display: "flex", flexDirection: "column", gap: compacto ? 0 : 4, background: "#eef6f4", borderRadius: 14, padding: compacto ? "8px 18px" : "12px 20px", minWidth: 0 };
   return (
-    <div className="cd" style={{ background: "linear-gradient(125deg,#e3f4f0 0%,#ffffff 62%)", borderColor: "#b7dad3", padding: "20px 34px 22px", display: "grid", gridTemplateColumns: comGrafico ? "minmax(0,1fr) minmax(0,1.05fr)" : "minmax(0,1fr)", gap: 34 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+    <div className="cd" style={{ background: "linear-gradient(125deg,#e3f4f0 0%,#ffffff 62%)", borderColor: "#b7dad3", padding: "20px 34px 22px", overflow: "hidden", minHeight: 0, display: "grid", gridTemplateRows: "minmax(0,1fr)", gridTemplateColumns: comGrafico ? "minmax(0,1fr) minmax(0,1.05fr)" : "minmax(0,1fr)", gap: 34 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: fat.porProduto?.length ? 8 : 10, minWidth: 0, minHeight: 0 }}>
         <div className="row"><span className="lb nw" style={{ fontSize: 18 }}>{tituloDe(q)}</span><div style={{ flex: 1 }} />
           {r.selo && <Selo tom={r.selo.tom}>{r.selo.texto}</Selo>}</div>
-        <span className="vl nw" style={{ fontSize: 108 }}>{moeda(fat.real)}</span>
+        <span className="vl nw" style={{ fontSize: fat.porProduto?.length ? 80 : 108 }}>{moeda(fat.real)}</span>
         {fat.meta ? (
           <>
             <span className="nw" style={{ fontSize: 28, color: C.mute, fontWeight: 500 }}>de <b style={{ color: C.texto }}>{moeda(fat.meta)}</b> · <b style={{ color: C.label, fontSize: 34 }}>{Math.round(r.pctMeta ?? 0)}%</b></span>
@@ -143,14 +144,13 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
           </>
         )}
         {!!fat.porProduto?.length && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }} aria-label="Faturamento por produto">
+          // uma linha so (nunca quebra): a Plataforma destacada primeiro, os outros produtos em seguida
+          <div style={{ display: "flex", flexWrap: "nowrap", gap: 8, overflow: "hidden", flexShrink: 0 }} aria-label="Faturamento por produto">
             {fat.porProduto.map((x) => (
-              <div key={x.produto} style={x.produto === "plataforma"
-                ? { display: "flex", alignItems: "baseline", gap: 10, background: "#1b9e88", color: "#fff", borderRadius: 12, padding: "8px 16px" }
-                : { display: "flex", alignItems: "baseline", gap: 8, background: "#eef6f4", borderRadius: 12, padding: "8px 14px" }}>
-                <span className="nw" style={{ fontSize: 17, fontWeight: 700, color: x.produto === "plataforma" ? "#fff" : C.mute }}>{NOME_PRODUTO[x.produto] ?? x.produto}</span>
-                <span className="nw" style={{ fontSize: x.produto === "plataforma" ? 28 : 22, fontWeight: 800 }}>{moeda(x.valor)}</span>
-                <span className="nw" style={{ fontSize: 15, opacity: 0.8 }}>{x.n} venda{x.n === 1 ? "" : "s"}</span>
+              <div key={x.produto} style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, flex: "0 1 auto", borderRadius: 10, padding: "5px 12px",
+                ...(x.produto === "plataforma" ? { background: "#1b9e88", color: "#fff" } : { background: "#eef6f4" }) }}>
+                <span className="nw" style={{ fontSize: 15, fontWeight: 700, color: x.produto === "plataforma" ? "#e3f4f0" : C.mute }}>{NOME_PRODUTO[x.produto] ?? x.produto}</span>
+                <span className="nw" style={{ fontSize: 22, fontWeight: 800 }}>{moeda(x.valor)}</span>
               </div>
             ))}
           </div>
@@ -160,13 +160,13 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
           {fat.meta && comPrecisa && (
             <div style={caixa}>
               <span className="lb nw" style={{ fontSize: 15, color: C.mute }}>Precisa por dia útil</span>
-              <span className="vl nw" style={{ fontSize: 40, color: r.precisaPorDia === null && r.faltam === 0 ? TOM.ok.c : C.texto }}>{r.precisaPorDia !== null ? moeda(r.precisaPorDia) : r.faltam === 0 ? "meta batida" : "—"}</span>
+              <span className="vl nw" style={{ fontSize: compacto ? 32 : 40, color: r.precisaPorDia === null && r.faltam === 0 ? TOM.ok.c : C.texto }}>{r.precisaPorDia !== null ? moeda(r.precisaPorDia) : r.faltam === 0 ? "meta batida" : "—"}</span>
               <span className="mu nw" style={{ fontSize: 17 }}>média até hoje {moeda(r.mediaAteHoje)}</span>
             </div>
           )}
           {comProjecao && <div style={caixa}>
             <span className="lb nw" style={{ fontSize: 15, color: C.mute }}>Projeção do mês</span>
-            <span className="vl nw" style={{ fontSize: 40 }}>{moeda(r.projecao ?? 0)}</span>
+            <span className="vl nw" style={{ fontSize: compacto ? 32 : 40 }}>{moeda(r.projecao ?? 0)}</span>
             <span className="mu nw" style={{ fontSize: 17 }}>{r.projecaoPct !== null ? `${Math.round(r.projecaoPct)}% · faltam ${moeda(r.faltam ?? 0)}` : "no ritmo atual do mês"}</span>
           </div>}
         </div>
@@ -257,7 +257,7 @@ export default function VisaoGeral({ dados }: { dados: VisaoGeralDados }) {
       {!dados.demo && <AutoRefresh segundos={60} />}
       <div style={{ position: "absolute", left: "50%", top: "50%", width: 1920, height: 1080, transform: `translate(-50%,-50%) scale(${esc ?? 1})`, visibility: esc ? "visible" : "hidden", padding: "22px 30px", background: "radial-gradient(1400px 700px at 0 0, rgba(109,207,192,.18), rgba(255,255,255,0) 60%), #f3f6f5", display: "flex", flexDirection: "column", gap: 16 }}>
         <Cabecalho d={dados} />
-        {fat && <div style={{ display: "grid", flex: pes || pequenos.length ? 0.95 : 1, minHeight: 0 }}><Faturamento d={dados} q={fat} /></div>}
+        {fat && <div style={{ display: "grid", gridTemplateRows: "minmax(0,1fr)", flex: pes || pequenos.length ? 0.95 : 1, minHeight: 0 }}><Faturamento d={dados} q={fat} /></div>}
         {(pes || pequenos.length > 0) && (
           <div style={{ display: "grid", gridTemplateColumns: pes && pequenos.length ? (pequenos.length > 3 ? "minmax(0,1fr) 640px" : "minmax(0,1fr) 420px") : "minmax(0,1fr)", gap: 16, flex: fat ? 1.05 : 1, minHeight: 0 }}>
             {pes && <PorPessoa d={dados} q={pes} />}
