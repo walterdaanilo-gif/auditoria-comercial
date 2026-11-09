@@ -169,7 +169,7 @@ export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
         const idx = itensQueSomam(novos, p.v.valor_cents as number);
         if (!idx) continue;
         p.resolvido = true;
-        idx.forEach((k, n) => out.push(linha(p.v, novos[k], n, {}, { ...p.v, produtos: idx.map((x) => novos[x]) })));
+        idx.forEach((k, n) => out.push(linha(p.v, novos[k], n, { vendedor_id: p.v.vendedor_id ?? v.vendedor_id }, { ...p.v, produtos: idx.map((x) => novos[x]) })));
         for (const k of [...idx].sort((a, b) => b - a)) { contados.push(novos[k]); novos.splice(k, 1); }
       }
       if (novos.length) novos.forEach((it, n) => out.push(linha(v, it, n)));
@@ -204,7 +204,8 @@ export function cruzar(linhas: (Resultado & { fone?: string })[], crm: CrmCruzad
   for (const r of linhas.filter((x) => x.origem === "ia")) {
     const v = r.fone ? crm.filter((c) => c.fone === r.fone && distDias(c.dia, r.data) <= JANELA_CRM).sort((a, b) => Number(compativel(r.produto, b.tipo)) - Number(compativel(r.produto, a.tipo)) || distDias(a.dia, r.data) - distDias(b.dia, r.data))[0] : undefined;
     if (v) {
-      r.duplicada = "já contada no CRM"; v.vista = true; v.vendedorConversa ??= r.vendedorId;
+      r.duplicada = "já contada no CRM"; v.vista = true;
+      if (compativel(r.produto, v.tipo)) v.vendedorConversa ??= r.vendedorId; // so empresta o vendedor da conversa do mesmo tipo de venda
       if (!v.diaCerto && r.data < v.dia && compativel(r.produto, v.tipo)) v.dia = r.data; // a venda apareceu antes na conversa
     }
   }
