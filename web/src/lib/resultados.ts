@@ -48,7 +48,7 @@ const num = (x: unknown): number | null => (x == null || x === "" ? null : Numbe
 export async function listarResultados(db: SupabaseClient, org: string, de: string, ate: string): Promise<{ linhas: Resultado[]; convites: string[]; tabelaOk: boolean; erro: string | null }> {
   // janela maior para achar a mesma venda antes ou depois do periodo (e nao contar de novo)
   const deLargo = somaDias(de, -JANELA_CRM);
-  const [rAud, rAj, rCrm, rCfg] = await Promise.all([
+  const [rAud, rAj, rCrm, rCfg, rPerf] = await Promise.all([
     db.from("auditorias").select("id,vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(id,data,canal,contato,contato_nome,telefone)")
       .eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", deLargo).lte("conversas.data", ate).limit(5000),
     db.from("resultados_vendas").select("*").eq("org_id", org).gte("data", de).lte("data", ate).limit(5000),
@@ -56,6 +56,7 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
     db.from("crm_vendas").select("deal_id,contato_crm_id,telefone,cliente,valor_cents,aberto_em,ganho_em,vendedor_id,produto,tipo,produtos,campos").eq("org_id", org).eq("status", "won").limit(5000),
     // quem leva as vendas de workshop (Configuracoes; na Weevo, o Ruan)
     db.from("audit_settings").select("vendedor_workshop").eq("org_id", org).maybeSingle(),
+    db.from("profiles").select("id,nome,org_id,ativo").limit(1000),
   ]);
   const tabelaOk = !rAj.error;
   const ajustes = (tabelaOk ? rAj.data ?? [] : []) as Ajuste[];
@@ -80,13 +81,21 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
   for (const m of ajustes.filter((x) => !x.auditoria_id)) {
     linhas.push({ chave: `m:${m.id}`, origem: "manual", id: m.id, auditoriaId: null, data: m.data, vendedorId: m.vendedor_id, cliente: m.cliente?.trim() ?? "", empresa: m.empresa?.trim() ?? "", produto: m.produto, forma: m.forma_pagamento, valor: num(m.valor), valorIA: null, ajustada: false, excluida: !!m.excluida, duplicada: null, naoLancada: false, naConversa: false });
   }
+  // venda alta (Imersao, Plataforma, In-Company) e do closer do negocio no CRM (pelo primeiro nome, so se for um so)
+  const perfis = ((rPerf.error ? [] : rPerf.data ?? []) as { id: string; nome: string; org_id: string | null; ativo: boolean }[]).filter((p) => p.org_id === org);
+  const primeiro = (n: unknown) => String(n ?? "").trim().split(/\s+/)[0]?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() || "";
+  const closerDe = (campos: Record<string, unknown> | null) => {
+    const k = primeiro(campos?.closer);
+    const achados = k ? perfis.filter((p) => primeiro(p.nome) === k) : [];
+    return achados.length === 1 ? achados[0].id : null;
+  };
   // cada negocio ganho vira uma linha por PRODUTO NOVO (o que o cliente ainda nao tinha comprado num negocio anterior)
   const todasCrm = produtosNovosCrm(((rCrm.error ? [] : rCrm.data ?? []) as Crm[]).map((v) => ({ ...v, dia: diaBR(v.ganho_em), fone: chaveFone(v.telefone), tipo: v.tipo || "outro" })));
   cruzar(linhas as (Resultado & { fone?: string })[], todasCrm.filter((v) => !v.repetidaDe));
   // so o periodo pedido (o resto foi buscado so para o cruzamento); o negocio que so repete produtos aparece riscado, sem somar
   for (const v of todasCrm.filter((x) => x.dia >= de && x.dia <= ate)) {
     linhas.push({
-      chave: `c:${v.deal_id}`, origem: "crm", id: null, auditoriaId: null, data: v.dia, vendedorId: v.vendedor_id ?? v.vendedorConversa ?? null,
+      chave: `c:${v.deal_id}`, origem: "crm", id: null, auditoriaId: null, data: v.dia, vendedorId: (ALTOS.includes(v.tipo) ? closerDe(v.campos) : null) ?? v.vendedor_id ?? v.vendedorConversa ?? null,
       cliente: v.cliente?.trim() ?? "", empresa: typeof v.campos?.["nome-da-empresa"] === "string" ? v.campos["nome-da-empresa"] : "",
       produto: PRODUTOS.some(([k]) => k === v.tipo) ? v.tipo : "outro", forma: null, valor: v.valor_cents != null ? v.valor_cents / 100 : null,
       valorIA: null, ajustada: false, excluida: false, duplicada: v.repetidaDe ? "produtos já contados em outro negócio do cliente" : null, naoLancada: false, naConversa: !!v.vista,
