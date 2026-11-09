@@ -104,7 +104,8 @@ async function importarEmpresa(org: { id: string; slug: string; crm_segredo: str
   const rever = Date.now() - REVER_HORAS * 3600_000;
   const fila = [...contatos].map(([id, o]) => ({ id, o, lido: lidoEm.get(id) ?? 0 }))
     .filter((x) => !x.lido || x.o.mudou > x.lido || x.lido < rever || (comAberto.has(x.id) && x.lido < rodada))
-    .sort((a, b) => Number(b.o.mudou > b.lido) - Number(a.o.mudou > a.lido) || a.lido - b.lido).slice(0, POR_RODADA);
+    // ordem: o que mudou no CRM, depois quem tem negocio aberto, depois os lidos ha mais tempo
+    .sort((a, b) => Number(b.o.mudou > b.lido) - Number(a.o.mudou > a.lido) || Number(comAberto.has(b.id)) - Number(comAberto.has(a.id)) || a.lido - b.lido).slice(0, POR_RODADA);
 
   let lidos = 0, gravados = 0;
   for (const { id: contato, o } of fila) {
