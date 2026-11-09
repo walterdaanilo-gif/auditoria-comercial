@@ -18,7 +18,8 @@ export type VisaoGeralDados = {
   // mensal = periodo "Mes atual": so nele valem a meta de faturamento do mes, o ritmo e a projecao.
   // Nos outros periodos diasUteisMes = diaUtil (periodo todo ja decorrido) e as metas diarias valem x dias uteis do periodo.
   periodo: { p: string; de: string; ate: string; mensal: boolean; rotulo: string; intervalo: string; diaUtil: number; diasUteisMes: number };
-  fat: { real: number; meta: number | null; serie: { du: number; real: number; data: string }[]; datasUteis: string[] };
+  // porProduto: o faturamento dividido pelos produtos (Plataforma primeiro), so os que venderam
+  fat: { real: number; meta: number | null; serie: { du: number; real: number; data: string }[]; datasUteis: string[]; porProduto?: { produto: string; valor: number; n: number }[] };
   pessoas: Pessoa[];
   quadros: QuadroCfg[];                       // quadros na tela, na ordem escolhida em Configuracoes
   kpis: Partial<Record<QuadroId, Kpi>>;       // quadros pequenos (semretorno, primeira, nota, ...)

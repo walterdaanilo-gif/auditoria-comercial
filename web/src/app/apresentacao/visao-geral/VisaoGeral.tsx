@@ -108,6 +108,7 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
   );
 }
 
+const NOME_PRODUTO: Record<string, string> = { plataforma: "Plataforma", imersao: "Imersão", incompany: "In-Company", workshop: "Workshop", outro: "Outro" };
 function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
   const comGrafico = temItem(q, "grafico"), comPrecisa = temItem(q, "precisa"), comProjecao = temItem(q, "projecao") && d.periodo.mensal;
   const { fat, periodo } = d;
@@ -140,6 +141,19 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
               </div>
             </div>
           </>
+        )}
+        {!!fat.porProduto?.length && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }} aria-label="Faturamento por produto">
+            {fat.porProduto.map((x) => (
+              <div key={x.produto} style={x.produto === "plataforma"
+                ? { display: "flex", alignItems: "baseline", gap: 10, background: "#1b9e88", color: "#fff", borderRadius: 12, padding: "8px 16px" }
+                : { display: "flex", alignItems: "baseline", gap: 8, background: "#eef6f4", borderRadius: 12, padding: "8px 14px" }}>
+                <span className="nw" style={{ fontSize: 17, fontWeight: 700, color: x.produto === "plataforma" ? "#fff" : C.mute }}>{NOME_PRODUTO[x.produto] ?? x.produto}</span>
+                <span className="nw" style={{ fontSize: x.produto === "plataforma" ? 28 : 22, fontWeight: 800 }}>{moeda(x.valor)}</span>
+                <span className="nw" style={{ fontSize: 15, opacity: 0.8 }}>{x.n} venda{x.n === 1 ? "" : "s"}</span>
+              </div>
+            ))}
+          </div>
         )}
         <div style={{ flex: 1 }} />
         <div style={{ display: "grid", gridTemplateColumns: fat.meta && comPrecisa && comProjecao ? "repeat(2,minmax(0,1fr))" : "1fr", gap: 14 }}>

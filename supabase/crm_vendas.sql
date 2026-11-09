@@ -41,3 +41,6 @@ select cron.schedule('crm-vendas-15min', '7,22,37,52 * * * *', 'select public.cr
 -- controle de leitura por contato (a funcao le os negocios de cada contato, de qualquer instancia)
 create table if not exists public.crm_contatos_lidos (contato_crm_id text primary key, org_id uuid not null references public.organizacoes(id), lido_em timestamptz not null default now());
 alter table public.crm_contatos_lidos enable row level security;
+
+-- quem leva todas as vendas de workshop (na Weevo, o Ruan)
+alter table public.audit_settings add column if not exists vendedor_workshop uuid references public.profiles(id) on delete set null;

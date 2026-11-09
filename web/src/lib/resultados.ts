@@ -47,12 +47,14 @@ const num = (x: unknown): number | null => (x == null || x === "" ? null : Numbe
 export async function listarResultados(db: SupabaseClient, org: string, de: string, ate: string): Promise<{ linhas: Resultado[]; convites: string[]; tabelaOk: boolean; erro: string | null }> {
   // janela maior para achar a mesma venda antes ou depois do periodo (e nao contar de novo)
   const deLargo = somaDias(de, -JANELA_CRM);
-  const [rAud, rAj, rCrm] = await Promise.all([
+  const [rAud, rAj, rCrm, rCfg] = await Promise.all([
     db.from("auditorias").select("id,vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(id,data,canal,contato,contato_nome,telefone)")
       .eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", deLargo).lte("conversas.data", ate).limit(5000),
     db.from("resultados_vendas").select("*").eq("org_id", org).gte("data", de).lte("data", ate).limit(5000),
     // todos os negocios ganhos (de qualquer data): o negocio novo do CRM repete os produtos que o cliente ja comprou antes
     db.from("crm_vendas").select("deal_id,contato_crm_id,telefone,cliente,valor_cents,aberto_em,ganho_em,vendedor_id,produto,tipo,produtos,campos").eq("org_id", org).eq("status", "won").limit(5000),
+    // quem leva as vendas de workshop (Configuracoes; na Weevo, o Ruan)
+    db.from("audit_settings").select("vendedor_workshop").eq("org_id", org).maybeSingle(),
   ]);
   const tabelaOk = !rAj.error;
   const ajustes = (tabelaOk ? rAj.data ?? [] : []) as Ajuste[];
@@ -89,6 +91,8 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
       valorIA: null, ajustada: false, excluida: false, duplicada: v.repetidaDe ? "produtos já contados em outro negócio do cliente" : null, naoLancada: false, naConversa: !!v.vista,
     });
   }
+  const doWorkshop = ((rCfg.error ? null : rCfg.data) as { vendedor_workshop: string | null } | null)?.vendedor_workshop ?? null;
+  if (doWorkshop) for (const r of linhas) if (r.produto === "workshop") r.vendedorId = doWorkshop;
   const noPeriodo = linhas.filter((r) => r.data >= de && r.data <= ate).map(({ ...r }) => { delete (r as { fone?: string }).fone; return r as Resultado; });
   noPeriodo.sort((x, y) => y.data.localeCompare(x.data) || (y.valor ?? -1) - (x.valor ?? -1));
   return { linhas: noPeriodo, convites, tabelaOk, erro: rAud.error?.message ?? null };

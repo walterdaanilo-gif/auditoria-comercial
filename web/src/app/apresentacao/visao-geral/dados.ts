@@ -12,6 +12,7 @@ type Linha = { vendedor_id: string; respostas: number; marcacoes: number; ligaco
 type Tempos = { vendedor_id: string; primeira_resposta_seg: number | null; tempo_medio_resposta_seg: number | null; respostas_sdr: number | null };
 
 const n = (x: unknown) => Number(x) || 0;
+const ORDEM_PRODUTOS = ["plataforma", "imersao", "incompany", "workshop", "outro"]; // Plataforma primeiro na TV
 const ddmm = (d: string) => d.slice(8, 10) + "/" + d.slice(5, 7);
 const util = (d: string) => { const w = new Date(d + "T12:00:00Z").getUTCDay(); return w !== 0 && w !== 6; };
 const sigla = (nome: string) => nome.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase() || "?";
@@ -112,7 +113,8 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     demo: false,
     atualizadoEm: horaBR(),
     periodo: { p: periodo.p, de: ini, ate: hoje, mensal, rotulo: periodo.rotulo, intervalo: mensal ? `01 a ${fim.slice(8)}/${fim.slice(5, 7)}` : ini === hoje ? ddmm(ini) : `${ddmm(ini)} a ${ddmm(hoje)}`, diaUtil, diasUteisMes },
-    fat: { real: acc, meta: mensal && cfg.meta_fat_mes != null ? Number(cfg.meta_fat_mes) : null, serie, datasUteis: diasEntre(ini, fim).filter(util).map(ddmm) },
+    fat: { real: acc, meta: mensal && cfg.meta_fat_mes != null ? Number(cfg.meta_fat_mes) : null, serie, datasUteis: diasEntre(ini, fim).filter(util).map(ddmm),
+      porProduto: ORDEM_PRODUTOS.map((produto) => { const l = vendas.filter((v) => (v.produto ?? "outro") === produto); return { produto, valor: l.reduce((t, v) => t + (v.valor ?? 0), 0), n: l.length }; }).filter((x) => x.n > 0) },
     pessoas: [...sdrs.map((p) => pessoa(p, "sdr")), ...closers.map((p) => pessoa(p, "closer"))],
     quadros: resolverQuadros(cfg.tv_quadros),
     kpis,
