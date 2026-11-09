@@ -16,6 +16,7 @@ import { importarHistoricoCrm } from "./crm.js";
 import { cancelarEventos } from "./agenda.js";
 import { sugerirParaLead } from "./closer.js";
 import { avisarDiagnosticos } from "./diagnostico.js";
+import { avisarVenda } from "./vendaAviso.js";
 
 const LIMITE_MS = 120_000; // a funcao tem ~150s; para antes e a proxima volta continua
 const json = (code, obj) => new Response(JSON.stringify(obj), { status: code, headers: { "Content-Type": "application/json" } });
@@ -74,6 +75,14 @@ Deno.serve(async req => {
       const body = await req.json().catch(() => null);
       if (!body) return json(400, { erro: "corpo invalido" });
       return json(200, await sugerirParaLead(db, body));
+    }
+    // Site: o faturamento ganhou uma venda de imersao ou plataforma -> avisa o Bruno no WhatsApp
+    if (url.pathname.endsWith("/avisos/venda")) {
+      if (req.method !== "POST") return json(405, { erro: "use POST" });
+      if (!(await tokenOk(req))) return json(401, { erro: "nao autorizado" });
+      const body = await req.json().catch(() => null);
+      if (!body) return json(400, { erro: "corpo invalido" });
+      return json(200, await avisarVenda(db, body));
     }
     if (url.pathname.endsWith("/tick")) {
       if (!(await tokenOk(req))) return json(401, { erro: "nao autorizado" });

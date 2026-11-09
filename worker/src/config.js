@@ -43,6 +43,8 @@ export const cfg = {
   // Aviso de diagnostico antes do workshop (so leitura). O codigo e o do painel do site; ficam como segredos da funcao, nunca no codigo.
   diagnosticoCode: env.DIAGNOSTICO_CODE || "",
   diagnosticoPlanilha: env.DIAGNOSTICO_PLANILHA_ID || "",
+  // WhatsApp que recebe o aviso de cada venda (imersao ou plataforma): o do Bruno. Pode trocar com AVISO_VENDA_TELEFONE.
+  avisoVendaTelefone: (env.AVISO_VENDA_TELEFONE || "5584999518137").replace(/\D/g, ""),
   diagnosticoSite: (env.DIAGNOSTICO_SITE || "https://weevoedu.com").replace(/\/$/, ""),
 };
 
