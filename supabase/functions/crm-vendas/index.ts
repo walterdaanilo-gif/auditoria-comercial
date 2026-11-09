@@ -97,15 +97,17 @@ async function importarEmpresa(org: { id: string; slug: string; crm_segredo: str
     await espera(100);
   }
 
-  // cliente com negocio em aberto e relido a cada rodada: e o negocio que vira venda (e o CRM nem sempre avisa que mudou)
-  const comAberto = new Set((lidas ?? []).filter((l: any) => l.status === "open" && l.contato_crm_id).map((l: any) => l.contato_crm_id));
+  // cliente em negociacao (negocio aberto com valor, produto, closer ou diagnostico) e relido primeiro, a cada rodada:
+  // e o negocio que vira venda, e o CRM nem sempre avisa que mudou. O negocio aberto vazio (toda conversa tem um) nao conta.
+  const negociando = (l: any) => l.status === "open" && l.contato_crm_id && ((l.valor_cents ?? 0) > 0 || (l.produtos ?? []).length > 0 || !!l.campos?.closer || !!l.campos?.["data-do-diagnostico"]);
+  const comAberto = new Set((lidas ?? []).filter(negociando).map((l: any) => l.contato_crm_id));
   for (const id of comAberto) if (!contatos.has(id)) contatos.set(id, { telefone: null, nome: null, mudou: 0, chats: new Map() });
   const rodada = Date.now() - RELER_ABERTO_MIN * 60_000;
   const rever = Date.now() - REVER_HORAS * 3600_000;
   const fila = [...contatos].map(([id, o]) => ({ id, o, lido: lidoEm.get(id) ?? 0 }))
     .filter((x) => !x.lido || x.o.mudou > x.lido || x.lido < rever || (comAberto.has(x.id) && x.lido < rodada))
-    // ordem: o que mudou no CRM, depois quem tem negocio aberto, depois os lidos ha mais tempo
-    .sort((a, b) => Number(b.o.mudou > b.lido) - Number(a.o.mudou > a.lido) || Number(comAberto.has(b.id)) - Number(comAberto.has(a.id)) || a.lido - b.lido).slice(0, POR_RODADA);
+    // ordem: quem esta em negociacao, depois o que mudou no CRM, depois os lidos ha mais tempo
+    .sort((a, b) => Number(comAberto.has(b.id)) - Number(comAberto.has(a.id)) || Number(b.o.mudou > b.lido) - Number(a.o.mudou > a.lido) || a.lido - b.lido).slice(0, POR_RODADA);
 
   let lidos = 0, gravados = 0;
   for (const { id: contato, o } of fila) {
