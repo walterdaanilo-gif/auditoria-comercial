@@ -53,7 +53,8 @@ export async function avisarVendasNovas(db: SupabaseClient, tokenWorker: string,
         signal: AbortSignal.timeout(30000), cache: "no-store",
       });
       const j = await resp.json().catch(() => null);
-      if (!resp.ok || !j?.ok) { falhas++; continue; } // nao anota: tenta de novo na proxima rodada
+      // so vale se o worker confirmou o envio ("enviado"): um worker antigo, sem esta rota, responde so { ok: true, servico }
+      if (!resp.ok || !j?.ok || j.enviado !== true) { falhas++; continue; } // nao anota: tenta de novo na proxima rodada
       await db.from("vendas_avisadas").insert({ org_id: org.id, chave: r.chave });
       enviadas++;
     } catch { falhas++; }
