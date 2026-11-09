@@ -47,7 +47,7 @@ export async function avisarVendasNovas(db: SupabaseClient, tokenWorker: string,
   let enviadas = 0, falhas = 0;
   for (const r of novas.slice(0, MAX_POR_RODADA)) {
     try {
-      const resp = await fetchImpl(`${SUPABASE_URL}/functions/v1/worker/avisos/venda`, {
+      const resp = await fetchImpl(`${SUPABASE_URL}/functions/v1/aviso-venda`, {
         method: "POST", headers: { "Content-Type": "application/json", "x-worker-token": tokenWorker },
         body: JSON.stringify({ produto: r.produto, valor: r.valor, cliente: r.cliente, empresa: r.empresa, indicadoPor: r.indicadoPor ?? "", vendedor: r.vendedorId ? nomes.get(r.vendedorId) ?? "" : "" }),
         signal: AbortSignal.timeout(30000), cache: "no-store",
