@@ -6,7 +6,9 @@ import { telefone, um } from "@/lib/format";
 // + vendas que a IA detectou nas conversas (tabela auditorias), com os ajustes feitos na aba Resultados,
 // + vendas lancadas a mao (tabela resultados_vendas).
 // Cruzamento sem duplicar (cada venda conta uma vez):
-// - venda da conversa do mesmo cliente (DDD + 8 digitos) e produto compativel, ate 30 dias do ganho no CRM: vale a do CRM
+// A chave e o NUMERO do contato (DDD + 8 digitos, ignora 55 e o 9 extra):
+// - venda da conversa com o mesmo numero de uma venda do CRM, ate 45 dias, qualquer produto: vale so a do CRM
+// - o mesmo numero com dois negocios ganhos no CRM do mesmo produto (ou sem produto), ate 30 dias: vale o primeiro
 // - a mesma venda detectada pela IA em mais de um dia: vale a primeira
 // - venda manual com o mesmo cliente (nome) e produto do CRM, ate 30 dias: vale a do CRM
 // - empresa com CRM ligado: venda alta (imersao, plataforma, in-company) que so aparece na conversa fica como
@@ -44,7 +46,7 @@ const num = (x: unknown): number | null => (x == null || x === "" ? null : Numbe
 // Se a tabela de resultados ainda nao existe no banco, tabelaOk = false e valem so as vendas da IA.
 export async function listarResultados(db: SupabaseClient, org: string, de: string, ate: string): Promise<{ linhas: Resultado[]; convites: string[]; tabelaOk: boolean; erro: string | null }> {
   // janela maior para achar a mesma venda antes ou depois do periodo (e nao contar de novo)
-  const deLargo = somaDias(de, -JANELA), ateLargo = somaDias(ate, JANELA);
+  const deLargo = somaDias(de, -JANELA_CRM), ateLargo = somaDias(ate, JANELA_CRM);
   const [rAud, rAj, rCrm] = await Promise.all([
     db.from("auditorias").select("id,vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(id,data,canal,contato,contato_nome,telefone)")
       .eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", deLargo).lte("conversas.data", ate).limit(5000),
@@ -75,7 +77,8 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
   for (const m of ajustes.filter((x) => !x.auditoria_id)) {
     linhas.push({ chave: `m:${m.id}`, origem: "manual", id: m.id, auditoriaId: null, data: m.data, vendedorId: m.vendedor_id, cliente: m.cliente?.trim() ?? "", empresa: m.empresa?.trim() ?? "", produto: m.produto, forma: m.forma_pagamento, valor: num(m.valor), valorIA: null, ajustada: false, excluida: !!m.excluida, duplicada: null, naoLancada: false, naConversa: false });
   }
-  const todasCrm: CrmCruzado[] = ((rCrm.error ? [] : rCrm.data ?? []) as Crm[]).map((v) => ({ ...v, dia: diaBR(v.ganho_em), fone: chaveFone(v.telefone), tipo: v.tipo || "outro" }));
+  // negocio do CRM sem produto: ate R$ 1.000 e workshop
+  const todasCrm: CrmCruzado[] = ((rCrm.error ? [] : rCrm.data ?? []) as Crm[]).map((v) => ({ ...v, dia: diaBR(v.ganho_em), fone: chaveFone(v.telefone), tipo: v.tipo || (v.valor_cents != null && v.valor_cents > 0 && v.valor_cents <= 100000 ? "workshop" : "outro") }));
   const crm = unirRepetidasCrm(todasCrm);
   cruzar(linhas as (Resultado & { fone?: string })[], crm);
   // so o periodo pedido (o resto foi buscado so para o cruzamento); a repetida do CRM aparece riscada, sem somar
@@ -111,7 +114,8 @@ export function unirRepetidasCrm(lista: CrmCruzado[]): CrmCruzado[] {
   }
   return validas;
 }
-const JANELA = 30; // dias: a mesma venda vista na conversa e lancada no CRM
+const JANELA = 30; // dias: a mesma venda repetida (no CRM ou na conversa)
+const JANELA_CRM = 45; // dias: a venda da conversa que tambem esta no CRM
 const ALTOS = ["imersao", "plataforma", "incompany", "outro"];
 const somaDias = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const distDias = (a: string, b: string) => Math.abs(Date.parse(a + "T12:00:00Z") - Date.parse(b + "T12:00:00Z")) / 86400_000;
@@ -129,9 +133,9 @@ const compativel = (ia: string | null, crm: string) => (ia === "workshop" ? crm 
 
 export function cruzar(linhas: (Resultado & { fone?: string })[], crm: CrmCruzado[]) {
   const crmLigado = crm.length > 0;
-  // 1) IA x CRM: mesma pessoa, produto compativel, ate JANELA dias
+  // 1) IA x CRM: mesmo numero, qualquer produto, ate JANELA_CRM dias (o CRM manda)
   for (const r of linhas.filter((x) => x.origem === "ia")) {
-    const v = r.fone ? crm.find((c) => c.fone === r.fone && compativel(r.produto, c.tipo) && distDias(c.dia, r.data) <= JANELA) : undefined;
+    const v = r.fone ? crm.filter((c) => c.fone === r.fone && distDias(c.dia, r.data) <= JANELA_CRM).sort((a, b) => Number(compativel(r.produto, b.tipo)) - Number(compativel(r.produto, a.tipo)) || distDias(a.dia, r.data) - distDias(b.dia, r.data))[0] : undefined;
     if (v) { r.duplicada = "já contada no CRM"; v.vista = true; v.vendedorConversa ??= r.vendedorId; }
   }
   // 2) IA repetida em mais de um dia: vale a primeira (ou a que foi ajustada a mao)
@@ -145,6 +149,11 @@ export function cruzar(linhas: (Resultado & { fone?: string })[], crm: CrmCruzad
   for (const r of linhas.filter((x) => x.origem === "manual" && x.cliente)) {
     const k = nomeChave(r.cliente);
     if (k && crm.some((c) => c.cliente && nomeChave(c.cliente) === k && (!r.produto || r.produto === c.tipo) && distDias(c.dia, r.data) <= JANELA)) r.duplicada = "já lançada no CRM";
+  }
+  // 3b) venda lancada a mao que a IA tambem viu na conversa (mesmo nome e produto): vale a manual
+  for (const m of linhas.filter((x) => x.origem === "manual" && !x.duplicada && x.cliente)) {
+    const k = nomeChave(m.cliente);
+    for (const r of linhas.filter((x) => x.origem === "ia" && !x.duplicada && x.cliente && nomeChave(x.cliente) === k && (!m.produto || m.produto === x.produto) && distDias(x.data, m.data) <= JANELA)) r.duplicada = "já lançada à mão";
   }
   // 4) venda alta so na conversa: espera o lancamento no CRM. Abaixo de R$ 1.000 a IA chamou de imersao um workshop: segue valendo.
   if (crmLigado) for (const r of linhas.filter((x) => x.origem === "ia" && !x.duplicada && ALTOS.includes(x.produto ?? "") && (x.valor == null || x.valor >= 1000))) r.naoLancada = true;
