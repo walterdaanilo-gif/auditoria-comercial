@@ -8,7 +8,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const API = "https://api.grupoquatro5.com/public/v1";
-const LIMITE_MS = 120_000, POR_RODADA = 300, REVER_HORAS = 6;
+const LIMITE_MS = 120_000, POR_RODADA = 300, REVER_HORAS = 6, PAGINAS_CRM = 40;
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const primeiro = (n: unknown) => String(n ?? "").trim().split(/\s+/)[0]?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() || "";
@@ -57,11 +57,14 @@ async function importarEmpresa(org: { id: string; slug: string; crm_segredo: str
   // 2) contatos das conversas do CRM: primeiro os nunca lidos, os que mudaram e os lidos ha mais de REVER_HORAS
   const convs = await todas("crm_conversas", "id,telefone,contato_nome,vendedor_id,raw", org.id);
   const { data: perfis } = await sb.from("profiles").select("id,nome,org_id,ativo").limit(1000);
-  const lidas = await todas("crm_vendas", "deal_id,produto,produtos,campos", org.id);
+  const lidas = await todas("crm_vendas", "deal_id,chat_id,status,valor_cents,produto,produtos,campos", org.id);
   const contatosLidos = await todas("crm_contatos_lidos", "contato_crm_id,lido_em", org.id);
   const daEmpresa = (perfis ?? []).filter((p: any) => p.org_id === org.id && p.ativo !== false);
   const porPrimeiroNome = (n: unknown) => { const k = primeiro(n); return k ? daEmpresa.filter((p: any) => primeiro(p.nome) === k) : []; };
   const salvo = new Map((lidas ?? []).map((l: any) => [l.deal_id, l]));
+  // negocio de cada conversa como esta salvo: se o CRM mostrar outra situacao ou outro valor, o cliente e relido ja
+  const porChat = new Map<string, { status: string | null; valor: number | null }[]>();
+  for (const l of lidas ?? []) if (l.chat_id) porChat.set(l.chat_id, [...(porChat.get(l.chat_id) ?? []), { status: l.status, valor: l.valor_cents }]);
   const lidoEm = new Map((contatosLidos ?? []).map((l: any) => [l.contato_crm_id, Date.parse(l.lido_em)]));
   const contatos = new Map<string, { telefone: string | null; nome: string | null; mudou: number; chats: Map<string, string | null> }>();
   for (const c of convs ?? []) {
@@ -73,10 +76,31 @@ async function importarEmpresa(org: { id: string; slug: string; crm_segredo: str
     o.chats.set((c as any).id, (c as any).vendedor_id);
     contatos.set(id, o);
   }
+  // conversas de TODAS as instancias direto do CRM (a sincronizacao de conversas nao traz algumas, como a
+  // "Comercial inbound", onde muitas vendas sao lancadas): as mais recentes primeiro, so as que tem negocio
+  for (let pagina = 1; pagina <= PAGINAS_CRM && Date.now() < ate - 60_000; pagina++) {
+    const r = await q5(`/conversations?limit=100&page=${pagina}`, chave);
+    if (r.status !== 200) break;
+    const lista = (r.corpo?.data ?? []) as any[];
+    for (const c of lista) {
+      const id = c?.contact?.id;
+      if (!id || !c.deal) continue;
+      const o = contatos.get(id) ?? { telefone: null, nome: null, mudou: 0, chats: new Map() };
+      o.telefone ||= c.contact.phoneE164 || null; o.nome ||= c.contact.name || null;
+      o.mudou = Math.max(o.mudou, Date.parse(c.updatedAt || 0) || 0);
+      const conhecidos = porChat.get(c.id) ?? [];
+      if (c.deal.status && !conhecidos.some((k) => k.status === c.deal.status && (k.valor ?? null) === (c.deal.valueCents ?? null))) o.mudou = Date.now();
+      if (!o.chats.has(c.id)) o.chats.set(c.id, null);
+      contatos.set(id, o);
+    }
+    if (lista.length < 100) break;
+    await espera(100);
+  }
+
   const rever = Date.now() - REVER_HORAS * 3600_000;
   const fila = [...contatos].map(([id, o]) => ({ id, o, lido: lidoEm.get(id) ?? 0 }))
     .filter((x) => !x.lido || x.o.mudou > x.lido || x.lido < rever)
-    .sort((a, b) => a.lido - b.lido).slice(0, POR_RODADA);
+    .sort((a, b) => Number(b.o.mudou > b.lido) - Number(a.o.mudou > a.lido) || a.lido - b.lido).slice(0, POR_RODADA);
 
   let lidos = 0, gravados = 0;
   for (const { id: contato, o } of fila) {
