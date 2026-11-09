@@ -46,13 +46,13 @@ const num = (x: unknown): number | null => (x == null || x === "" ? null : Numbe
 // Se a tabela de resultados ainda nao existe no banco, tabelaOk = false e valem so as vendas da IA.
 export async function listarResultados(db: SupabaseClient, org: string, de: string, ate: string): Promise<{ linhas: Resultado[]; convites: string[]; tabelaOk: boolean; erro: string | null }> {
   // janela maior para achar a mesma venda antes ou depois do periodo (e nao contar de novo)
-  const deLargo = somaDias(de, -JANELA_CRM), ateLargo = somaDias(ate, JANELA_CRM);
+  const deLargo = somaDias(de, -JANELA_CRM);
   const [rAud, rAj, rCrm] = await Promise.all([
     db.from("auditorias").select("id,vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(id,data,canal,contato,contato_nome,telefone)")
       .eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", deLargo).lte("conversas.data", ate).limit(5000),
     db.from("resultados_vendas").select("*").eq("org_id", org).gte("data", de).lte("data", ate).limit(5000),
-    db.from("crm_vendas").select("deal_id,contato_crm_id,telefone,cliente,valor_cents,ganho_em,vendedor_id,produto,tipo,campos").eq("org_id", org).eq("status", "won")
-      .gte("ganho_em", `${deLargo}T00:00:00-03:00`).lte("ganho_em", `${ateLargo}T23:59:59-03:00`).limit(5000),
+    // todos os negocios ganhos (de qualquer data): o negocio novo do CRM repete os produtos que o cliente ja comprou antes
+    db.from("crm_vendas").select("deal_id,contato_crm_id,telefone,cliente,valor_cents,ganho_em,vendedor_id,produto,tipo,produtos,campos").eq("org_id", org).eq("status", "won").limit(5000),
   ]);
   const tabelaOk = !rAj.error;
   const ajustes = (tabelaOk ? rAj.data ?? [] : []) as Ajuste[];
@@ -77,17 +77,16 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
   for (const m of ajustes.filter((x) => !x.auditoria_id)) {
     linhas.push({ chave: `m:${m.id}`, origem: "manual", id: m.id, auditoriaId: null, data: m.data, vendedorId: m.vendedor_id, cliente: m.cliente?.trim() ?? "", empresa: m.empresa?.trim() ?? "", produto: m.produto, forma: m.forma_pagamento, valor: num(m.valor), valorIA: null, ajustada: false, excluida: !!m.excluida, duplicada: null, naoLancada: false, naConversa: false });
   }
-  // negocio do CRM sem produto: ate R$ 1.000 e workshop
-  const todasCrm: CrmCruzado[] = ((rCrm.error ? [] : rCrm.data ?? []) as Crm[]).map((v) => ({ ...v, dia: diaBR(v.ganho_em), fone: chaveFone(v.telefone), tipo: v.tipo || (v.valor_cents != null && v.valor_cents > 0 && v.valor_cents <= 100000 ? "workshop" : "outro") }));
-  const crm = unirRepetidasCrm(todasCrm);
-  cruzar(linhas as (Resultado & { fone?: string })[], crm);
-  // so o periodo pedido (o resto foi buscado so para o cruzamento); a repetida do CRM aparece riscada, sem somar
+  // cada negocio ganho vira uma linha por PRODUTO NOVO (o que o cliente ainda nao tinha comprado num negocio anterior)
+  const todasCrm = produtosNovosCrm(((rCrm.error ? [] : rCrm.data ?? []) as Crm[]).map((v) => ({ ...v, dia: diaBR(v.ganho_em), fone: chaveFone(v.telefone), tipo: v.tipo || "outro" })));
+  cruzar(linhas as (Resultado & { fone?: string })[], todasCrm.filter((v) => !v.repetidaDe));
+  // so o periodo pedido (o resto foi buscado so para o cruzamento); o negocio que so repete produtos aparece riscado, sem somar
   for (const v of todasCrm.filter((x) => x.dia >= de && x.dia <= ate)) {
     linhas.push({
       chave: `c:${v.deal_id}`, origem: "crm", id: null, auditoriaId: null, data: v.dia, vendedorId: v.vendedor_id ?? v.vendedorConversa ?? null,
       cliente: v.cliente?.trim() ?? "", empresa: typeof v.campos?.["nome-da-empresa"] === "string" ? v.campos["nome-da-empresa"] : "",
       produto: PRODUTOS.some(([k]) => k === v.tipo) ? v.tipo : "outro", forma: null, valor: v.valor_cents != null ? v.valor_cents / 100 : null,
-      valorIA: null, ajustada: false, excluida: false, duplicada: v.repetidaDe ? "negócio repetido no CRM (mesma venda)" : null, naoLancada: false, naConversa: !!v.vista,
+      valorIA: null, ajustada: false, excluida: false, duplicada: v.repetidaDe ? "produtos já contados em outro negócio do cliente" : null, naoLancada: false, naConversa: !!v.vista,
     });
   }
   const noPeriodo = linhas.filter((r) => r.data >= de && r.data <= ate).map(({ ...r }) => { delete (r as { fone?: string }).fone; return r as Resultado; });
@@ -96,23 +95,76 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
 }
 
 // ---------- cruzamento ----------
-type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | null; cliente: string | null; valor_cents: number | null; ganho_em: string; vendedor_id: string | null; produto: string | null; tipo: string | null; campos: Record<string, unknown> | null };
+type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | null; cliente: string | null; valor_cents: number | null; ganho_em: string; vendedor_id: string | null; produto: string | null; tipo: string | null; produtos?: unknown; campos: Record<string, unknown> | null };
 type CrmCruzado = Crm & { dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string };
 
-// O mesmo cliente com mais de um negocio ganho do mesmo produto (ou sem produto), ate JANELA dias: e a mesma venda
-// lancada duas vezes no CRM (ex.: um negocio por instancia). Vale o primeiro ganho, com o produto e o vendedor de quem tiver.
-export function unirRepetidasCrm(lista: CrmCruzado[]): CrmCruzado[] {
-  const validas: CrmCruzado[] = [];
-  for (const v of [...lista].sort((a, b) => a.ganho_em.localeCompare(b.ganho_em))) {
-    const mesmo = validas.find((x) => ((x.contato_crm_id && x.contato_crm_id === v.contato_crm_id) || (x.fone && x.fone === v.fone))
-      && (x.tipo === v.tipo || x.tipo === "outro" || v.tipo === "outro") && distDias(x.dia, v.dia) <= JANELA);
-    if (!mesmo) { validas.push(v); continue; }
-    v.repetidaDe = mesmo.deal_id;
-    if (mesmo.tipo === "outro" && v.tipo !== "outro") { mesmo.tipo = v.tipo; mesmo.produto = v.produto; }
-    if (!mesmo.vendedor_id && v.vendedor_id) mesmo.vendedor_id = v.vendedor_id;
-    if (mesmo.valor_cents == null && v.valor_cents != null) mesmo.valor_cents = v.valor_cents;
+type Item = { produto_id?: string | null; nome?: string | null; quantidade?: number | null; total_cents?: number | null };
+// Tipo do produto pelo nome (o mesmo de supabase/functions/crm-vendas)
+export function tipoDoProduto(nome: string | null | undefined, valorCents: number | null = null): string {
+  const n = String(nome ?? "").toLowerCase();
+  if (/imers/.test(n)) return "imersao";
+  if (/in.?company/.test(n)) return "incompany";
+  if (/workshop/.test(n)) return "workshop";
+  if (/plataforma|start/.test(n)) return "plataforma";
+  if (n) return "outro";
+  return valorCents != null && valorCents > 0 && valorCents <= 100000 ? "workshop" : "outro"; // sem produto: ate R$ 1.000 e workshop
+}
+const mesmoItem = (a: Item, b: Item) => (a.produto_id ? a.produto_id === b.produto_id : a.nome === b.nome) && (a.total_cents ?? 0) === (b.total_cents ?? 0);
+// itens cuja soma e exatamente o valor (para descobrir o que tinha num negocio antigo que veio sem a lista de produtos)
+function itensQueSomam(itens: Item[], alvo: number): number[] | null {
+  const n = Math.min(itens.length, 12);
+  for (let m = 1; m < 1 << n; m++) {
+    let t = 0; const idx: number[] = [];
+    for (let k = 0; k < n; k++) if (m & (1 << k)) { t += itens[k].total_cents ?? 0; idx.push(k); }
+    if (t === alvo) return idx;
   }
-  return validas;
+  return null;
+}
+
+// O negocio do CRM acumula os produtos: o negocio novo de um cliente lista tambem o que ele ja comprou antes
+// (ex.: Imersao + Workshop em outubro; em novembro o negocio traz Imersao + Workshop + In-Company). Por cliente
+// (contato do CRM, ou numero), em ordem de ganho, so conta o produto que ainda nao foi contado num negocio anterior.
+// Negocio antigo sem a lista de produtos (a API so detalha o negocio atual de cada conversa): descobre pelos itens de
+// um negocio seguinte que somam exatamente o valor dele. Se nada sobra de novo, o negocio inteiro e repetido.
+export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
+  const out: CrmCruzado[] = [];
+  const porCliente = new Map<string, CrmCruzado[]>();
+  for (const v of lista) { const k = v.contato_crm_id || v.fone || v.deal_id; porCliente.set(k, [...(porCliente.get(k) ?? []), v]); }
+  for (const negocios of porCliente.values()) {
+    negocios.sort((a, b) => a.ganho_em.localeCompare(b.ganho_em));
+    const contados: Item[] = [];                       // itens ja contados deste cliente
+    const semLista: { v: CrmCruzado; resolvido: boolean }[] = [];
+    // desconto dado no negocio inteiro: o valor do negocio e o que vale, dividido entre os produtos na proporcao do preco
+    const fator = (v: CrmCruzado) => {
+      const soma = ((Array.isArray(v.produtos) ? v.produtos : []) as Item[]).reduce((t, it) => t + (it.total_cents ?? 0), 0);
+      return v.valor_cents != null && soma > 0 && soma !== v.valor_cents ? v.valor_cents / soma : 1;
+    };
+    const linha = (v: CrmCruzado, it: Item | null, n: number, extra: Partial<CrmCruzado> = {}, dono: CrmCruzado = v): CrmCruzado => ({
+      ...v, deal_id: it ? `${v.deal_id}#${n}` : v.deal_id, produto: it?.nome ?? v.produto,
+      tipo: it ? tipoDoProduto(it.nome) : tipoDoProduto(v.produto, v.valor_cents), valor_cents: it ? Math.round((it.total_cents ?? 0) * fator(dono)) : v.valor_cents, ...extra,
+    });
+    for (const v of negocios) {
+      const itens = (Array.isArray(v.produtos) ? v.produtos : []) as Item[];
+      if (!itens.length) { semLista.push({ v, resolvido: false }); continue; }
+      // tira o que ja foi contado em negocio anterior
+      const resto = [...contados], novos: Item[] = [];
+      for (const it of itens) { const i = resto.findIndex((x) => mesmoItem(x, it)); if (i >= 0) resto.splice(i, 1); else novos.push(it); }
+      // negocio anterior sem lista: os itens que somam o valor dele eram dele
+      for (const p of semLista.filter((x) => !x.resolvido && x.v.valor_cents)) {
+        const idx = itensQueSomam(novos, p.v.valor_cents as number);
+        if (!idx) continue;
+        p.resolvido = true;
+        idx.forEach((k, n) => out.push(linha(p.v, novos[k], n, {}, { ...p.v, produtos: idx.map((x) => novos[x]) })));
+        for (const k of [...idx].sort((a, b) => b - a)) { contados.push(novos[k]); novos.splice(k, 1); }
+      }
+      if (novos.length) novos.forEach((it, n) => out.push(linha(v, it, n)));
+      else out.push(linha(v, null, 0, { repetidaDe: "anterior", tipo: tipoDoProduto(itens[0]?.nome) }));
+      contados.push(...novos);
+    }
+    // negocio sem lista que nao foi explicado por nenhum outro: conta pelo valor
+    for (const p of semLista.filter((x) => !x.resolvido)) out.push(linha(p.v, null, 0));
+  }
+  return out;
 }
 const JANELA = 30; // dias: a mesma venda repetida (no CRM ou na conversa)
 const JANELA_CRM = 45; // dias: a venda da conversa que tambem esta no CRM
