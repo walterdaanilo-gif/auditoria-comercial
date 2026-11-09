@@ -37,3 +37,7 @@ create or replace function public.crm_disparar_vendas() returns bigint language 
 $$;
 revoke all on function public.crm_disparar_vendas() from public, anon, authenticated;
 select cron.schedule('crm-vendas-15min', '7,22,37,52 * * * *', 'select public.crm_disparar_vendas()');
+
+-- controle de leitura por contato (a funcao le os negocios de cada contato, de qualquer instancia)
+create table if not exists public.crm_contatos_lidos (contato_crm_id text primary key, org_id uuid not null references public.organizacoes(id), lido_em timestamptz not null default now());
+alter table public.crm_contatos_lidos enable row level security;

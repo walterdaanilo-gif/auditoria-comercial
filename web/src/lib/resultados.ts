@@ -49,7 +49,7 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
     db.from("auditorias").select("id,vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(id,data,canal,contato,contato_nome,telefone)")
       .eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", deLargo).lte("conversas.data", ate).limit(5000),
     db.from("resultados_vendas").select("*").eq("org_id", org).gte("data", de).lte("data", ate).limit(5000),
-    db.from("crm_vendas").select("deal_id,telefone,cliente,valor_cents,ganho_em,vendedor_id,produto,tipo,campos").eq("org_id", org).eq("status", "won")
+    db.from("crm_vendas").select("deal_id,contato_crm_id,telefone,cliente,valor_cents,ganho_em,vendedor_id,produto,tipo,campos").eq("org_id", org).eq("status", "won")
       .gte("ganho_em", `${deLargo}T00:00:00-03:00`).lte("ganho_em", `${ateLargo}T23:59:59-03:00`).limit(5000),
   ]);
   const tabelaOk = !rAj.error;
@@ -75,15 +75,16 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
   for (const m of ajustes.filter((x) => !x.auditoria_id)) {
     linhas.push({ chave: `m:${m.id}`, origem: "manual", id: m.id, auditoriaId: null, data: m.data, vendedorId: m.vendedor_id, cliente: m.cliente?.trim() ?? "", empresa: m.empresa?.trim() ?? "", produto: m.produto, forma: m.forma_pagamento, valor: num(m.valor), valorIA: null, ajustada: false, excluida: !!m.excluida, duplicada: null, naoLancada: false, naConversa: false });
   }
-  const crm: CrmCruzado[] = ((rCrm.error ? [] : rCrm.data ?? []) as Crm[]).map((v) => ({ ...v, dia: diaBR(v.ganho_em), fone: chaveFone(v.telefone), tipo: v.tipo || "outro" }));
+  const todasCrm: CrmCruzado[] = ((rCrm.error ? [] : rCrm.data ?? []) as Crm[]).map((v) => ({ ...v, dia: diaBR(v.ganho_em), fone: chaveFone(v.telefone), tipo: v.tipo || "outro" }));
+  const crm = unirRepetidasCrm(todasCrm);
   cruzar(linhas as (Resultado & { fone?: string })[], crm);
-  // so o periodo pedido (o resto foi buscado so para o cruzamento)
-  for (const v of crm.filter((x) => x.dia >= de && x.dia <= ate)) {
+  // so o periodo pedido (o resto foi buscado so para o cruzamento); a repetida do CRM aparece riscada, sem somar
+  for (const v of todasCrm.filter((x) => x.dia >= de && x.dia <= ate)) {
     linhas.push({
       chave: `c:${v.deal_id}`, origem: "crm", id: null, auditoriaId: null, data: v.dia, vendedorId: v.vendedor_id ?? v.vendedorConversa ?? null,
       cliente: v.cliente?.trim() ?? "", empresa: typeof v.campos?.["nome-da-empresa"] === "string" ? v.campos["nome-da-empresa"] : "",
       produto: PRODUTOS.some(([k]) => k === v.tipo) ? v.tipo : "outro", forma: null, valor: v.valor_cents != null ? v.valor_cents / 100 : null,
-      valorIA: null, ajustada: false, excluida: false, duplicada: null, naoLancada: false, naConversa: !!v.vista,
+      valorIA: null, ajustada: false, excluida: false, duplicada: v.repetidaDe ? "negócio repetido no CRM (mesma venda)" : null, naoLancada: false, naConversa: !!v.vista,
     });
   }
   const noPeriodo = linhas.filter((r) => r.data >= de && r.data <= ate).map(({ ...r }) => { delete (r as { fone?: string }).fone; return r as Resultado; });
@@ -92,8 +93,24 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
 }
 
 // ---------- cruzamento ----------
-type Crm = { deal_id: string; telefone: string | null; cliente: string | null; valor_cents: number | null; ganho_em: string; vendedor_id: string | null; produto: string | null; tipo: string | null; campos: Record<string, unknown> | null };
-type CrmCruzado = Crm & { dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null };
+type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | null; cliente: string | null; valor_cents: number | null; ganho_em: string; vendedor_id: string | null; produto: string | null; tipo: string | null; campos: Record<string, unknown> | null };
+type CrmCruzado = Crm & { dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string };
+
+// O mesmo cliente com mais de um negocio ganho do mesmo produto (ou sem produto), ate JANELA dias: e a mesma venda
+// lancada duas vezes no CRM (ex.: um negocio por instancia). Vale o primeiro ganho, com o produto e o vendedor de quem tiver.
+export function unirRepetidasCrm(lista: CrmCruzado[]): CrmCruzado[] {
+  const validas: CrmCruzado[] = [];
+  for (const v of [...lista].sort((a, b) => a.ganho_em.localeCompare(b.ganho_em))) {
+    const mesmo = validas.find((x) => ((x.contato_crm_id && x.contato_crm_id === v.contato_crm_id) || (x.fone && x.fone === v.fone))
+      && (x.tipo === v.tipo || x.tipo === "outro" || v.tipo === "outro") && distDias(x.dia, v.dia) <= JANELA);
+    if (!mesmo) { validas.push(v); continue; }
+    v.repetidaDe = mesmo.deal_id;
+    if (mesmo.tipo === "outro" && v.tipo !== "outro") { mesmo.tipo = v.tipo; mesmo.produto = v.produto; }
+    if (!mesmo.vendedor_id && v.vendedor_id) mesmo.vendedor_id = v.vendedor_id;
+    if (mesmo.valor_cents == null && v.valor_cents != null) mesmo.valor_cents = v.valor_cents;
+  }
+  return validas;
+}
 const JANELA = 30; // dias: a mesma venda vista na conversa e lancada no CRM
 const ALTOS = ["imersao", "plataforma", "incompany", "outro"];
 const somaDias = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
