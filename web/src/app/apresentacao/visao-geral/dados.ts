@@ -33,7 +33,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     db.from("profiles").select("id,nome,funcao,ativo,foto_url").order("nome"),
     db.from("instancias_whatsapp").select("vendedor_id").eq("org_id", org),
     db.from("audit_settings").select("*").eq("org_id", org).maybeSingle(),
-    // vendas em dinheiro = a mesma lista da aba Resultados (vendas da IA com ajustes + vendas manuais)
+    // vendas em dinheiro = a mesma lista da aba Resultados (CRM + vendas da IA com ajustes + manuais, sem duplicar)
     listarResultados(db, org, ini, hoje),
     // mesma conta do painel de atendimento: tempos de resposta das conversas auditadas
     db.from("auditorias").select("vendedor_id,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,conversas!inner(data,canal)").eq("org_id", org).neq("conversas.canal", "importada").gte("conversas.data", ini).lte("conversas.data", hoje).limit(5000),
@@ -46,8 +46,8 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const closers = time.filter((p) => p.funcao === "closer");
   const ids = new Set(time.map((p) => p.id)), sdrIds = new Set(sdrs.map((p) => p.id));
   const linhas = ((rRes.data ?? []) as Linha[]).filter((l) => ids.has(l.vendedor_id));
-  // vendas da IA: so de quem e do time; vendas manuais entram todas (mesmo sem vendedor)
-  const vendas = resultados.linhas.filter((r) => contaNoFaturamento(r) && (r.origem === "manual" || (r.vendedorId != null && ids.has(r.vendedorId))));
+  // vendas da IA: so de quem e do time; vendas do CRM e manuais entram todas (mesmo sem vendedor). Ja vem sem duplicar.
+  const vendas = resultados.linhas.filter((r) => contaNoFaturamento(r) && (r.origem !== "ia" || (r.vendedorId != null && ids.has(r.vendedorId))));
   const tempos = ((rTem.data ?? []) as unknown as Tempos[]).filter((t) => ids.has(t.vendedor_id));
   const cfg = (rCfg.data ?? {}) as Record<string, unknown>;
 

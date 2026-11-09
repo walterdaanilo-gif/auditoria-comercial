@@ -12,7 +12,7 @@ export const metadata = { title: "Resultados · Cabueta do Elon Musk" };
 
 const sel = "input !py-1.5";
 
-// Resultados: as vendas em dinheiro do periodo (as que a IA detectou, com ajustes, e as lancadas a mao).
+// Resultados: as vendas em dinheiro do periodo (as ganhas no CRM, as que a IA detectou, com ajustes, e as lancadas a mao), sem duplicar.
 // E a mesma lista que o faturamento da TV soma: mudou aqui, muda la.
 export default async function Resultados({ searchParams: spP }: { searchParams: Promise<{ p?: string; de?: string; ate?: string; ok?: string; erro?: string }> }) {
   const sp = await spP;
@@ -30,7 +30,8 @@ export default async function Resultados({ searchParams: spP }: { searchParams: 
   const { linhas } = res;
   const contam = linhas.filter(contaNoFaturamento);
   const total = contam.reduce((s, r) => s + (r.valor ?? 0), 0);
-  const semValor = linhas.filter((r) => !r.excluida && (r.valor ?? 0) <= 0 && r.origem === "ia").length;
+  const semValor = linhas.filter((r) => !r.excluida && !r.duplicada && (r.valor ?? 0) <= 0 && r.origem === "ia").length;
+  const naoLancadas = linhas.filter((r) => r.naoLancada && !r.excluida);
   const volta = new URLSearchParams(periodo.p === "livre" ? { de: periodo.de, ate: periodo.ate } : { p: periodo.p }).toString();
   const porForma = FORMAS.map(([k, t]) => [t, contam.filter((r) => r.forma === k).reduce((s, r) => s + (r.valor ?? 0), 0)] as [string, number]).filter(([, v]) => v > 0);
   const semForma = contam.filter((r) => !r.forma).reduce((s, r) => s + (r.valor ?? 0), 0);
@@ -45,7 +46,7 @@ export default async function Resultados({ searchParams: spP }: { searchParams: 
   return (
     <div className="space-y-5">
       <div><h1 className="page-title">Resultados</h1>
-        <p className="page-sub">As vendas em dinheiro do período: as que a IA detectou nas conversas e as que você lança à mão. Esta lista é a que o faturamento da TV soma: se você corrigir um valor ou adicionar uma venda aqui, a TV acompanha.</p></div>
+        <p className="page-sub">As vendas em dinheiro do período: as ganhas no CRM, as que a IA detectou nas conversas e as que você lança à mão, cada uma contada uma vez. Esta lista é a que o faturamento da TV soma: se você corrigir um valor ou adicionar uma venda aqui, a TV acompanha.</p></div>
       {sp.erro && <p className="card border-bad text-sm text-bad">{sp.erro}</p>}
       {sp.ok && <p className="card border-ok text-sm text-ok">{sp.ok}</p>}
       {!res.tabelaOk && (
@@ -67,6 +68,12 @@ export default async function Resultados({ searchParams: spP }: { searchParams: 
         <div className="card"><div className="label">Sem valor</div><div className="mt-1 text-3xl font-extrabold tabular-nums">{semValor}</div>
           <div className="mt-1 text-sm text-mute">vendas da IA em que ela não achou o valor: edite para entrarem no faturamento</div></div>
       </div>
+
+      {!!naoLancadas.length && (
+        <div className="aviso flex gap-3"><AlertTriangle size={20} className="mt-0.5 shrink-0 text-warn" />
+          <div><b className="text-base text-warn">{naoLancadas.length} venda{naoLancadas.length === 1 ? "" : "s"} da conversa sem lançamento no CRM</b>
+            <p className="mt-1 text-ink/90">A IA viu {naoLancadas.length === 1 ? "esta venda" : "estas vendas"} na conversa, mas não {naoLancadas.length === 1 ? "achei" : "achei nenhuma"} no CRM: {naoLancadas.map((r) => `${r.cliente || "cliente sem nome"} (${rotuloProduto(r.produto)}${r.valor ? `, ${brlCompleto(r.valor)}` : ""})`).join(", ")}. Lance no CRM para entrar no faturamento, ou tire do faturamento se não foi venda.</p></div></div>
+      )}
 
       <details className="card" open={!!sp.erro}>
         <summary className="cursor-pointer font-bold">Adicionar venda manualmente</summary>
@@ -91,7 +98,7 @@ export default async function Resultados({ searchParams: spP }: { searchParams: 
           <thead><tr>{["Dia", "Quem vendeu", "Cliente", "Empresa", "Produto", "Pagamento", "Valor", "Origem", ""].map((h) => <th key={h} className={`th ${h === "Valor" ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
           <tbody>
             {linhas.map((r) => (
-              <tr key={r.chave} className={r.excluida ? "opacity-50" : ""}>
+              <tr key={r.chave} className={r.excluida || r.duplicada ? "opacity-50" : ""}>
                 <td className="td whitespace-nowrap tabular-nums">{fmtData(r.data)}</td>
                 <td className="td">{r.vendedorId ? nomes.get(r.vendedorId) ?? "—" : "—"}</td>
                 <td className={`td ${r.excluida ? "line-through" : ""}`}>{r.cliente || <span className="text-mute">—</span>}</td>
@@ -103,11 +110,13 @@ export default async function Resultados({ searchParams: spP }: { searchParams: 
                   {r.ajustada && r.valorIA != null && r.valorIA !== r.valor && <div className="text-xs font-normal text-mute">IA leu {brlCompleto(r.valorIA)}</div>}
                 </td>
                 <td className="td whitespace-nowrap">
-                  <span className={`chip ${r.origem === "manual" ? "border-warn text-warn" : "border-brand text-brand"}`}>{r.origem === "manual" ? "Manual" : r.ajustada ? "IA · ajustada" : "IA"}</span>
+                  <span className={`chip ${r.origem === "manual" ? "border-warn text-warn" : r.origem === "crm" ? "border-ok text-ok" : "border-brand text-brand"}`}>{r.origem === "manual" ? "Manual" : r.origem === "crm" ? (r.naConversa ? "CRM · conversa" : "CRM") : r.ajustada ? "IA · ajustada" : "IA"}</span>
                   {r.excluida && <span className="ml-1 text-xs text-bad">fora do faturamento</span>}
+                  {r.duplicada && <div className="mt-0.5 text-xs text-mute">{r.duplicada}: não soma</div>}
+                  {r.naoLancada && !r.excluida && <div className="mt-0.5 text-xs text-warn">não lançada no CRM: não soma</div>}
                 </td>
                 <td className="td">
-                  <details className="min-w-[230px]">
+                  {r.origem === "crm" ? <span className="text-xs text-mute">Edite no CRM</span> : <details className="min-w-[230px]">
                     <summary className="cursor-pointer text-xs font-semibold text-brand">Editar</summary>
                     <form action={salvarVenda} className="mt-2 grid gap-2">
                       <Campos r={r} />
@@ -130,7 +139,7 @@ export default async function Resultados({ searchParams: spP }: { searchParams: 
                         <form action={removerVenda}><Campos r={r} /><button className="btn-ghost !py-1 text-xs text-bad">{r.origem === "manual" ? "Apagar venda" : "Tirar do faturamento"}</button></form>
                       )}
                     </div>
-                  </details>
+                  </details>}
                 </td>
               </tr>
             ))}
@@ -138,7 +147,7 @@ export default async function Resultados({ searchParams: spP }: { searchParams: 
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-mute">A venda da IA mostra o cliente pelo nome do contato no WhatsApp. A IA não lê empresa nem forma de pagamento: preencha em Editar. Convites do workshop (cupom R$ 0) não entram, porque não são venda em dinheiro.</p>
+      <p className="text-xs text-mute">As vendas ganhas no CRM entram sozinhas (a cada 15 minutos) com o produto do CRM. Cada venda conta uma vez: se a mesma venda aparece na conversa ou foi lançada à mão, vale a do CRM. Imersão, Plataforma ou In-company que só aparece na conversa espera o lançamento no CRM para somar. A venda da IA mostra o cliente pelo nome do contato no WhatsApp. A IA não lê empresa nem forma de pagamento: preencha em Editar. Convites do workshop (cupom R$ 0) não entram, porque não são venda em dinheiro.</p>
     </div>
   );
 }
