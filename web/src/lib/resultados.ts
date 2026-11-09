@@ -52,7 +52,7 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
       .eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", deLargo).lte("conversas.data", ate).limit(5000),
     db.from("resultados_vendas").select("*").eq("org_id", org).gte("data", de).lte("data", ate).limit(5000),
     // todos os negocios ganhos (de qualquer data): o negocio novo do CRM repete os produtos que o cliente ja comprou antes
-    db.from("crm_vendas").select("deal_id,contato_crm_id,telefone,cliente,valor_cents,ganho_em,vendedor_id,produto,tipo,produtos,campos").eq("org_id", org).eq("status", "won").limit(5000),
+    db.from("crm_vendas").select("deal_id,contato_crm_id,telefone,cliente,valor_cents,aberto_em,ganho_em,vendedor_id,produto,tipo,produtos,campos").eq("org_id", org).eq("status", "won").limit(5000),
   ]);
   const tabelaOk = !rAj.error;
   const ajustes = (tabelaOk ? rAj.data ?? [] : []) as Ajuste[];
@@ -95,8 +95,21 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
 }
 
 // ---------- cruzamento ----------
-type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | null; cliente: string | null; valor_cents: number | null; ganho_em: string; vendedor_id: string | null; produto: string | null; tipo: string | null; produtos?: unknown; campos: Record<string, unknown> | null };
-type CrmCruzado = Crm & { dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string };
+type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | null; cliente: string | null; valor_cents: number | null; aberto_em?: string | null; ganho_em: string; vendedor_id: string | null; produto: string | null; tipo: string | null; produtos?: unknown; campos: Record<string, unknown> | null };
+type CrmCruzado = Crm & { dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string; diaCerto?: boolean };
+
+// Dia da VENDA (nao o dia em que o negocio foi marcado como ganho: o time lanca vendas antigas de uma vez no CRM).
+// 1) "Data do diagnostico" do negocio; 2) workshop: o dia em que o negocio foi aberto (quando o link foi mandado);
+// 3) aberto ate 7 dias antes do ganho: o dia da abertura; 4) senao, o ganho. O cruzamento com a conversa ainda pode
+// antecipar a venda grande sem diagnostico para o dia em que ela apareceu na conversa.
+export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; campos?: Record<string, unknown> | null }, tipo: string): { dia: string; certo: boolean } {
+  const ganho = diaBR(v.ganho_em);
+  const diag = typeof v.campos?.["data-do-diagnostico"] === "string" ? (v.campos["data-do-diagnostico"] as string).slice(0, 10) : "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(diag) && diag <= ganho) return { dia: diag, certo: true };
+  const aberto = v.aberto_em ? diaBR(v.aberto_em) : "";
+  if (aberto && aberto <= ganho && (tipo === "workshop" || distDias(aberto, ganho) <= 7)) return { dia: aberto, certo: tipo === "workshop" };
+  return { dia: ganho, certo: false };
+}
 
 type Item = { produto_id?: string | null; nome?: string | null; quantidade?: number | null; total_cents?: number | null };
 // Tipo do produto pelo nome (o mesmo de supabase/functions/crm-vendas)
@@ -139,10 +152,12 @@ export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
       const soma = ((Array.isArray(v.produtos) ? v.produtos : []) as Item[]).reduce((t, it) => t + (it.total_cents ?? 0), 0);
       return v.valor_cents != null && soma > 0 && soma !== v.valor_cents ? v.valor_cents / soma : 1;
     };
-    const linha = (v: CrmCruzado, it: Item | null, n: number, extra: Partial<CrmCruzado> = {}, dono: CrmCruzado = v): CrmCruzado => ({
-      ...v, deal_id: it ? `${v.deal_id}#${n}` : v.deal_id, produto: it?.nome ?? v.produto,
-      tipo: it ? tipoDoProduto(it.nome) : tipoDoProduto(v.produto, v.valor_cents), valor_cents: it ? Math.round((it.total_cents ?? 0) * fator(dono)) : v.valor_cents, ...extra,
-    });
+    const linha = (v: CrmCruzado, it: Item | null, n: number, extra: Partial<CrmCruzado> = {}, dono: CrmCruzado = v): CrmCruzado => {
+      const tipo = it ? tipoDoProduto(it.nome) : tipoDoProduto(v.produto, v.valor_cents);
+      const { dia, certo } = diaDaVenda(v, tipo);
+      return { ...v, deal_id: it ? `${v.deal_id}#${n}` : v.deal_id, produto: it?.nome ?? v.produto, tipo, dia, diaCerto: certo,
+        valor_cents: it ? Math.round((it.total_cents ?? 0) * fator(dono)) : v.valor_cents, ...extra };
+    };
     for (const v of negocios) {
       const itens = (Array.isArray(v.produtos) ? v.produtos : []) as Item[];
       if (!itens.length) { semLista.push({ v, resolvido: false }); continue; }
@@ -188,7 +203,10 @@ export function cruzar(linhas: (Resultado & { fone?: string })[], crm: CrmCruzad
   // 1) IA x CRM: mesmo numero, qualquer produto, ate JANELA_CRM dias (o CRM manda)
   for (const r of linhas.filter((x) => x.origem === "ia")) {
     const v = r.fone ? crm.filter((c) => c.fone === r.fone && distDias(c.dia, r.data) <= JANELA_CRM).sort((a, b) => Number(compativel(r.produto, b.tipo)) - Number(compativel(r.produto, a.tipo)) || distDias(a.dia, r.data) - distDias(b.dia, r.data))[0] : undefined;
-    if (v) { r.duplicada = "já contada no CRM"; v.vista = true; v.vendedorConversa ??= r.vendedorId; }
+    if (v) {
+      r.duplicada = "já contada no CRM"; v.vista = true; v.vendedorConversa ??= r.vendedorId;
+      if (!v.diaCerto && r.data < v.dia && compativel(r.produto, v.tipo)) v.dia = r.data; // a venda apareceu antes na conversa
+    }
   }
   // 2) IA repetida em mais de um dia: vale a primeira (ou a que foi ajustada a mao)
   const grupos = new Map<string, (Resultado & { fone?: string })[]>();
