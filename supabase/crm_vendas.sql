@@ -44,3 +44,18 @@ alter table public.crm_contatos_lidos enable row level security;
 
 -- quem leva todas as vendas de workshop (na Weevo, o Ruan)
 alter table public.audit_settings add column if not exists vendedor_workshop uuid references public.profiles(id) on delete set null;
+
+-- ---------- tempo real (aviso do CRM + varredura de 3 min) ----------
+-- Segredo do aviso do CRM (webhook): a funcao crm-vendas compara ?k= com esta linha. Nunca vai ao navegador.
+create table if not exists public.crm_webhook_segredo (id int primary key default 1 check (id = 1), token text not null default encode(gen_random_bytes(24), 'hex'));
+alter table public.crm_webhook_segredo enable row level security;
+-- Registro do que chegou pelo aviso (sem dados pessoais): para conferir que os avisos estao chegando
+create table if not exists public.crm_eventos (id bigserial primary key, recebido_em timestamptz not null default now(), org text, evento text, chaves text[], chat_id text, acao text);
+alter table public.crm_eventos enable row level security;
+-- Estados da conversa que ja geraram releitura do cliente (evita reler o mesmo cliente a cada varredura)
+alter table public.crm_contatos_lidos add column if not exists assinatura text;
+-- Varredura a cada 3 minutos (rede de seguranca do aviso instantaneo)
+-- select cron.schedule('crm-vendas-3min', '*/3 * * * *', 'select public.crm_disparar_vendas()');
+
+-- REGRA DE CONTAGEM: venda = unidade. Uma reuniao ou um comprovante pode gerar mais de uma Imersao;
+-- item do negocio com quantidade N vira N vendas (web/src/lib/resultados.ts, abrirUnidades).

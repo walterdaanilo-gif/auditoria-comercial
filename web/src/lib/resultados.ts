@@ -161,6 +161,15 @@ function itensQueSomam(itens: Item[], alvo: number): number[] | null {
 // (contato do CRM, ou numero), em ordem de ganho, so conta o produto que ainda nao foi contado num negocio anterior.
 // Negocio antigo sem a lista de produtos (a API so detalha o negocio atual de cada conversa): descobre pelos itens de
 // um negocio seguinte que somam exatamente o valor dele. Se nada sobra de novo, o negocio inteiro e repetido.
+// Uma linha com quantidade 3 sao 3 vendas: abre em unidades (o centavo que sobra vai para a primeira)
+export function abrirUnidades(itens: Item[]): Item[] {
+  return itens.flatMap((it) => {
+    const q = Math.min(20, Math.max(1, Math.trunc(Number(it.quantidade) || 1)));
+    if (q === 1) return [it];
+    const total = it.total_cents ?? 0, base = Math.floor(total / q), resto = total - base * q;
+    return Array.from({ length: q }, (_, i) => ({ ...it, quantidade: 1, total_cents: base + (i === 0 ? resto : 0) }));
+  });
+}
 export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
   const out: CrmCruzado[] = [];
   const porCliente = new Map<string, CrmCruzado[]>();
@@ -171,7 +180,7 @@ export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
     const semLista: { v: CrmCruzado; resolvido: boolean }[] = [];
     // desconto dado no negocio inteiro: o valor do negocio e o que vale, dividido entre os produtos na proporcao do preco
     const fator = (v: CrmCruzado) => {
-      const soma = ((Array.isArray(v.produtos) ? v.produtos : []) as Item[]).reduce((t, it) => t + (it.total_cents ?? 0), 0);
+      const soma = abrirUnidades((Array.isArray(v.produtos) ? v.produtos : []) as Item[]).reduce((t, it) => t + (it.total_cents ?? 0), 0);
       return v.valor_cents != null && soma > 0 && soma !== v.valor_cents ? v.valor_cents / soma : 1;
     };
     const linha = (v: CrmCruzado, it: Item | null, n: number, extra: Partial<CrmCruzado> = {}, dono: CrmCruzado = v): CrmCruzado => {
@@ -181,7 +190,7 @@ export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
         valor_cents: it ? Math.round((it.total_cents ?? 0) * fator(dono)) : v.valor_cents, ...extra };
     };
     for (const v of negocios) {
-      const itens = (Array.isArray(v.produtos) ? v.produtos : []) as Item[];
+      const itens = abrirUnidades((Array.isArray(v.produtos) ? v.produtos : []) as Item[]);
       if (!itens.length) { semLista.push({ v, resolvido: false }); continue; }
       // tira o que ja foi contado em negocio anterior
       const resto = [...contados], novos: Item[] = [];
