@@ -35,6 +35,7 @@ export type Resultado = {
   duplicada: string | null;         // a mesma venda ja esta em outra linha (o motivo); nao soma
   naoLancada: boolean;              // venda alta so na conversa, empresa com CRM ligado: nao soma ate lancar no CRM
   naConversa: boolean;              // venda do CRM que tambem foi vista na conversa
+  valorEstimado?: "crm" | "padrao"; // venda da IA sem valor na conversa: valor do negocio do CRM ou o padrao da empresa
   indicadoPor?: string;             // so na venda do CRM: "Indicado por" do negocio (vazio = nao foi indicado ou nao informado)
 };
 
@@ -48,15 +49,17 @@ const num = (x: unknown): number | null => (x == null || x === "" ? null : Numbe
 export async function listarResultados(db: SupabaseClient, org: string, de: string, ate: string): Promise<{ linhas: Resultado[]; convites: string[]; tabelaOk: boolean; erro: string | null }> {
   // janela maior para achar a mesma venda antes ou depois do periodo (e nao contar de novo)
   const deLargo = somaDias(de, -JANELA_CRM);
-  const [rAud, rAj, rCrm, rCfg, rPerf] = await Promise.all([
+  const [rAud, rAj, rCrm, rCfg, rPerf, rWs] = await Promise.all([
     db.from("auditorias").select("id,vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(id,data,canal,contato,contato_nome,telefone)")
       .eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", deLargo).lte("conversas.data", ate).limit(5000),
     db.from("resultados_vendas").select("*").eq("org_id", org).gte("data", de).lte("data", ate).limit(5000),
     // todos os negocios ganhos (de qualquer data): o negocio novo do CRM repete os produtos que o cliente ja comprou antes
     db.from("crm_vendas").select("deal_id,contato_crm_id,telefone,cliente,valor_cents,aberto_em,ganho_em,vendedor_id,produto,tipo,produtos,campos").eq("org_id", org).eq("status", "won").limit(5000),
     // quem leva as vendas de workshop (Configuracoes; na Weevo, o Ruan)
-    db.from("audit_settings").select("vendedor_workshop").eq("org_id", org).maybeSingle(),
+    db.from("audit_settings").select("vendedor_workshop,workshop_valor_padrao").eq("org_id", org).maybeSingle(),
     db.from("profiles").select("id,nome,org_id,ativo").limit(1000),
+    // negocios de valor de workshop (ate R$ 1.000, qualquer situacao menos perdido): o valor que o cliente pagou, quando a conversa nao diz
+    db.from("crm_vendas").select("telefone,valor_cents,aberto_em").eq("org_id", org).neq("status", "lost").gt("valor_cents", 0).lte("valor_cents", 100000).limit(5000),
   ]);
   const tabelaOk = !rAj.error;
   const ajustes = (tabelaOk ? rAj.data ?? [] : []) as Ajuste[];
@@ -102,7 +105,21 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
       indicadoPor: indicadorDoCrm(v.campos),
     });
   }
-  const doWorkshop = ((rCfg.error ? null : rCfg.data) as { vendedor_workshop: string | null } | null)?.vendedor_workshop ?? null;
+  const cfg = (rCfg.error ? null : rCfg.data) as { vendedor_workshop: string | null; workshop_valor_padrao?: number | string | null } | null;
+  const doWorkshop = cfg?.vendedor_workshop ?? null;
+  // inscricao de workshop sem valor na conversa (a IA le R$ 0 ou nada): vale o que o cliente pagou no CRM; sem isso, o valor padrao da empresa
+  const padrao = num(cfg?.workshop_valor_padrao);
+  const pagoNoCrm = new Map<string, { v: number; ab: string }>();
+  for (const n of (rWs.error ? [] : rWs.data ?? []) as { telefone: string | null; valor_cents: number; aberto_em: string | null }[]) {
+    const k = chaveFone(n.telefone); if (!k) continue;
+    const ab = n.aberto_em ?? "";
+    if (!pagoNoCrm.has(k) || ab > pagoNoCrm.get(k)!.ab) pagoNoCrm.set(k, { v: n.valor_cents / 100, ab });
+  }
+  for (const r of linhas as (Resultado & { fone?: string })[]) {
+    if (r.origem !== "ia" || r.produto !== "workshop" || r.ajustada || r.duplicada || r.excluida || (r.valor ?? 0) > 0) continue;
+    const doCrm = r.fone ? pagoNoCrm.get(r.fone)?.v : undefined;
+    if (doCrm) { r.valor = doCrm; r.valorEstimado = "crm"; } else if (padrao && padrao > 0) { r.valor = padrao; r.valorEstimado = "padrao"; }
+  }
   if (doWorkshop) for (const r of linhas) if (r.produto === "workshop") r.vendedorId = doWorkshop;
   const noPeriodo = linhas.filter((r) => r.data >= de && r.data <= ate).map(({ ...r }) => { delete (r as { fone?: string }).fone; return r as Resultado; });
   noPeriodo.sort((x, y) => y.data.localeCompare(x.data) || (y.valor ?? -1) - (x.valor ?? -1));

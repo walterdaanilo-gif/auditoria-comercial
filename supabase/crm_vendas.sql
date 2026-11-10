@@ -59,3 +59,6 @@ alter table public.crm_contatos_lidos add column if not exists assinatura text;
 
 -- REGRA DE CONTAGEM: venda = unidade. Uma reuniao ou um comprovante pode gerar mais de uma Imersao;
 -- item do negocio com quantidade N vira N vendas (web/src/lib/resultados.ts, abrirUnidades).
+
+-- Valor padrao da inscricao de workshop quando nem a conversa nem o CRM dizem o valor (Weevo: R$ 97). Carbone: sem padrao ate informarem.
+alter table public.audit_settings add column if not exists workshop_valor_padrao numeric(10,2);
