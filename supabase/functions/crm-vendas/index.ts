@@ -88,9 +88,9 @@ async function lerContato(ctx: Ctx, contato: string, info: Info, assinatura?: st
         itens = (Array.isArray(det.corpo.products) ? det.corpo.products : []).map((p: any) => {
           const i = antes.findIndex((x) => (x.produto_id ?? x.nome) === (p.product_id ?? p.name));
           const velho = i >= 0 ? antes.splice(i, 1)[0] : null;
-          // produto acrescentado num negocio que ja tinha produtos, ou negocio aberto visto pela primeira vez: o dia em que apareceu
+          // produto acrescentado num negocio que ja tinha produtos: o dia em que apareceu (negocio novo para nos: vale a data do CRM)
           // (a data preenchida no CRM, quando existe, vale mais: web/src/lib/resultados.ts, diaDaVenda)
-          return { produto_id: p.product_id, nome: p.name, quantidade: p.quantity, total_cents: p.total_cents, visto_em: velho ? velho.visto_em ?? null : (ant?.produtos ?? []).length || (!ant && d.status === "open") ? agoraIso : null };
+          return { produto_id: p.product_id, nome: p.name, quantidade: p.quantity, total_cents: p.total_cents, visto_em: velho ? velho.visto_em ?? null : (ant?.produtos ?? []).length ? agoraIso : null };
         });
         campos = det.corpo.field_values && typeof det.corpo.field_values === "object" ? det.corpo.field_values : {};
       }
