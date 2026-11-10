@@ -82,6 +82,18 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
     rotulos.push({ x: xh, t: "hoje", hoje: true });
     if (du < N - 1) rotulos.push({ x: 840, t: fat.datasUteis[N - 1] ?? "" });
   }
+  // meta e projecao no fim do grafico: o de valor maior acima da propria linha, o outro abaixo, com 36 de distancia no minimo
+  const fins = [
+    ...(fat.meta ? [{ t: `meta ${mil(fat.meta)}`, v: fat.meta, cor: C.mute }] : []),
+    ...(ult && du < N && r.projecao !== null ? [{ t: `projeção ${mil(r.projecao)}`, v: r.projecao, cor: C.texto }] : []),
+  ].sort((a, b) => b.v - a.v);
+  const rotulosFim: { t: string; y: number; cor: string }[] = [];
+  fins.forEach((f, i) => {
+    let y = i === 0 ? Y(f.v) - 12 : Y(f.v) + 36;
+    if (i === 0) y = Math.max(y, 30);
+    else y = Math.min(Math.max(y, rotulosFim[0].y + 36), 470);
+    rotulosFim.push({ t: f.t, y, cor: f.cor });
+  });
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, minHeight: 0 }}>
       <div className="row" style={{ gap: 16 }}>
@@ -99,8 +111,8 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
         {ult && du < N && <line x1={xh} y1={Y(ult.real)} x2="860" y2={Y(r.projecao ?? 0)} stroke={C.texto} strokeWidth="4" strokeDasharray="2 8" strokeLinecap="round" />}
         {pts.length > 1 && <polyline points={pts.join(" ")} fill="none" stroke={C.real} strokeWidth="6" strokeLinejoin="round" strokeLinecap="round" />}
         {ult && <circle cx={xh} cy={Y(ult.real)} r="10" fill={C.real} stroke="#fff" strokeWidth="3" />}
-        {fat.meta ? <text x="860" y={Math.max(Y(fat.meta) - 8, 26)} fill={C.texto} fontSize="28" fontWeight="600" textAnchor="end">meta {mil(fat.meta)}</text> : null}
-        {ult && du < N && r.projecao !== null && <text x="856" y={Y(r.projecao) + 40} fill={C.texto} fontSize="28" fontWeight="600" textAnchor="end">projeção {mil(r.projecao)}</text>}
+        {/* rotulos da meta e da projecao: o de valor maior fica acima da linha dele, o outro abaixo, nunca um em cima do outro */}
+        {rotulosFim.map((l) => <text key={l.t} x="858" y={l.y} fill={l.cor} fontSize="28" fontWeight="700" textAnchor="end" stroke="#fff" strokeWidth="8" strokeLinejoin="round" paintOrder="stroke">{l.t}</text>)}
         <g fill={C.mute} fontSize="28" textAnchor="middle">{rotulos.map((l) => <text key={l.t + l.x} x={l.x} y="534" fill={l.hoje ? C.texto : undefined} fontWeight={l.hoje ? 800 : undefined}>{l.t}</text>)}</g>
         <text x="16" y="266.7" fill={C.mute} fontSize="24" transform="rotate(-90 16 266.7)" textAnchor="middle">R$ mil</text>
       </svg>
