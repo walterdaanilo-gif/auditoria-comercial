@@ -144,13 +144,13 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
           </>
         )}
         {!!fat.porProduto?.length && (
-          // uma linha so (nunca quebra): a Plataforma destacada primeiro, os outros produtos em seguida
-          <div style={{ display: "flex", flexWrap: "nowrap", gap: 8, overflow: "hidden", flexShrink: 0 }} aria-label="Faturamento por produto">
+          // uma linha so, cada produto numa coluna do mesmo tamanho (nome em cima, valor embaixo): cabe ate 5 produtos sem cortar
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${fat.porProduto.length},minmax(0,1fr))`, gap: 8, flexShrink: 0 }} aria-label="Faturamento por produto">
             {fat.porProduto.map((x) => (
-              <div key={x.produto} style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, flex: "0 1 auto", borderRadius: 10, padding: "5px 12px",
+              <div key={x.produto} style={{ display: "flex", flexDirection: "column", gap: 0, minWidth: 0, borderRadius: 10, padding: "5px 10px",
                 ...(x.produto === "plataforma" ? { background: "#1b9e88", color: "#fff" } : { background: "#eef6f4" }) }}>
-                <span className="nw" style={{ fontSize: 15, fontWeight: 700, color: x.produto === "plataforma" ? "#e3f4f0" : C.mute }}>{NOME_PRODUTO[x.produto] ?? x.produto}</span>
-                <span className="nw" style={{ fontSize: 22, fontWeight: 800 }}>{moeda(x.valor)}</span>
+                <span className="nw" style={{ fontSize: 14, fontWeight: 700, color: x.produto === "plataforma" ? "#e3f4f0" : C.mute, overflow: "hidden", textOverflow: "ellipsis" }}>{NOME_PRODUTO[x.produto] ?? x.produto}</span>
+                <span className="nw" style={{ fontSize: fat.porProduto!.length > 4 ? 19 : 22, fontWeight: 800, lineHeight: 1.15 }}>{moeda(x.valor)}</span>
               </div>
             ))}
           </div>
