@@ -23,7 +23,7 @@ const LIMITE_MS = 120_000, REVER_GANHO_H = 24, MAX_FILA = 150;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const primeiro = (n: unknown) => String(n ?? "").trim().split(/\s+/)[0]?.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase() || "";
+const primeiro = (n: unknown) => String(n ?? "").trim().split(/\s+/)[0]?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() || "";
 const digitos = (t: unknown) => String(t ?? "").replace(/\D/g, "") || null;
 
 // Tipo do produto pelo nome (o painel separa as vendas por tipo)
