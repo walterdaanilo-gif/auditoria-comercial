@@ -1,8 +1,9 @@
 // Edge Function "crm-vendas": vendas do CRM Q5 (negocios + produtos) quase em tempo real, por empresa que tem chave do CRM.
 //
 // Como as vendas chegam:
+//  Venda = produto num negocio GANHO ou ABERTO, de qualquer funil (Vendas, Pos-vendas, Plataforma, Workshop...). Perdido nao conta.
 //  1) Aviso do CRM (webhook conversation.updated, so quando o campo status muda = cartao mudou de etapa):
-//     POST ?k=<segredo>&org=<slug>. Se a conversa esta em etapa de ganho (ou ja tinha venda ganha), le o cliente na hora.
+//     POST ?k=<segredo>&org=<slug>. Conversa em etapa de ganho, com negocio de valor ou que ja tinha venda: le o cliente na hora.
 //  2) Rede de seguranca a cada 3 min (pg_cron, header x-crm-sync-token): varre TODAS as conversas (status=all, inclusive as
 //     encerradas) e compara etapa, situacao e valor do negocio com o que esta guardado. Venda nova, valor mudado ou venda
 //     desfeita: le o cliente na hora. A lista vem ordenada pela ultima MENSAGEM, nao pela ultima mudanca, entao nao da para
@@ -83,7 +84,14 @@ async function lerContato(ctx: Ctx, contato: string, info: Info, assinatura?: st
     if (d.status !== "lost" && d.chat_id && (!itens.length || d.status === "open" || Date.parse(d.closed_at || d.won_at || 0) > rever)) {
       const det = await q5(`/conversations/${d.chat_id}/deal`, chave);
       if (det.status === 200 && det.corpo?.id === d.id) {
-        itens = (Array.isArray(det.corpo.products) ? det.corpo.products : []).map((p: any) => ({ produto_id: p.product_id, nome: p.name, quantidade: p.quantity, total_cents: p.total_cents }));
+        const antes = [...((ant?.produtos ?? []) as any[])], agoraIso = new Date().toISOString();
+        itens = (Array.isArray(det.corpo.products) ? det.corpo.products : []).map((p: any) => {
+          const i = antes.findIndex((x) => (x.produto_id ?? x.nome) === (p.product_id ?? p.name));
+          const velho = i >= 0 ? antes.splice(i, 1)[0] : null;
+          // produto novo num negocio que ja conheciamos, ou negocio aberto visto pela primeira vez: o dia em que apareceu
+          // (a data preenchida no CRM, quando existe, vale mais: web/src/lib/resultados.ts, diaDaVenda)
+          return { produto_id: p.product_id, nome: p.name, quantidade: p.quantity, total_cents: p.total_cents, visto_em: velho ? velho.visto_em ?? null : ant || d.status === "open" ? agoraIso : null };
+        });
         campos = det.corpo.field_values && typeof det.corpo.field_values === "object" ? det.corpo.field_values : {};
       }
       await espera(80);
@@ -170,6 +178,9 @@ async function varrerEmpresa(org: Org, ate: number) {
       const sig = `${c.id}|${c.status}|${c.deal?.status ?? ""}|${valorNaLista ?? ""}`;
       if (ganhoNaLista(c)) {
         if (!guardados.some((g) => g.status === "won" && (g.valor_cents ?? null) === valorNaLista)) marcar(id, "venda nova ou valor mudou", sig);
+      } else if (c.deal && c.deal.status !== "lost" && (valorNaLista ?? 0) > 0) {
+        // negocio aberto com produto (pos-venda, plataforma, workshop...): produto acrescentado conta como venda
+        if (!guardados.some((g) => g.status === (c.deal.status ?? null) && (g.valor_cents ?? null) === valorNaLista)) marcar(id, "produto no negocio mudou", sig);
       } else if (guardados.some((g) => g.status === "won") && !guardados.some((g) => g.status === (c.deal?.status ?? null) && (g.valor_cents ?? null) === valorNaLista)) marcar(id, "venda desfeita", sig);
     }
     if (lista.length < 100) break;
@@ -229,7 +240,8 @@ async function tratarEvento(org: Org, corpo: any) {
   const contato = chat.contact.id as string;
   const salvos = ((await sb.from("crm_vendas").select("deal_id,chat_id,contato_crm_id,telefone,cliente,status,valor_cents,produto,produtos,campos").eq("org_id", org.id).eq("contato_crm_id", contato)).data ?? []) as any[];
   const tinhaGanho = salvos.some((s) => s.chat_id === chat.id && s.status === "won");
-  if (!ganhoNaLista(chat) && !tinhaGanho) { await registrar(chat.id, "ignorado_sem_venda"); return; }
+  const comValor = chat.deal && chat.deal.status !== "lost" && (chat.deal.valueCents ?? 0) > 0;
+  if (!ganhoNaLista(chat) && !tinhaGanho && !comValor && !salvos.some((s) => s.chat_id === chat.id && (s.produtos ?? []).length)) { await registrar(chat.id, "ignorado_sem_venda"); return; }
 
   const chatsSis = ((await sb.from("crm_conversas").select("id,vendedor_id,telefone,contato_nome").eq("org_id", org.id).eq("raw->contact->>id", contato)).data ?? []) as any[];
   const info: Info = { telefone: digitos(chat.contact.phoneE164) ?? digitos(chatsSis[0]?.telefone), nome: chat.contact.name ?? chatsSis[0]?.contato_nome ?? null, chats: new Map(chatsSis.map((x) => [x.id, x.vendedor_id])) };

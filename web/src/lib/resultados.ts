@@ -54,7 +54,8 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
       .eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", deLargo).lte("conversas.data", ate).limit(5000),
     db.from("resultados_vendas").select("*").eq("org_id", org).gte("data", de).lte("data", ate).limit(5000),
     // todos os negocios ganhos (de qualquer data): o negocio novo do CRM repete os produtos que o cliente ja comprou antes
-    db.from("crm_vendas").select("deal_id,contato_crm_id,telefone,cliente,valor_cents,aberto_em,ganho_em,vendedor_id,produto,tipo,produtos,campos").eq("org_id", org).eq("status", "won").limit(5000),
+    // e os negocios ABERTOS com produto, de qualquer funil (pos-venda, plataforma...): produto no negocio = vendido
+    db.from("crm_vendas").select("deal_id,status,contato_crm_id,telefone,cliente,valor_cents,aberto_em,ganho_em,sincronizado_em,vendedor_id,produto,tipo,produtos,campos").eq("org_id", org).in("status", ["won", "open"]).limit(5000),
     // quem leva as vendas de workshop (Configuracoes; na Weevo, o Ruan)
     db.from("audit_settings").select("vendedor_workshop,workshop_valor_padrao").eq("org_id", org).maybeSingle(),
     db.from("profiles").select("id,nome,org_id,ativo").limit(1000),
@@ -93,7 +94,11 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
     return achados.length === 1 ? achados[0].id : null;
   };
   // cada negocio ganho vira uma linha por PRODUTO NOVO (o que o cliente ainda nao tinha comprado num negocio anterior)
-  const todasCrm = produtosNovosCrm(((rCrm.error ? [] : rCrm.data ?? []) as Crm[]).map((v) => ({ ...v, dia: diaBR(v.ganho_em), fone: chaveFone(v.telefone), tipo: v.tipo || "outro" })));
+  const negociosCrm = ((rCrm.error ? [] : rCrm.data ?? []) as (Crm & { status?: string; sincronizado_em?: string | null })[])
+    .filter((v) => v.status !== "open" || (Array.isArray(v.produtos) && v.produtos.length > 0))
+    // negocio aberto nao tem dia de ganho: vale a data de venda do negocio, senao o dia em que o produto apareceu, senao a abertura
+    .map((v) => ({ ...v, ganho_em: v.ganho_em || dataDoCampo(v.campos, "") || v.aberto_em || v.sincronizado_em || new Date().toISOString() }));
+  const todasCrm = produtosNovosCrm(negociosCrm.map((v) => ({ ...v, dia: diaBR(v.ganho_em), fone: chaveFone(v.telefone), tipo: v.tipo || "outro" })));
   cruzar(linhas as (Resultado & { fone?: string })[], todasCrm.filter((v) => !v.repetidaDe));
   // so o periodo pedido (o resto foi buscado so para o cruzamento); o negocio que so repete produtos aparece riscado, sem somar
   for (const v of todasCrm.filter((x) => x.dia >= de && x.dia <= ate)) {
@@ -141,7 +146,29 @@ type CrmCruzado = Crm & { dia: string; fone: string; tipo: string; vista?: boole
 // 1) "Data do diagnostico" do negocio; 2) workshop: o dia em que o negocio foi aberto (quando o link foi mandado);
 // 3) aberto ate 7 dias antes do ganho: o dia da abertura; 4) senao, o ganho. O cruzamento com a conversa ainda pode
 // antecipar a venda grande sem diagnostico para o dia em que ela apareceu na conversa.
-export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; campos?: Record<string, unknown> | null }, tipo: string): { dia: string; certo: boolean } {
+// Datas preenchidas no CRM: "data da venda/fechamento" do negocio ou a data de um produto (ex.: "Data venda plataforma").
+// tipo vazio = so a data do negocio. Aceita AAAA-MM-DD ou DD/MM/AAAA.
+export function dataDoCampo(campos: Record<string, unknown> | null | undefined, tipo: string): string {
+  if (!campos) return "";
+  const palavra: Record<string, RegExp> = { imersao: /imers/, plataforma: /plataforma|start/, incompany: /in.?company/, workshop: /workshop/ };
+  const ler = (x: unknown) => {
+    const t = String(x ?? "").trim();
+    const iso = t.match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    if (iso && iso > "2000") return iso;
+    const br = t.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    return br ? `${br[3]}-${br[2]}-${br[1]}` : "";
+  };
+  const chaves = Object.keys(campos).filter((k) => /data|dia/.test(k) && /venda|fechamento|fechou|compra|pagamento/.test(k));
+  const doProduto = tipo && palavra[tipo] ? chaves.find((k) => palavra[tipo].test(k) && ler(campos[k])) : undefined;
+  const doNegocio = chaves.find((k) => !Object.values(palavra).some((r) => r.test(k)) && ler(campos[k]));
+  const k = doProduto ?? doNegocio;
+  return k ? ler(campos[k]) : "";
+}
+
+export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; campos?: Record<string, unknown> | null }, tipo: string, item?: { visto_em?: string | null } | null): { dia: string; certo: boolean } {
+  const doCampo = dataDoCampo(v.campos, tipo);
+  if (doCampo) return { dia: doCampo, certo: true };
+  if (item?.visto_em) return { dia: diaBR(item.visto_em), certo: true }; // produto acrescentado depois num negocio que ja existia
   const ganho = diaBR(v.ganho_em);
   const diag = typeof v.campos?.["data-do-diagnostico"] === "string" ? (v.campos["data-do-diagnostico"] as string).slice(0, 10) : "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(diag) && diag <= ganho) return { dia: diag, certo: true };
@@ -150,7 +177,7 @@ export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; cam
   return { dia: ganho, certo: false };
 }
 
-type Item = { produto_id?: string | null; nome?: string | null; quantidade?: number | null; total_cents?: number | null };
+type Item = { produto_id?: string | null; nome?: string | null; quantidade?: number | null; total_cents?: number | null; visto_em?: string | null };
 // Tipo do produto pelo nome (o mesmo de supabase/functions/crm-vendas)
 export function tipoDoProduto(nome: string | null | undefined, valorCents: number | null = null): string {
   const n = String(nome ?? "").toLowerCase();
@@ -202,7 +229,7 @@ export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
     };
     const linha = (v: CrmCruzado, it: Item | null, n: number, extra: Partial<CrmCruzado> = {}, dono: CrmCruzado = v): CrmCruzado => {
       const tipo = it ? tipoDoProduto(it.nome) : tipoDoProduto(v.produto, v.valor_cents);
-      const { dia, certo } = diaDaVenda(v, tipo);
+      const { dia, certo } = diaDaVenda(v, tipo, it);
       return { ...v, deal_id: it ? `${v.deal_id}#${n}` : v.deal_id, produto: it?.nome ?? v.produto, tipo, dia, diaCerto: certo,
         valor_cents: it ? Math.round((it.total_cents ?? 0) * fator(dono)) : v.valor_cents, ...extra };
     };
