@@ -23,14 +23,30 @@ export async function calcularDia(db, dia) {
   const daOrg = s.org_id ? { org_id: `eq.${s.org_id}` } : {};
   const [todasLinhas, convs, daEmpresa] = await Promise.all([
     db.rpc("resumo_sdr2", { p_from: dia, p_to: dia }),
-    db.selectAll("conversas", { select: "id,data,canal", filters: { data: `eq.${dia}`, canal: "neq.importada", ...daOrg } }),
+    db.selectAll("conversas", { select: "id,data,canal,telefone,contato", filters: { data: `eq.${dia}`, canal: "neq.importada", ...daOrg } }),
     s.org_id ? db.select("profiles", { select: "id", filters: daOrg }) : Promise.resolve(null),
   ]);
   const doTime = daEmpresa && new Set(daEmpresa.map(p => p.id));
   const linhas = doTime ? todasLinhas.filter(l => doTime.has(l.vendedor_id)) : todasLinhas;
   const ids = convs.map(c => c.id);
   const auds = [];
-  for (let i = 0; i < ids.length; i += 150) auds.push(...await db.select("auditorias", { select: "vendedor_id,nota_geral,so_bot,venda,venda_tipo,venda_valor,venda_cupom,venda_convite_origem,remarcacao,oportunidade,oportunidade_tipo,critico,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr", filters: { conversa_id: `in.(${ids.slice(i, i + 150).join(",")})` } }));
+  for (let i = 0; i < ids.length; i += 150) auds.push(...await db.select("auditorias", { select: "conversa_id,vendedor_id,nota_geral,so_bot,venda,venda_tipo,venda_valor,venda_cupom,venda_convite_origem,remarcacao,oportunidade,oportunidade_tipo,critico,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr", filters: { conversa_id: `in.(${ids.slice(i, i + 150).join(",")})` } }));
+  // inscricao de workshop sem valor na conversa (a IA le R$ 0 ou nada): vale o que o cliente pagou no CRM; sem isso, o padrao da empresa
+  // (mesma regra da aba Resultados e da TV: web/src/lib/resultados.ts)
+  const fim8 = t => { const d = String(t ?? "").replace(/\D/g, ""); return d.length >= 8 ? d.slice(-8) : ""; };
+  const padrao = Number(s.workshop_valor_padrao) > 0 ? Number(s.workshop_valor_padrao) : 0;
+  const semValor = a => a.venda && a.venda_tipo !== "imersao" && !a.venda_cupom && !(Number(a.venda_valor) > 0);
+  if (s.org_id && auds.some(semValor)) {
+    const foneDaConversa = new Map(convs.map(c => [c.id, fim8(c.telefone || c.contato)]));
+    const pago = new Map();
+    try {
+      for (const n of await db.selectAll("crm_vendas", { select: "telefone,valor_cents,aberto_em", filters: { ...daOrg, status: "neq.lost", valor_cents: "lte.100000" } })) {
+        const k = fim8(n.telefone), v = Number(n.valor_cents) / 100;
+        if (k && v > 0 && (!pago.has(k) || String(n.aberto_em ?? "") > pago.get(k).ab)) pago.set(k, { v, ab: String(n.aberto_em ?? "") });
+      }
+    } catch (e) { console.error("[relatorio] valor do workshop no CRM:", e.message); }
+    for (const a of auds) if (semValor(a)) a.venda_valor = pago.get(foneDaConversa.get(a.conversa_id))?.v ?? (padrao || a.venda_valor);
+  }
   // o time = quem tem WhatsApp cadastrado (aparece mesmo sem atividade no dia: zero marcacao tambem e informacao)
   const time_ = (await db.select("instancias_whatsapp", { select: "vendedor_id", filters: daOrg })).map(i => i.vendedor_id);
   const vendIds = [...new Set([...time_, ...linhas.map(l => l.vendedor_id), ...auds.map(a => a.vendedor_id)].filter(Boolean))];
