@@ -267,7 +267,14 @@ export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
         idx.forEach((k, n) => out.push(linha(p.v, novos[k], n, { vendedor_id: p.v.vendedor_id ?? v.vendedor_id }, { ...p.v, produtos: idx.map((x) => novos[x]) })));
         for (const k of [...idx].sort((a, b) => b - a)) { contados.push(novos[k]); novos.splice(k, 1); }
       }
-      if (novos.length) novos.forEach((it, n) => out.push(linha(v, it, n)));
+      // valor dos produtos novos: o negocio acumula o que o cliente ja tinha comprado. O que sobra do valor do negocio depois
+      // dos produtos antigos e dos novos; se nao sobra nada (o valor do negocio nao inclui o novo, ex.: Joao Paulo de Sa,
+      // negocio de R$ 3.779 = Imersao + Workshop antigos, com In-Company de R$ 5.000 acrescentado), o novo vale o preco dele.
+      const soma = (l: Item[]) => l.reduce((t, it) => t + (it.total_cents ?? 0), 0);
+      const somaNovos = soma(novos), somaVelhos = soma(itens) - somaNovos;
+      const restante = (v.valor_cents ?? 0) - somaVelhos;
+      const f = v.valor_cents == null || !somaNovos ? 1 : !somaVelhos ? fator(v) : restante <= 0 || restante >= somaNovos ? 1 : restante / somaNovos;
+      if (novos.length) novos.forEach((it, n) => out.push(linha(v, it, n, { valor_cents: Math.round((it.total_cents ?? 0) * f) })));
       else out.push(linha(v, null, 0, { repetidaDe: "anterior", tipo: tipoDoProduto(itens[0]?.nome) }));
       contados.push(...novos);
     }
