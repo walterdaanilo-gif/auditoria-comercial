@@ -267,8 +267,15 @@ export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
       else out.push(linha(v, null, 0, { repetidaDe: "anterior", tipo: tipoDoProduto(itens[0]?.nome) }));
       contados.push(...novos);
     }
-    // negocio sem lista que nao foi explicado por nenhum outro: conta pelo valor
-    for (const p of semLista.filter((x) => !x.resolvido)) out.push(linha(p.v, null, 0));
+    // negocio sem lista que nao foi explicado por nenhum outro: conta pelo valor, a nao ser que o cliente tenha outro negocio
+    // ganho com o MESMO valor ate 30 dias (ex.: Lucas Santos, um no Suporte sem produto e outro com Plataforma): e a mesma venda
+    const jaContados: CrmCruzado[] = negocios.filter((n) => !semLista.some((x) => x.v === n && !x.resolvido));
+    // o que tem produto informado vem primeiro (fica valendo); o sem produto vira o repetido
+    for (const p of semLista.filter((x) => !x.resolvido).sort((a, b) => Number(!!b.v.produto) - Number(!!a.v.produto))) {
+      const gemeo = p.v.valor_cents ? [...jaContados].find((n) => n !== p.v && n.valor_cents === p.v.valor_cents && distDias(diaBR(n.ganho_em), diaBR(p.v.ganho_em)) <= JANELA) : undefined;
+      out.push(gemeo ? linha(p.v, null, 0, { repetidaDe: "mesmo valor em outro negocio do cliente" }) : linha(p.v, null, 0));
+      jaContados.push(p.v);
+    }
   }
   return out;
 }
