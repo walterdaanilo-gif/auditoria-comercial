@@ -62,3 +62,6 @@ alter table public.crm_contatos_lidos add column if not exists assinatura text;
 
 -- Valor padrao da inscricao de workshop quando nem a conversa nem o CRM dizem o valor (Weevo: R$ 97). Carbone: sem padrao ate informarem.
 alter table public.audit_settings add column if not exists workshop_valor_padrao numeric(10,2);
+
+-- Comprovante na conversa (imagem ou documento do cliente) perto do fechamento no CRM: a venda e do dia do comprovante.
+-- Funcao crm_comprovantes(p_org, p_de, p_ate): so contato e hora, security definer, so da propria empresa (ou service role).

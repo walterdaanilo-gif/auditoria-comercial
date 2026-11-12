@@ -49,7 +49,7 @@ const num = (x: unknown): number | null => (x == null || x === "" ? null : Numbe
 export async function listarResultados(db: SupabaseClient, org: string, de: string, ate: string): Promise<{ linhas: Resultado[]; convites: string[]; tabelaOk: boolean; erro: string | null }> {
   // janela maior para achar a mesma venda antes ou depois do periodo (e nao contar de novo)
   const deLargo = somaDias(de, -JANELA_CRM);
-  const [rAud, rAj, rCrm, rCfg, rPerf, rWs] = await Promise.all([
+  const [rAud, rAj, rCrm, rCfg, rPerf, rWs, rComp] = await Promise.all([
     db.from("auditorias").select("id,vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(id,data,canal,contato,contato_nome,telefone)")
       .eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", deLargo).lte("conversas.data", ate).limit(5000),
     db.from("resultados_vendas").select("*").eq("org_id", org).gte("data", de).lte("data", ate).limit(5000),
@@ -61,6 +61,8 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
     db.from("profiles").select("id,nome,org_id,ativo").limit(1000),
     // negocios de valor de workshop (ate R$ 1.000, qualquer situacao menos perdido): o valor que o cliente pagou, quando a conversa nao diz
     db.from("crm_vendas").select("telefone,valor_cents,aberto_em").eq("org_id", org).neq("status", "lost").gt("valor_cents", 0).lte("valor_cents", 100000).limit(5000),
+    // imagens e documentos que o cliente mandou no WhatsApp (comprovante): so contato e hora
+    db.rpc("crm_comprovantes", { p_org: org, p_de: `${somaDias(deLargo, -3)}T00:00:00-03:00`, p_ate: `${somaDias(ate, 2)}T23:59:59-03:00` }),
   ]);
   const tabelaOk = !rAj.error;
   const ajustes = (tabelaOk ? rAj.data ?? [] : []) as Ajuste[];
@@ -94,10 +96,21 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
     return achados.length === 1 ? achados[0].id : null;
   };
   // cada negocio ganho vira uma linha por PRODUTO NOVO (o que o cliente ainda nao tinha comprado num negocio anterior)
+  // comprovante do cliente na conversa entre 2 dias antes e 1 dia depois do fechamento no CRM: a venda e do dia do comprovante
+  // (o CRM e atualizado com atraso e com vendas antigas; a conversa mostra quando o cliente pagou)
+  const comps = new Map<string, number[]>();
+  for (const c of (rComp.error ? [] : rComp.data ?? []) as { contato_crm_id: string | null; quando: string }[]) if (c.contato_crm_id) comps.set(c.contato_crm_id, [...(comps.get(c.contato_crm_id) ?? []), Date.parse(c.quando)]);
+  const comprovanteDe = (contato: string | null, ganho: string) => {
+    const g = Date.parse(ganho), l = (contato ? comps.get(contato) ?? [] : []).filter((t) => t >= g - 2 * 86400_000 && t <= g + 86400_000);
+    if (!l.length) return undefined;
+    const antes = l.filter((t) => t <= g);
+    return new Date(antes.length ? Math.max(...antes) : Math.min(...l)).toISOString(); // o ultimo antes do fechamento, senao o primeiro depois
+  };
   const negociosCrm = ((rCrm.error ? [] : rCrm.data ?? []) as (Crm & { status?: string; sincronizado_em?: string | null })[])
     .filter((v) => v.status !== "open" || (Array.isArray(v.produtos) && v.produtos.length > 0))
     // negocio aberto nao tem dia de ganho: vale a data de venda do negocio, senao o dia em que o produto apareceu, senao a abertura
-    .map((v) => ({ ...v, ganho_em: v.ganho_em || dataDoCampo(v.campos, "") || v.aberto_em || v.sincronizado_em || new Date().toISOString() }));
+    .map((v) => ({ ...v, comprovante: v.status === "won" && v.ganho_em ? comprovanteDe(v.contato_crm_id, v.ganho_em) : undefined,
+      ganho_em: v.ganho_em || dataDoCampo(v.campos, "") || v.aberto_em || v.sincronizado_em || new Date().toISOString() }));
   const todasCrm = produtosNovosCrm(negociosCrm.map((v) => ({ ...v, dia: diaBR(v.ganho_em), fone: chaveFone(v.telefone), tipo: v.tipo || "outro" })));
   cruzar(linhas as (Resultado & { fone?: string })[], todasCrm.filter((v) => !v.repetidaDe));
   // so o periodo pedido (o resto foi buscado so para o cruzamento); o negocio que so repete produtos aparece riscado, sem somar
@@ -140,9 +153,11 @@ export function indicadorDoCrm(campos: Record<string, unknown> | null | undefine
 
 // ---------- cruzamento ----------
 type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | null; cliente: string | null; valor_cents: number | null; aberto_em?: string | null; ganho_em: string; vendedor_id: string | null; produto: string | null; tipo: string | null; produtos?: unknown; campos: Record<string, unknown> | null };
-type CrmCruzado = Crm & { dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string; diaCerto?: boolean };
+type CrmCruzado = Crm & { comprovante?: string; dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string; diaCerto?: boolean };
 
 // Dia da VENDA (nao o dia em que o negocio foi marcado como ganho: o time lanca vendas antigas de uma vez no CRM).
+// 0) data de venda preenchida no CRM; produto acrescentado depois (o dia em que apareceu); COMPROVANTE do cliente na
+//    conversa ate 2 dias antes (ou 1 depois) do fechamento: o dia do comprovante (a conversa manda: ex. Rila, 12/11);
 // 1) "Data do diagnostico" do negocio; 2) workshop: o dia em que o negocio foi aberto (quando o link foi mandado);
 // 3) aberto ate 7 dias antes do ganho: o dia da abertura; 4) senao, o ganho. O cruzamento com a conversa ainda pode
 // antecipar a venda grande sem diagnostico para o dia em que ela apareceu na conversa.
@@ -165,10 +180,11 @@ export function dataDoCampo(campos: Record<string, unknown> | null | undefined, 
   return k ? ler(campos[k]) : "";
 }
 
-export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; campos?: Record<string, unknown> | null }, tipo: string, item?: { visto_em?: string | null } | null): { dia: string; certo: boolean } {
+export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; campos?: Record<string, unknown> | null; comprovante?: string }, tipo: string, item?: { visto_em?: string | null } | null): { dia: string; certo: boolean } {
   const doCampo = dataDoCampo(v.campos, tipo);
   if (doCampo) return { dia: doCampo, certo: true };
   if (item?.visto_em) return { dia: diaBR(item.visto_em), certo: true }; // produto acrescentado depois num negocio que ja existia
+  if (v.comprovante && tipo !== "workshop") return { dia: diaBR(v.comprovante), certo: true }; // cliente mandou o comprovante na conversa
   const ganho = diaBR(v.ganho_em);
   const diag = typeof v.campos?.["data-do-diagnostico"] === "string" ? (v.campos["data-do-diagnostico"] as string).slice(0, 10) : "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(diag) && diag <= ganho) return { dia: diag, certo: true };
