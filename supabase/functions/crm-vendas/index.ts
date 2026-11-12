@@ -8,7 +8,7 @@
 //     encerradas) e compara etapa, situacao e valor do negocio com o que esta guardado. Venda nova, valor mudado ou venda
 //     desfeita: le o cliente na hora. A lista vem ordenada pela ultima MENSAGEM, nao pela ultima mudanca, entao nao da para
 //     olhar so as primeiras paginas.
-//  3) Venda ganha e relida a cada 24 h (produtos e campos podem ser editados depois).
+//  3) Venda ganha relida a cada 20 min na primeira semana e depois a cada 24 h (valor e produtos sao corrigidos depois).
 //
 // O negocio do cliente vem de /contacts/{id}/deals (todas as instancias); o detalhe (produtos e campos) so existe em
 // /conversations/{chat}/deal e so para o negocio atual daquela conversa.
@@ -194,8 +194,11 @@ async function varrerEmpresa(org: Org, ate: number) {
     const ganhos = ds.filter((d: any) => d.status === "won");
     if (!ganhos.length || fila.has(id)) continue;
     const recenteSemProduto = ganhos.some((d: any) => Date.parse(d.ganho_em || 0) > agora - 2 * 86400_000 && !(d.produtos ?? []).length && Date.parse(d.sincronizado_em || 0) < agora - 150_000);
-    const velho = (lidoEm.get(id) ?? 0) < agora - REVER_GANHO_H * 3600_000;
-    if (recenteSemProduto) fila.set(id, { motivo: "venda recente sem produto", sigs: new Set() }); else if (velho) fila.set(id, { motivo: "releitura diaria", sigs: new Set() });
+    // venda ganha nos ultimos 7 dias: relida a cada 20 min (o time corrige valor e produto depois de fechar, sem mudar a etapa,
+    // e a conversa pode estar mostrando outro negocio do cliente); as mais antigas, 1 vez por dia
+    const recente = ganhos.some((d: any) => Date.parse(d.ganho_em || 0) > agora - 7 * 86400_000);
+    const velho = (lidoEm.get(id) ?? 0) < agora - (recente ? 20 * 60_000 : REVER_GANHO_H * 3600_000);
+    if (recenteSemProduto) fila.set(id, { motivo: "venda recente sem produto", sigs: new Set() }); else if (velho) fila.set(id, { motivo: recente ? "venda recente (confere valor)" : "releitura diaria", sigs: new Set() });
   }
 
   const ctx: Ctx = { org, chave, perfis, salvo, rever: agora - 6 * 3600_000 };
