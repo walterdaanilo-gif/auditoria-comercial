@@ -159,7 +159,8 @@ type CrmCruzado = Crm & { comprovante?: string; dia: string; fone: string; tipo:
 // 0) data de venda preenchida no CRM; produto acrescentado depois (o dia em que apareceu); COMPROVANTE do cliente na
 //    conversa ate 2 dias antes (ou 1 depois) do fechamento: o dia do comprovante (a conversa manda: ex. Rila, 12/11);
 // 1) "Data do diagnostico" do negocio; 2) workshop: o dia em que o negocio foi aberto (quando o link foi mandado);
-// 3) aberto ate 7 dias antes do ganho: o dia da abertura; 4) senao, o ganho. O cruzamento com a conversa ainda pode
+// 3) aberto ate 7 dias antes do ganho: o dia da abertura; 4) aberto ha mais de 30 dias (venda antiga lancada agora): a
+//    abertura; 5) senao, o ganho. O cruzamento com a conversa ainda pode
 // antecipar a venda grande sem diagnostico para o dia em que ela apareceu na conversa.
 // Datas preenchidas no CRM: "data da venda/fechamento" do negocio ou a data de um produto (ex.: "Data venda plataforma").
 // tipo vazio = so a data do negocio. Aceita AAAA-MM-DD ou DD/MM/AAAA.
@@ -190,6 +191,9 @@ export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; cam
   if (/^\d{4}-\d{2}-\d{2}$/.test(diag) && diag <= ganho) return { dia: diag, certo: true };
   const aberto = v.aberto_em ? diaBR(v.aberto_em) : "";
   if (aberto && aberto <= ganho && (tipo === "workshop" || distDias(aberto, ganho) <= 7)) return { dia: aberto, certo: tipo === "workshop" };
+  // negocio aberto ha mais de 30 dias e ganho agora, sem diagnostico, sem data e sem comprovante: e venda antiga lancada
+  // agora no CRM (arrumacao do funil). Fica no dia da abertura, nao entra como venda de hoje.
+  if (aberto && aberto <= ganho && distDias(aberto, ganho) > 30) return { dia: aberto, certo: true };
   return { dia: ganho, certo: false };
 }
 
