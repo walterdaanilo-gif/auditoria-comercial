@@ -142,10 +142,9 @@ export function indicadorDoCrm(campos: Record<string, unknown> | null | undefine
 type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | null; cliente: string | null; valor_cents: number | null; aberto_em?: string | null; ganho_em: string; vendedor_id: string | null; produto: string | null; tipo: string | null; produtos?: unknown; campos: Record<string, unknown> | null };
 type CrmCruzado = Crm & { dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string; diaCerto?: boolean };
 
-// Dia da VENDA (nao o dia em que o negocio foi marcado como ganho: o time lanca vendas antigas de uma vez no CRM).
-// 1) "Data do diagnostico" do negocio; 2) workshop: o dia em que o negocio foi aberto (quando o link foi mandado);
-// 3) aberto ate 7 dias antes do ganho: o dia da abertura; 4) senao, o ganho. O cruzamento com a conversa ainda pode
-// antecipar a venda grande sem diagnostico para o dia em que ela apareceu na conversa.
+// Dia da VENDA (12/11/2026, pedido do Walter: a venda conta no dia em que FECHOU):
+// 1) data de venda preenchida no CRM (do produto ou do negocio); 2) produto acrescentado depois: o dia em que apareceu;
+// 3) workshop: o dia em que o negocio foi aberto; 4) senao, o dia em que o cartao foi ganho no CRM.
 // Datas preenchidas no CRM: "data da venda/fechamento" do negocio ou a data de um produto (ex.: "Data venda plataforma").
 // tipo vazio = so a data do negocio. Aceita AAAA-MM-DD ou DD/MM/AAAA.
 export function dataDoCampo(campos: Record<string, unknown> | null | undefined, tipo: string): string {
@@ -169,12 +168,12 @@ export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; cam
   const doCampo = dataDoCampo(v.campos, tipo);
   if (doCampo) return { dia: doCampo, certo: true };
   if (item?.visto_em) return { dia: diaBR(item.visto_em), certo: true }; // produto acrescentado depois num negocio que ja existia
+  // dia do FECHAMENTO (cartao ganho no CRM). A "Data do diagnostico" nao e mais usada: a venda conta no mes em que fechou.
+  // Workshop: o dia em que o negocio foi aberto (quando o link foi mandado e pago).
   const ganho = diaBR(v.ganho_em);
-  const diag = typeof v.campos?.["data-do-diagnostico"] === "string" ? (v.campos["data-do-diagnostico"] as string).slice(0, 10) : "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(diag) && diag <= ganho) return { dia: diag, certo: true };
   const aberto = v.aberto_em ? diaBR(v.aberto_em) : "";
-  if (aberto && aberto <= ganho && (tipo === "workshop" || distDias(aberto, ganho) <= 7)) return { dia: aberto, certo: tipo === "workshop" };
-  return { dia: ganho, certo: false };
+  if (tipo === "workshop" && aberto && aberto <= ganho) return { dia: aberto, certo: true };
+  return { dia: ganho, certo: true };
 }
 
 type Item = { produto_id?: string | null; nome?: string | null; quantidade?: number | null; total_cents?: number | null; visto_em?: string | null };
