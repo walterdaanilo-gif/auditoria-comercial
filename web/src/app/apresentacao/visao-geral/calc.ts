@@ -9,7 +9,15 @@ export type Pessoa = {
   conversas: { v: number; meta: number } | null;  // so SDR (meta do Walter por dia util x dias uteis do mes)
   marcacoes: { v: number; meta: number } | null;  // so SDR
   vendasValor: number; vendasN: number;            // vendas pagas (Workshop pago e Imersao)
+  // so closer: cartoes que entraram em "Diagnostico realizado" (funil Vendas 2 do CRM) no periodo, contra
+  // meta_closer_reunioes x dias uteis. null = sem fonte ou sem meta
+  reunioes?: { v: number; meta: number } | null;
+  // so closer: clientes potenciais sem mensagem do time ha "dias" dias ou mais (retrato do worker, agora; nao segue o periodo)
+  followups?: { qtd: number; maisAntigo: number | null; dias: number } | null;
 };
+
+// Uma venda na lista do produto: cliente (e empresa), quem vendeu, dia (DD/MM) e valor
+export type VendaProduto = { cliente: string; empresa: string; vendedor: string | null; data: string; valor: number };
 
 // Tela fixa da TV (Visao geral). O que o Cabueta nao mede nao entra aqui.
 export type VisaoGeralDados = {
@@ -19,7 +27,8 @@ export type VisaoGeralDados = {
   // Nos outros periodos diasUteisMes = diaUtil (periodo todo ja decorrido) e as metas diarias valem x dias uteis do periodo.
   periodo: { p: string; de: string; ate: string; mensal: boolean; rotulo: string; intervalo: string; diaUtil: number; diasUteisMes: number };
   // porProduto: o faturamento dividido pelos produtos (Plataforma primeiro), so os que venderam
-  fat: { real: number; meta: number | null; serie: { du: number; real: number; data: string }[]; datasUteis: string[]; porProduto?: { produto: string; valor: number; n: number }[] };
+  // vendas: as vendas daquele produto (clicar no produto na TV abre a lista), da maior para a menor
+  fat: { real: number; meta: number | null; serie: { du: number; real: number; data: string }[]; datasUteis: string[]; porProduto?: { produto: string; valor: number; n: number; vendas?: VendaProduto[] }[] };
   pessoas: Pessoa[];
   quadros: QuadroCfg[];                       // quadros na tela, na ordem escolhida em Configuracoes
   kpis: Partial<Record<QuadroId, Kpi>>;       // quadros pequenos (semretorno, primeira, nota, ...)
@@ -28,12 +37,9 @@ export type VisaoGeralDados = {
 export type Kpi = { valor: string | null; sub: string; tom: Tom; selo?: string; pct?: number | null };
 
 // ---------- formatos ----------
-const num1 = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+// Valor completo, com centavos: R$ 34.817,80
 export function moeda(n: number): string {
-  const a = Math.abs(n);
-  if (a >= 1_000_000) return `R$ ${num1(n / 1_000_000)} mi`;
-  if (a >= 1000) return `R$ ${num1(n / 1000)} mil`;
-  return `R$ ${Math.round(n).toLocaleString("pt-BR")}`;
+  return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 export const inteiro = (n: number) => Math.round(n).toLocaleString("pt-BR");
 export const pctTxt = (a: number, b: number): string | null => (b > 0 ? `${Math.round((a / b) * 100)}%` : null);

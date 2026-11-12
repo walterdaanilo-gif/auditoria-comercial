@@ -109,6 +109,27 @@ export function textoGestao(porVendedor, nomes, funcao, dias, modelos) {
   ].join("\n"));
 }
 
+// Retrato dos follow-ups atrasados por vendedor (tabela followups_atrasados), para a TV so ler: a conta e pesada demais
+// para rodar a cada recarga da tela. Mesma regra do aviso (leadsParados). No maximo a cada 15 min; troca o retrato inteiro.
+export const RETRATO_MIN = 15;
+export async function fotografarFollowups(db, { agora = Date.now() } = {}) {
+  const [ult] = await db.select("followups_atrasados", { select: "calculado_em", order: "calculado_em.desc", limit: 1 });
+  if (ult && agora - Date.parse(ult.calculado_em) < (RETRATO_MIN - 1) * 60_000) return "retrato recente"; // 1 min de folga para o relogio do laco
+  const R = await carregarRegras(db);
+  const porVendedor = new Map();
+  for (const l of await leadsParados(db, R, { agora })) {
+    const v = porVendedor.get(l.vendedor_id) || { qtd: 0, dias: 0 };
+    porVendedor.set(l.vendedor_id, { qtd: v.qtd + 1, dias: Math.max(v.dias, l.dias) });
+  }
+  const em = new Date(agora).toISOString();
+  // vendedor sem lead parado tambem ganha linha (qtd 0): a TV distingue "zero" de "ainda nao calculado"
+  const vendedores = new Set([...R.nomes.keys(), ...porVendedor.keys()]);
+  const linhas = [...vendedores].filter(Boolean).map(v => ({ vendedor_id: v, org_id: R.bruto.org_id ?? null, qtd: porVendedor.get(v)?.qtd ?? 0, mais_antigo_dias: porVendedor.get(v)?.dias ?? null, dias_regra: R.bruto.followup_alerta_d ?? 6, calculado_em: em }));
+  if (linhas.length) await db.insert("followups_atrasados", linhas, { onConflict: "vendedor_id", returning: false });
+  await db.delete("followups_atrasados", { calculado_em: `lt.${em}` }); // quem saiu do time
+  return `${[...porVendedor.values()].reduce((t, v) => t + v.qtd, 0)} leads parados em ${porVendedor.size} vendedores`;
+}
+
 // Junto com o resumo da manha. Cada lead entra uma vez por periodo sem follow-up (a chave inclui a ultima mensagem do vendedor).
 export async function avisarFollowups(db, { envio = enviarWhatsApp, agora = Date.now() } = {}) {
   const R = await carregarRegras(db);

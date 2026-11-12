@@ -405,7 +405,7 @@ export default function FormConfig({ inicial, agenda, retornoAgenda, empresa = "
           </div>
           <div className="rounded-2xl border border-line p-4">
             <div className="label mb-1">Metas diárias do Closer</div>
-            <Linha titulo="Reuniões de implementação"><Numero vazio valor={s.meta_closer_reunioes} onChange={(v) => set({ meta_closer_reunioes: v })} sufixo="por dia" /></Linha>
+            <Linha titulo="Reuniões realizadas" sub="Diagnóstico feito (funil do CRM). É a barra do closer na TV"><Numero vazio valor={s.meta_closer_reunioes} onChange={(v) => set({ meta_closer_reunioes: v })} sufixo="por dia" /></Linha>
             <Linha titulo="Imersões fechadas"><Numero vazio valor={s.meta_closer_vendas} onChange={(v) => set({ meta_closer_vendas: v })} sufixo="por dia" /></Linha>
           </div>
         </div>

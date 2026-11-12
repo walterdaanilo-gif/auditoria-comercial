@@ -27,9 +27,9 @@ export default function PeriodoSeletor({ p, de, ate, detalhe }: { p: string; de:
       </select>
       {preset === "livre" && (
         <span className="row" style={{ gap: 8 }}>
-          <input type="date" aria-label="Data inicial" value={d1} max={d2 || undefined} onChange={(e) => trocarData(e.target.value, d2)} style={{ fontSize: 18, fontVariantNumeric: "tabular-nums", colorScheme: "light" }} />
+          <input type="date" aria-label="Data inicial" value={d1} max={d2 || undefined} onChange={(e) => trocarData(e.target.value, d2)} style={{ fontSize: 18, fontVariantNumeric: "tabular-nums" }} />
           <span className="mu">a</span>
-          <input type="date" aria-label="Data final" value={d2} min={d1 || undefined} onChange={(e) => trocarData(d1, e.target.value)} style={{ fontSize: 18, fontVariantNumeric: "tabular-nums", colorScheme: "light" }} />
+          <input type="date" aria-label="Data final" value={d2} min={d1 || undefined} onChange={(e) => trocarData(d1, e.target.value)} style={{ fontSize: 18, fontVariantNumeric: "tabular-nums" }} />
         </span>
       )}
       <span className="mu nw">{detalhe}</span>

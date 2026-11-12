@@ -29,7 +29,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const ritmoPct = (Math.max(diaUtil, 1) / diasUteisMes) * 100;
   const db = createAdminClient();
 
-  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem] = await Promise.all([
+  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem, rEtapas, rFup, rDiag] = await Promise.all([
     db.rpc("resumo_sdr2", { p_from: ini, p_to: hoje }),
     db.from("profiles").select("id,nome,funcao,ativo,foto_url").order("nome"),
     db.from("instancias_whatsapp").select("vendedor_id").eq("org_id", org),
@@ -39,8 +39,16 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     // mesma conta do painel de atendimento: tempos de resposta das conversas auditadas
     db.from("auditorias").select("vendedor_id,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,conversas!inner(data,canal)").eq("org_id", org).neq("conversas.canal", "importada").gte("conversas.data", ini).lte("conversas.data", hoje).limit(5000),
     db.rpc("conversas_sem_retorno", { p_from: ini, p_to: hoje, p_min: 15 }),
+    // closer: cartoes que ENTRARAM em "Diagnostico realizado" (reuniao feita) no funil do CRM (tabela crm_etapas)
+    db.from("crm_etapas").select("conversa_id,vendedor_id,etapa").eq("org_id", org).like("etapa", "%diagnostico_realizado")
+      .gte("em", `${ini}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(5000),
+    // follow-ups atrasados agora, por vendedor (retrato que o worker grava a cada 15 min, mesma regra do aviso)
+    db.from("followups_atrasados").select("vendedor_id,qtd,mais_antigo_dias,dias_regra,calculado_em").limit(1000),
+    // closer: negocios do CRM com "Data do diagnostico" (reuniao feita) e o campo Closer; cobre o que veio antes do historico de etapas
+    db.from("crm_vendas").select("deal_id,chat_id,contato_crm_id,closer,campos").eq("org_id", org).not("closer", "is", null).limit(5000),
   ]);
 
+  const nomeDe = new Map(((rPerf.data ?? []) as Perfil[]).map((p) => [p.id, p.nome])); // quem vendeu, na lista de vendas do produto
   const equipe = new Set(((rInst.data ?? []) as { vendedor_id: string }[]).map((i) => i.vendedor_id));
   const time = ((rPerf.data ?? []) as Perfil[]).filter((p) => p.ativo && equipe.has(p.id));
   const sdrs = time.filter((p) => p.funcao !== "closer" && p.funcao !== "gestao");
@@ -68,6 +76,30 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const somaDe = (id: string) => linhas.filter((l) => l.vendedor_id === id).reduce((t, l) => ({ respostas: t.respostas + n(l.respostas), marcacoes: t.marcacoes + n(l.marcacoes) }), { respostas: 0, marcacoes: 0 });
   const metaConvDia = n(cfg.meta_sdr_conversas ?? 25), metaMarcDia = n(cfg.meta_sdr_marcacoes ?? 6);
   const metaConv = metaConvDia * diasUteisMes, metaMarc = metaMarcDia * diasUteisMes;
+  const metaReun = n(cfg.meta_closer_reunioes) * diasUteisMes; // Configuracoes: reunioes de implementacao por dia util
+  // funil do closer: cada cartao conta uma vez por etapa no periodo (vai e volta de coluna nao repete)
+  const etapas = rEtapas.error ? null : ((rEtapas.data ?? []) as { conversa_id: string; vendedor_id: string | null; etapa: string }[]);
+  // Reunioes realizadas = cartao que entrou em "Diagnostico realizado" (historico de etapas, desde 12/11/2026)
+  // + negocio do CRM com "Data do diagnostico" no periodo e o closer no campo Closer (pelo primeiro nome).
+  // A mesma conversa conta uma vez. "Como foi a reuniao" dizendo que nao aconteceu (nao foi feita, no-show) fica de fora.
+  const primeiro = (x: unknown) => String(x ?? "").trim().split(/\s+/)[0]?.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase() || "";
+  type Diag = { deal_id: string; chat_id: string | null; contato_crm_id: string | null; closer: string | null; campos: Record<string, unknown> | null };
+  const diagnosticos = ((rDiag.error ? [] : rDiag.data ?? []) as Diag[]).filter((v) => {
+    const dia = String(v.campos?.["data-do-diagnostico"] ?? "").slice(0, 10);
+    return dia >= ini && dia <= hoje && !/n[aã]o foi feit|no.?show|n[aã]o compareceu|n[aã]o aconteceu/i.test(String(v.campos?.["como-foi-a-reuniao-de-diagnostico"] ?? ""));
+  });
+  const noFunil = (id: string, fim: string) => {
+    const chaves = new Set((etapas ?? []).filter((e) => e.vendedor_id === id && e.etapa.endsWith(fim)).map((e) => e.conversa_id));
+    const nome = primeiro(time.find((p) => p.id === id)?.nome);
+    const xara = time.filter((p) => primeiro(p.nome) === nome).length > 1; // dois closers com o mesmo primeiro nome: nao da para saber de quem e
+    if (fim === "diagnostico_realizado" && nome && !xara)
+      for (const v of diagnosticos) if (primeiro(v.closer) === nome) chaves.add(v.chat_id || `d:${v.contato_crm_id || v.deal_id}|${String(v.campos?.["data-do-diagnostico"]).slice(0, 10)}`);
+    return chaves.size;
+  };
+  // retrato com mais de 1 h = worker parado: melhor nao mostrar numero velho
+  type Fup = { vendedor_id: string; qtd: number; mais_antigo_dias: number | null; dias_regra: number | null; calculado_em: string };
+  const fups = new Map(((rFup.error ? [] : rFup.data ?? []) as Fup[]).filter((f) => Date.now() - Date.parse(f.calculado_em) < 3600_000).map((f) => [f.vendedor_id, f]));
+  const followupsDe = (id: string) => { const f = fups.get(id); return f ? { qtd: n(f.qtd), maisAntigo: f.mais_antigo_dias, dias: n(f.dias_regra ?? cfg.followup_alerta_d ?? 6) } : null; };
   const pessoa = (p: Perfil, tipo: "sdr" | "closer"): Pessoa => {
     const vs = vendas.filter((v) => v.vendedorId === p.id), t = somaDe(p.id);
     return {
@@ -75,6 +107,8 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
       conversas: tipo === "sdr" ? { v: t.respostas, meta: metaConv } : null,
       marcacoes: tipo === "sdr" ? { v: t.marcacoes, meta: metaMarc } : null,
       vendasValor: vs.reduce((s, v) => s + (v.valor ?? 0), 0), vendasN: vs.length,
+      reunioes: tipo === "closer" && etapas && metaReun ? { v: noFunil(p.id, "diagnostico_realizado"), meta: metaReun } : null,
+      followups: tipo === "closer" ? followupsDe(p.id) : null,
     };
   };
 
@@ -114,7 +148,12 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     atualizadoEm: horaBR(),
     periodo: { p: periodo.p, de: ini, ate: hoje, mensal, rotulo: periodo.rotulo, intervalo: mensal ? `01 a ${fim.slice(8)}/${fim.slice(5, 7)}` : ini === hoje ? ddmm(ini) : `${ddmm(ini)} a ${ddmm(hoje)}`, diaUtil, diasUteisMes },
     fat: { real: acc, meta: mensal && cfg.meta_fat_mes != null ? Number(cfg.meta_fat_mes) : null, serie, datasUteis: diasEntre(ini, fim).filter(util).map(ddmm),
-      porProduto: ORDEM_PRODUTOS.map((produto) => { const l = vendas.filter((v) => (v.produto ?? "outro") === produto); return { produto, valor: l.reduce((t, v) => t + (v.valor ?? 0), 0), n: l.length }; }).filter((x) => x.n > 0) },
+      porProduto: ORDEM_PRODUTOS.map((produto) => {
+        const l = vendas.filter((v) => (v.produto ?? "outro") === produto);
+        const lista = l.map((v) => ({ cliente: v.cliente || "Cliente sem nome", empresa: v.empresa, vendedor: v.vendedorId ? nomeDe.get(v.vendedorId) ?? null : null, data: ddmm(v.data), valor: v.valor ?? 0 }))
+          .sort((a, b) => b.valor - a.valor);
+        return { produto, valor: l.reduce((t, v) => t + (v.valor ?? 0), 0), n: l.length, vendas: lista };
+      }).filter((x) => x.n > 0) },
     pessoas: [...sdrs.map((p) => pessoa(p, "sdr")), ...closers.map((p) => pessoa(p, "closer"))],
     quadros: resolverQuadros(cfg.tv_quadros),
     kpis,

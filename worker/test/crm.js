@@ -61,6 +61,17 @@ assert.deepEqual(parados.map(l => l.nome), ["Lia"]);
 assert.equal(parados[0].semResposta, true); assert.equal(parados[0].dias, 8);
 console.log("OK: historico do CRM sem duplicar, revisao so de clientes potenciais, follow-up juntando WhatsApp e CRM");
 
+// retrato para a TV: 1 lead parado do Nick; rodar de novo antes de 15 min nao recalcula; vendedor que saiu do time some
+{
+  const { fotografarFollowups } = await import("../src/followup.js");
+  db.tables.followups_atrasados = [{ vendedor_id: "saiu", qtd: 3, calculado_em: new Date(Date.now() - 3600_000).toISOString() }];
+  const agora = Date.now();
+  await fotografarFollowups(db, { agora });
+  assert.deepEqual(db.tables.followups_atrasados.map(f => [f.vendedor_id, f.qtd, f.mais_antigo_dias, f.dias_regra]), [[NICK, 1, 8, 6]]);
+  assert.equal(await fotografarFollowups(db, { agora: agora + 5 * 60_000 }), "retrato recente");
+  console.log("OK: retrato dos follow-ups atrasados para a TV");
+}
+
 // Fonte "crm": o WhatsApp do vendedor sai das conversas, o CRM entra inteiro (sem corte) e a reuniao da agenda segue o lead
 {
   const db = fakeSupa();

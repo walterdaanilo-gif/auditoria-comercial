@@ -17,6 +17,7 @@ import { cancelarEventos } from "./agenda.js";
 import { sugerirParaLead } from "./closer.js";
 import { avisarDiagnosticos } from "./diagnostico.js";
 import { avisarVenda } from "./vendaAviso.js";
+import { fotografarFollowups } from "./followup.js";
 
 const LIMITE_MS = 120_000; // a funcao tem ~150s; para antes e a proxima volta continua
 const json = (code, obj) => new Response(JSON.stringify(obj), { status: code, headers: { "Content-Type": "application/json" } });
@@ -50,6 +51,8 @@ const TAREFAS = {
     const out = { auditorias: await cicloDeAuditoria(db, { ate: Date.now() + LIMITE_MS }) };
     // aviso de diagnostico 6h antes de cada turma; uma falha aqui nao atrapalha a auditoria
     try { out.diagnostico = await avisarDiagnosticos(db); } catch (e) { console.error("[diagnostico]", e.message); out.diagnostico = `erro: ${e.message}`; }
+    // retrato dos follow-ups atrasados para a TV (no maximo a cada 15 min)
+    try { out.followup_tv = await fotografarFollowups(db); } catch (e) { console.error("[followup_tv]", e.message); out.followup_tv = `erro: ${e.message}`; }
     return out;
   },
   async crm() { return await importarHistoricoCrm(db); },

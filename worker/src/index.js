@@ -11,6 +11,7 @@ import { processAnalyses } from "./analysis.js";
 import { mirrorAll, mirrorEnabled } from "./mirror.js";
 import { importarHistoricoCrm } from "./crm.js";
 import { cancelarEventos } from "./agenda.js";
+import { fotografarFollowups, RETRATO_MIN } from "./followup.js";
 
 // Avisa no log quais variaveis faltam. Sem as do Supabase nao da para rodar nada.
 const faltam = Object.entries({ SUPABASE_URL: cfg.supabaseUrl, SUPABASE_SERVICE_ROLE_KEY: cfg.serviceKey }).filter(([, v]) => !v).map(([k]) => k);
@@ -42,6 +43,8 @@ loop("analise", 30_000, () => processAnalyses(supa));
 // CRM Q5: historico de antes do WhatsApp conectado + revisao dos clientes potenciais (daqui pra frente vale o WhatsApp)
 loop("crm", 15 * 60_000, () => importarHistoricoCrm(supa));
 loop("agenda-cancelar", 60_000, () => cancelarEventos(supa));
+// retrato dos follow-ups atrasados por vendedor, para a TV
+loop("followup-tv", RETRATO_MIN * 60_000, () => fotografarFollowups(supa));
 if (mirrorEnabled()) loop("planilha", 30_000, () => mirrorAll(supa)); else console.log("[planilha] espelho desligado (sem SHEET_ID ou chave do Google)");
 
 // Servidor HTTP: saude para a hospedagem e webhook da Uazapi (POST /webhook/uazapi?k=<WEBHOOK_SECRET>)
