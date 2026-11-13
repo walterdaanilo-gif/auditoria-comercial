@@ -96,25 +96,18 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
   const r = calcularRitmo(fat.real, fat.meta, du, N);
   const eixo = eixoY(Math.max(fat.meta ?? 0, r.projecao ?? 0, fat.real));
   // o desenho termina em XF; a direita fica a coluna dos rotulos de meta e projecao (nunca em cima das linhas)
-  const XF = 750;
+  const XF = 680;
   const X = (i: number) => 80 + ((i - 1) / Math.max(N - 1, 1)) * (XF - 80);
   const Y = (v: number) => Math.max(14, 480 - (v / eixo.topo) * 440);
   const pts = fat.serie.map((s) => `${X(s.du).toFixed(1)},${Y(s.real).toFixed(1)}`);
   const ult = fat.serie[fat.serie.length - 1];
   const xh = ult ? X(ult.du) : X(1);
   const mil = (v: number) => String(Math.round(v / 1000));
-  const rotulos: { x: number; t: string; hoje?: boolean }[] = [];
-  if (fat.datasUteis.length) {
-    rotulos.push({ x: Math.max(X(1), 96), t: fat.datasUteis[0] });
-    if (du >= 9 && fat.datasUteis[5]) rotulos.push({ x: X(6), t: fat.datasUteis[5] });
-    rotulos.push({ x: xh, t: "hoje", hoje: true });
-    if (du < N - 1) rotulos.push({ x: XF, t: fat.datasUteis[N - 1] ?? "" });
-  }
   // meta e projecao: rotulo de duas linhas (nome e valor) na coluna da direita, na altura do fim de cada linha,
   // com 70 de distancia no minimo entre os dois (o de valor maior fica em cima)
   const fins = [
-    ...(fat.meta ? [{ nome: "meta", valor: mil(fat.meta), v: fat.meta, cor: C.mute }] : []),
-    ...(ult && du < N && r.projecao !== null ? [{ nome: "projeção", valor: mil(r.projecao), v: r.projecao, cor: C.texto }] : []),
+    ...(fat.meta ? [{ nome: "meta", valor: moeda(fat.meta), v: fat.meta, cor: C.mute }] : []),
+    ...(ult && du < N && r.projecao !== null ? [{ nome: "projeção", valor: moeda(r.projecao), v: r.projecao, cor: C.texto }] : []),
   ].sort((a, b) => b.v - a.v);
   const rotulosFim: { nome: string; valor: string; y: number; cor: string }[] = [];
   fins.forEach((f, i) => {
@@ -133,16 +126,20 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
       </div>
       <svg width="100%" viewBox="0 0 900 560" style={{ flex: 1, minHeight: 0 }} role="img" aria-label={`Faturamento acumulado: ${moeda(fat.real)} no dia útil ${du}${fat.meta ? `, meta ${moeda(fat.meta)}` : ""}`}>
         <defs><linearGradient id="vgar" x1="0" y1="0" x2="0" y2="1.3"><stop offset="0" stopColor={C.real} stopOpacity=".28" /><stop offset="1" stopColor={C.real} stopOpacity="0" /></linearGradient></defs>
-        <g stroke="var(--vg-grade)" strokeWidth="1.5" strokeDasharray="3 7">{eixo.marcas.map((m) => <line key={m} x1="80" y1={Y(m)} x2={XF} y2={Y(m)} />)}</g>
+        {/* uma linha vertical por dia util (o dia de hoje mais forte) e as linhas horizontais do eixo, bem visiveis */}
+        <g stroke="var(--vg-grade)" strokeWidth="1.5">{Array.from({ length: N }, (_, i) => <line key={i} x1={X(i + 1)} y1={Y(eixo.topo)} x2={X(i + 1)} y2="480" strokeOpacity={i + 1 === du ? 1 : 0.7} />)}</g>
+        <g stroke="var(--vg-tracejado)" strokeWidth="2.2" strokeDasharray="8 6">{eixo.marcas.map((m) => <line key={m} x1="80" y1={Y(m)} x2={XF} y2={Y(m)} />)}</g>
         <g fill={C.mute} fontSize="28" textAnchor="end">{eixo.marcas.map((m) => <text key={m} x="68" y={Y(m) + 9.3}>{mil(m)}</text>)}</g>
         {ult && pts.length > 1 && <polygon points={`${pts.join(" ")} ${X(ult.du)},480 ${X(1)},480`} fill="url(#vgar)" />}
-        {fat.meta ? <line x1={X(1)} y1={Y(fat.meta / N)} x2={XF} y2={Y(fat.meta)} stroke={C.mute} strokeWidth="3.5" strokeDasharray="10 8" /> : null}
-        {ult && du < N && <line x1={xh} y1={Y(ult.real)} x2={XF} y2={Y(r.projecao ?? 0)} stroke={C.texto} strokeWidth="4" strokeDasharray="2 8" strokeLinecap="round" />}
+        {fat.meta ? <line x1={X(1)} y1={Y(fat.meta / N)} x2={XF} y2={Y(fat.meta)} stroke={C.mute} strokeWidth="5" strokeDasharray="14 9" /> : null}
+        {ult && du < N && <line x1={xh} y1={Y(ult.real)} x2={XF} y2={Y(r.projecao ?? 0)} stroke={C.texto} strokeWidth="5.5" strokeDasharray="2 9" strokeLinecap="round" />}
         {pts.length > 1 && <polyline points={pts.join(" ")} fill="none" stroke={C.real} strokeWidth="6" strokeLinejoin="round" strokeLinecap="round" />}
         {ult && <circle cx={xh} cy={Y(ult.real)} r="10" fill={C.real} stroke="var(--vg-quadro)" strokeWidth="3" />}
         {/* rotulos da meta e da projecao: o de valor maior fica acima da linha dele, o outro abaixo, nunca um em cima do outro */}
-        {rotulosFim.map((l) => <g key={l.nome}><text x={XF + 22} y={l.y - 6} fill={C.mute} fontSize="24" fontWeight="600">{l.nome}</text><text x={XF + 22} y={l.y + 26} fill={l.cor} fontSize="34" fontWeight="800">{l.valor}</text></g>)}
-        <g fill={C.mute} fontSize="28" textAnchor="middle">{rotulos.map((l) => <text key={l.t + l.x} x={l.x} y="534" fill={l.hoje ? C.texto : undefined} fontWeight={l.hoje ? 800 : undefined}>{l.t}</text>)}</g>
+        {rotulosFim.map((l) => <g key={l.nome}><text x={XF + 16} y={l.y - 6} fill={C.mute} fontSize="22" fontWeight="600">{l.nome}</text><text x={XF + 16} y={l.y + 22} fill={l.cor} fontSize="25" fontWeight="800">{l.valor}</text></g>)}
+        {/* o dia de cada dia util embaixo da sua linha e "hoje" embaixo do dia de hoje (o mes esta no periodo, no alto da tela) */}
+        <g fill={C.mute} fontSize="19" textAnchor="middle">{fat.datasUteis.slice(0, N).map((t, i) => <text key={i} x={X(i + 1)} y="508" fill={i + 1 === du ? C.texto : undefined} fontWeight={i + 1 === du ? 800 : 500}>{t.slice(0, 2)}</text>)}</g>
+        {ult && <text x={xh} y="542" fill={C.texto} fontSize="24" fontWeight="800" textAnchor="middle">hoje</text>}
         <text x="16" y="266.7" fill={C.mute} fontSize="24" transform="rotate(-90 16 266.7)" textAnchor="middle">R$ mil</text>
       </svg>
     </div>
