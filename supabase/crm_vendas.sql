@@ -65,3 +65,6 @@ alter table public.audit_settings add column if not exists workshop_valor_padrao
 
 -- Comprovante na conversa (imagem ou documento do cliente) perto do fechamento no CRM: a venda e do dia do comprovante.
 -- Funcao crm_comprovantes(p_org, p_de, p_ate): so contato e hora, security definer, so da propria empresa (ou service role).
+
+-- Botao "Atualizar do CRM" (Resultados): o servidor dispara crm_disparar_vendas() e acompanha com
+-- crm_resposta_disparo(id) (so codigo HTTP e se a rodada foi pulada; so service_role).

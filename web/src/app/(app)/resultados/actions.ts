@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { exigirGestor } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { FORMAS, PRODUTOS } from "@/lib/resultados";
 
 // Acoes da aba Resultados. Todas passam por exigirGestor() e pela RLS da tabela (so gestor/admin, so a empresa aberta).
@@ -112,4 +113,23 @@ export async function restaurarVenda(fd: FormData): Promise<void> {
   if (error) falhaBanco(fd, error.message);
   revalidatePath("/resultados"); revalidatePath("/apresentacao");
   voltar(fd, "ok", "Venda restaurada: vale de novo o que a IA leu.");
+}
+
+// Botao "Atualizar do CRM": dispara agora a mesma busca que roda sozinha a cada 3 min (Edge Function crm-vendas).
+// O token da busca fica no banco e so o servidor usa (via crm_disparar_vendas); a tela recebe so o numero do pedido.
+export async function buscarCrmAgora(): Promise<{ id?: number; erro?: string }> {
+  await exigirGestor();
+  const { data, error } = await createAdminClient().rpc("crm_disparar_vendas");
+  if (error || data == null) return { erro: "Não foi possível pedir a busca ao CRM agora." };
+  return { id: Number(data) };
+}
+
+// A busca disparada ja terminou? (pulou = outra busca ja estava rodando; ela termina em seguida)
+export async function statusBuscaCrm(id: number): Promise<{ pronto: boolean; ok?: boolean; pulou?: boolean }> {
+  await exigirGestor();
+  if (!Number.isInteger(id) || id <= 0) return { pronto: true, ok: false };
+  const { data } = await createAdminClient().rpc("crm_resposta_disparo", { p_id: id });
+  const r = (Array.isArray(data) ? data[0] : data) as { status_code: number | null; pulou: boolean } | undefined;
+  if (!r) return { pronto: false };
+  return { pronto: true, ok: r.status_code === 200, pulou: !!r.pulou };
 }

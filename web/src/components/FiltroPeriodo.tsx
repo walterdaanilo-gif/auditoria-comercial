@@ -3,8 +3,9 @@ import { CalendarDays } from "lucide-react";
 import type { Periodo } from "@/lib/periodo";
 
 // Linha de filtros acima de tudo: atalhos de periodo, datas livres e (para gestor) o vendedor
-export default function FiltroPeriodo({ base, periodo, vendedores, vendedor, atalhos = [["hoje", "Hoje"], ["7", "7 dias"], ["30", "30 dias"]] }: {
+export default function FiltroPeriodo({ base, periodo, vendedores, vendedor, atalhos = [["hoje", "Hoje"], ["7", "7 dias"], ["30", "30 dias"]], acoes }: {
   base: string; periodo: Periodo; vendedores?: [string, string][]; vendedor?: string; atalhos?: [string, string][];
+  acoes?: React.ReactNode; // botoes extras ao lado do Aplicar (ex.: Atualizar do CRM em Resultados)
 }) {
   const extra: Record<string, string> = vendedor ? { v: vendedor } : {};
   const href = (p: string) => `${base}?${new URLSearchParams({ p, ...extra })}`;
@@ -27,6 +28,7 @@ export default function FiltroPeriodo({ base, periodo, vendedores, vendedor, ata
         )}
         <button className="btn-ghost !py-2"><CalendarDays size={16} />Aplicar</button>
       </form>
+      {acoes}
       <span className="ml-auto text-sm text-mute">{periodo.rotulo}</span>
     </div>
   );
