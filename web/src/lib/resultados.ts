@@ -208,6 +208,13 @@ export function tipoDoProduto(nome: string | null | undefined, valorCents: numbe
   if (n) return "outro";
   return valorCents != null && valorCents > 0 && valorCents <= 100000 ? "workshop" : "outro"; // sem produto: ate R$ 1.000 e workshop
 }
+// Assinatura da Plataforma: quando o cliente assina, o CRM abre e ganha sozinho um negocio na instancia "Suporte/posvendas",
+// com o valor da assinatura e sem produto (ex.: Josue Jordao 12/11, Lucas Santos 10/11). Esse caminho e venda de Plataforma.
+export function assinaturaPlataforma(v: { status?: string | null; valor_cents: number | null; produto?: string | null; produtos?: unknown; campos?: Record<string, unknown> | null }): boolean {
+  const semLista = !(Array.isArray(v.produtos) && v.produtos.length);
+  return (v.status ?? "won") === "won" && semLista && (v.valor_cents ?? 0) > 0 && (!v.produto || /plataforma|start/i.test(v.produto))
+    && /suporte|p[oó]s.?venda/i.test(String(v.campos?.instancia ?? ""));
+}
 const mesmoItem = (a: Item, b: Item) => (a.produto_id ? a.produto_id === b.produto_id : a.nome === b.nome) && (a.total_cents ?? 0) === (b.total_cents ?? 0);
 // itens cuja soma e exatamente o valor (para descobrir o que tinha num negocio antigo que veio sem a lista de produtos)
 function itensQueSomam(itens: Item[], alvo: number): number[] | null {
@@ -248,7 +255,7 @@ export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
       return v.valor_cents != null && soma > 0 && soma !== v.valor_cents ? v.valor_cents / soma : 1;
     };
     const linha = (v: CrmCruzado, it: Item | null, n: number, extra: Partial<CrmCruzado> = {}, dono: CrmCruzado = v): CrmCruzado => {
-      const tipo = it ? tipoDoProduto(it.nome) : tipoDoProduto(v.produto, v.valor_cents);
+      const tipo = it ? tipoDoProduto(it.nome) : assinaturaPlataforma(v) ? "plataforma" : tipoDoProduto(v.produto, v.valor_cents);
       const { dia, certo } = diaDaVenda(v, tipo, it);
       return { ...v, deal_id: it ? `${v.deal_id}#${n}` : v.deal_id, produto: it?.nome ?? v.produto, tipo, dia, diaCerto: certo,
         valor_cents: it ? Math.round((it.total_cents ?? 0) * fator(dono)) : v.valor_cents, ...extra };
