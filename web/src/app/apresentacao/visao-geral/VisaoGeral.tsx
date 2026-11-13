@@ -233,12 +233,12 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
         {!!fat.porProduto?.length && (
           // uma linha so, cada produto numa coluna do mesmo tamanho (nome em cima, valor embaixo): cabe ate 5 produtos sem cortar
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${fat.porProduto.length},minmax(0,1fr))`, gap: 8, flexShrink: 0 }} aria-label="Faturamento por produto">
-            {fat.porProduto.map((x) => (
+            {fat.porProduto.map((x, i) => (
               // clicar no produto abre a lista das vendas dele (cliente, vendedor, data e valor)
               <button key={x.produto} type="button" className="pr" onClick={() => setAberto(x.produto)} aria-haspopup="dialog" title={`Ver as vendas de ${NOME_PRODUTO[x.produto] ?? x.produto}`}
                 style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0, minWidth: 0, borderRadius: 10, padding: "5px 10px", textAlign: "left",
-                ...(x.produto === "plataforma" ? { background: "#1b9e88", color: "#fff" } : { background: "var(--vg-dentro)", color: C.texto }) }}>
-                <span className="nw" style={{ fontSize: 14, fontWeight: 700, color: x.produto === "plataforma" ? "#e3f4f0" : C.mute, overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{NOME_PRODUTO[x.produto] ?? x.produto}</span>
+                ...(i === 0 ? { background: "#1b9e88", color: "#fff" } : { background: "var(--vg-dentro)", color: C.texto }) }}>
+                <span className="nw" style={{ fontSize: 14, fontWeight: 700, color: i === 0 ? "#e3f4f0" : C.mute, overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{NOME_PRODUTO[x.produto] ?? x.produto}</span>
                 <span className="nw" style={{ fontSize: fat.porProduto!.length > 4 ? 17 : 20, fontWeight: 800, lineHeight: 1.15, fontVariantNumeric: "tabular-nums" }}>{moeda(x.valor)}</span>
               </button>
             ))}

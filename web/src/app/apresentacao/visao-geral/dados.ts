@@ -12,7 +12,7 @@ type Linha = { vendedor_id: string; respostas: number; marcacoes: number; ligaco
 type Tempos = { vendedor_id: string; primeira_resposta_seg: number | null; tempo_medio_resposta_seg: number | null; respostas_sdr: number | null };
 
 const n = (x: unknown) => Number(x) || 0;
-const ORDEM_PRODUTOS = ["plataforma", "imersao", "incompany", "workshop", "outro"]; // Plataforma primeiro na TV
+const ORDEM_PRODUTOS = ["plataforma", "imersao", "incompany", "workshop", "outro"]; // desempate (a TV ordena pelo valor vendido)
 const ddmm = (d: string) => d.slice(8, 10) + "/" + d.slice(5, 7);
 const util = (d: string) => { const w = new Date(d + "T12:00:00Z").getUTCDay(); return w !== 0 && w !== 6; };
 const sigla = (nome: string) => nome.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase() || "?";
@@ -153,7 +153,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
         const lista = l.map((v) => ({ cliente: v.cliente || "Cliente sem nome", empresa: v.empresa, vendedor: v.vendedorId ? nomeDe.get(v.vendedorId) ?? null : null, data: ddmm(v.data), valor: v.valor ?? 0 }))
           .sort((a, b) => b.valor - a.valor);
         return { produto, valor: l.reduce((t, v) => t + (v.valor ?? 0), 0), n: l.length, vendas: lista };
-      }).filter((x) => x.n > 0) },
+      }).filter((x) => x.n > 0).sort((a, b) => b.valor - a.valor) }, // do produto que mais vendeu para o que menos vendeu
     pessoas: [...sdrs.map((p) => pessoa(p, "sdr")), ...closers.map((p) => pessoa(p, "closer"))],
     quadros: resolverQuadros(cfg.tv_quadros),
     kpis,
