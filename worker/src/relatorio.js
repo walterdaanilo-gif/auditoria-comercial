@@ -137,6 +137,7 @@ export async function numerosDaApresentacao(db, orgId) {
   } catch (e) { console.error("[relatorio] numeros da apresentacao:", e.message); return null; }
 }
 const NOME_PRODUTO = { plataforma: "Plataforma", imersao: "Imersão", incompany: "In-Company", workshop: "Workshop", outro: "Outro" };
+const NOMES_PRODUTO = { plataforma: "Plataformas", imersao: "Imersões", incompany: "In-Company", workshop: "Workshops", outro: "Outros" };
 const brlc = n => Number(n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 // Resumo com os numeros da apresentacao: vendas do dia por produto (do que mais vendeu para o que menos), marcacoes e
@@ -149,7 +150,7 @@ export function textoResumoApresentacao(ap, d, dia, { turno = "dia", modelos } =
   const marc = sdrs.reduce((n, p) => n + (p.marcacoes || 0), 0), metaTime = metaSdr * sdrs.length;
   const prods = [...(ap.dia.produtos || [])].sort((a, b) => b.valor - a.valor);
   const vendas = prods.length
-    ? `${brlc(ap.dia.total)} (${prods.map(p => `${plural(p.n, NOME_PRODUTO[p.produto] ?? p.produto, NOME_PRODUTO[p.produto] ?? p.produto)} ${brlc(p.valor)}`).join(" · ")})`
+    ? `${brlc(ap.dia.total)} (${prods.map(p => `${plural(p.n, NOME_PRODUTO[p.produto] ?? p.produto, NOMES_PRODUTO[p.produto] ?? p.produto)} ${brlc(p.valor)}`).join(" · ")})`
     : "nenhuma ainda";
   const atencao = pessoas.map(p => {
     const closer = p.tipo === "closer", meta = closer ? metaCloser : metaSdr, feito = closer ? p.reunioes : p.marcacoes;
