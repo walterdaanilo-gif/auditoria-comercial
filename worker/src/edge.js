@@ -1,5 +1,6 @@
 // Edge Function "worker" do Supabase: substitui o servidor ligado 24h.
 //   POST /worker/webhook/uazapi?k=<WEBHOOK_SECRET>  -> mensagens e chamadas que a Uazapi manda na hora
+//   POST /worker/resumo/agora                        -> manda o resumo do dia agora (chave worker_token)
 //   POST /worker/tick?t=rapido|ciclo|crm            -> relogios do banco (pg_cron), com a chave interna worker_token
 //     rapido (1 min): conexoes da Uazapi (QR/status), transcricao, fila rapida de auditoria, agenda, analise do time
 //     ciclo  (5 min): auditoria das conversas paradas, resumos das 13h e 19h, follow-up, aviso de diagnostico pendente (6h antes da turma)
@@ -18,6 +19,7 @@ import { sugerirParaLead } from "./closer.js";
 import { avisarDiagnosticos } from "./diagnostico.js";
 import { avisarVenda } from "./vendaAviso.js";
 import { fotografarFollowups } from "./followup.js";
+import { enviarRelatorio } from "./relatorio.js";
 
 const LIMITE_MS = 120_000; // a funcao tem ~150s; para antes e a proxima volta continua
 const json = (code, obj) => new Response(JSON.stringify(obj), { status: code, headers: { "Content-Type": "application/json" } });
@@ -86,6 +88,12 @@ Deno.serve(async req => {
       const body = await req.json().catch(() => null);
       if (!body) return json(400, { erro: "corpo invalido" });
       return json(200, await avisarVenda(db, body));
+    }
+    // Mandar o resumo do dia agora (gestao pediu de novo): mesmos numeros da apresentacao, para os telefones de alerta
+    if (url.pathname.endsWith("/resumo/agora")) {
+      if (req.method !== "POST") return json(405, { erro: "use POST" });
+      if (!(await tokenOk(req))) return json(401, { erro: "nao autorizado" });
+      return json(200, { resultado: await enviarRelatorio(db, { turno: "dia" }) });
     }
     if (url.pathname.endsWith("/tick")) {
       if (!(await tokenOk(req))) return json(401, { erro: "nao autorizado" });
