@@ -100,6 +100,24 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
   const X = (i: number) => 80 + ((i - 1) / Math.max(N - 1, 1)) * (XF - 80);
   const Y = (v: number) => Math.max(14, 480 - (v / eixo.topo) * 440);
   const pts = fat.serie.map((s) => `${X(s.du).toFixed(1)},${Y(s.real).toFixed(1)}`);
+  // curva suave passando pelo acumulado de cada dia util (cubica monotona: nunca sobe ou desce alem dos pontos do dia)
+  const curva = (() => {
+    const P = fat.serie.map((s) => [X(s.du), Y(s.real)] as [number, number]);
+    if (P.length < 2) return "";
+    const n = P.length, d = P.slice(0, -1).map((p, i) => (P[i + 1][1] - p[1]) / (P[i + 1][0] - p[0]));
+    const m = P.map((_, i) => (i === 0 ? d[0] : i === n - 1 ? d[n - 2] : d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2));
+    for (let i = 0; i < n - 1; i++) {
+      if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+      const a = m[i] / d[i], b = m[i + 1] / d[i], h = a * a + b * b;
+      if (h > 9) { const t = 3 / Math.sqrt(h); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+    }
+    let path = `M${P[0][0].toFixed(1)},${P[0][1].toFixed(1)}`;
+    for (let i = 0; i < n - 1; i++) {
+      const dx = (P[i + 1][0] - P[i][0]) / 3;
+      path += ` C${(P[i][0] + dx).toFixed(1)},${(P[i][1] + m[i] * dx).toFixed(1)} ${(P[i + 1][0] - dx).toFixed(1)},${(P[i + 1][1] - m[i + 1] * dx).toFixed(1)} ${P[i + 1][0].toFixed(1)},${P[i + 1][1].toFixed(1)}`;
+    }
+    return path;
+  })();
   const ult = fat.serie[fat.serie.length - 1];
   const xh = ult ? X(ult.du) : X(1);
   const mil = (v: number) => String(Math.round(v / 1000));
@@ -129,18 +147,11 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
         {/* linhas horizontais do eixo, bem visiveis */}
         <g stroke="var(--vg-tracejado)" strokeWidth="2.2" strokeDasharray="8 6">{eixo.marcas.map((m) => <line key={m} x1="80" y1={Y(m)} x2={XF} y2={Y(m)} />)}</g>
         <g fill={C.mute} fontSize="28" textAnchor="end">{eixo.marcas.map((m) => <text key={m} x="68" y={Y(m) + 9.3}>{mil(m)}</text>)}</g>
-        {ult && pts.length > 1 && <polygon points={`${pts.join(" ")} ${X(ult.du)},480 ${X(1)},480`} fill="url(#vgar)" />}
-        {/* as tres linhas quebradas por dia util: um ponto em cada dia (meta e projecao com o acumulado esperado de cada dia) */}
-        {fat.meta ? <g>
-          <line x1={X(1)} y1={Y(fat.meta / N)} x2={XF} y2={Y(fat.meta)} stroke={C.mute} strokeWidth="5" strokeDasharray="14 9" />
-          {Array.from({ length: N }, (_, i) => <circle key={i} cx={X(i + 1)} cy={Y((fat.meta! * (i + 1)) / N)} r="5" fill="var(--vg-quadro)" stroke={C.mute} strokeWidth="2.5" />)}
-        </g> : null}
-        {ult && du < N && r.projecao !== null && <g>
-          <line x1={xh} y1={Y(ult.real)} x2={XF} y2={Y(r.projecao ?? 0)} stroke={C.texto} strokeWidth="5.5" strokeDasharray="2 9" strokeLinecap="round" />
-          {Array.from({ length: N - du }, (_, k) => { const dia = du + k + 1; return <circle key={dia} cx={X(dia)} cy={Y(ult.real + ((r.projecao! - ult.real) * (dia - du)) / (N - du))} r="5" fill="var(--vg-quadro)" stroke={C.texto} strokeWidth="2.5" />; })}
-        </g>}
-        {pts.length > 1 && <polyline points={pts.join(" ")} fill="none" stroke={C.real} strokeWidth="6" strokeLinejoin="round" strokeLinecap="round" />}
-        {fat.serie.slice(0, -1).map((p) => <circle key={p.du} cx={X(p.du)} cy={Y(p.real)} r="7" fill={C.real} stroke="var(--vg-quadro)" strokeWidth="2.5" />)}
+        {ult && pts.length > 1 && <path d={`${curva} L${X(ult.du).toFixed(1)},480 L${X(1).toFixed(1)},480 Z`} fill="url(#vgar)" />}
+        {fat.meta ? <line x1={X(1)} y1={Y(fat.meta / N)} x2={XF} y2={Y(fat.meta)} stroke={C.mute} strokeWidth="5" strokeDasharray="14 9" /> : null}
+        {ult && du < N && <line x1={xh} y1={Y(ult.real)} x2={XF} y2={Y(r.projecao ?? 0)} stroke={C.texto} strokeWidth="5.5" strokeDasharray="2 9" strokeLinecap="round" />}
+        {/* realizado: curva que passa pelo acumulado de cada dia util */}
+        {pts.length > 1 && <path d={curva} fill="none" stroke={C.real} strokeWidth="6" strokeLinejoin="round" strokeLinecap="round" />}
         {ult && <circle cx={xh} cy={Y(ult.real)} r="10" fill={C.real} stroke="var(--vg-quadro)" strokeWidth="3" />}
         {/* rotulos da meta e da projecao: o de valor maior fica acima da linha dele, o outro abaixo, nunca um em cima do outro */}
         {rotulosFim.map((l) => <g key={l.nome}><text x={XF + 16} y={l.y - 6} fill={C.mute} fontSize="22" fontWeight="600">{l.nome}</text><text x={XF + 16} y={l.y + 22} fill={l.cor} fontSize="25" fontWeight="800">{l.valor}</text></g>)}
