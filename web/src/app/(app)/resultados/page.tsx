@@ -6,7 +6,6 @@ import { fmtData, hojeBR } from "@/lib/format";
 import { lerPeriodo } from "@/lib/periodo";
 import { FORMAS, PRODUTOS, brlCompleto, contaNoFaturamento, listarResultados, rotuloForma, rotuloProduto, type Resultado } from "@/lib/resultados";
 import { criarVenda, removerVenda, restaurarVenda, salvarVenda } from "./actions";
-import BuscarCrm from "./BuscarCrm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Resultados · Cabueta do Elon Musk" };
@@ -55,7 +54,7 @@ export default async function Resultados({ searchParams: spP }: { searchParams: 
           <div><b className="text-base text-warn">A tabela de resultados ainda não existe no banco</b>
             <p className="mt-1 text-ink/90">Rode o bloco "Resultados (vendas)" do arquivo supabase/schema.sql no SQL Editor do Supabase. Enquanto isso, a lista mostra só as vendas da IA e não dá para adicionar nem ajustar.</p></div></div>
       )}
-      <FiltroPeriodo base="/resultados" periodo={periodo} atalhos={[["hoje", "Hoje"], ["semana", "Semana"], ["mes", "Mês"], ["30", "30 dias"]]} acoes={<BuscarCrm />} />
+      <FiltroPeriodo base="/resultados" periodo={periodo} atalhos={[["hoje", "Hoje"], ["semana", "Semana"], ["mes", "Mês"], ["30", "30 dias"]]} />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="card"><div className="label">Faturamento do período</div><div className="mt-1 text-3xl font-extrabold tabular-nums">{brlCompleto(total)}</div>

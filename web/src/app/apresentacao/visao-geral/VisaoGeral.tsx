@@ -4,6 +4,7 @@ import Link from "next/link";
 import AutoRefresh from "@/components/AutoRefresh";
 import { duracao } from "@/lib/format";
 import PeriodoSeletor from "./PeriodoSeletor";
+import BotaoAtualizarCrm from "./BotaoAtualizarCrm";
 import { CATALOGO, temItem, tituloDe, type QuadroCfg } from "@/lib/quadrosTv";
 import { calcularRitmo, eixoY, inteiro, moeda, tomPorDiferenca, type Kpi, type Pessoa, type Tom, type VisaoGeralDados } from "./calc";
 
@@ -29,7 +30,7 @@ const CSS = `
 .vg .row{display:flex;align-items:center;gap:12px;min-width:0}
 .vg .st{font-weight:700;font-size:16px;border-radius:999px;padding:5px 14px;white-space:nowrap}
 .vg .nw{white-space:nowrap}
-.vg .bt{font-family:inherit;font-weight:700;font-size:17px;border-radius:999px;padding:9px 20px;cursor:pointer;text-decoration:none;border:1px solid ${C.linha};background:var(--vg-quadro);color:${C.texto}}
+.vg .bt{font-family:inherit;font-weight:700;font-size:16px;border-radius:999px;padding:8px 15px;cursor:pointer;text-decoration:none;border:1px solid ${C.linha};background:var(--vg-quadro);color:${C.texto}}
 .vg .bt:hover{border-color:${C.label}}
 .vg .bt:focus-visible,.vg .pr:focus-visible{outline:2px solid ${C.label};outline-offset:2px}
 .vg .bt-forte{background:var(--vg-forte-bg);border-color:var(--vg-forte-borda);color:var(--vg-forte-texto)}
@@ -64,12 +65,13 @@ function BotaoTelaCheia() {
 // ---------------- cabecalho ----------------
 function Cabecalho({ d, tema, trocarTema }: { d: VisaoGeralDados; tema: Tema; trocarTema: () => void }) {
   return (
-    <div className="row" style={{ gap: 18, height: 52 }}>
+    <div className="row" style={{ gap: 12, height: 52 }}>
       <Link href="/" title="Voltar ao painel" style={{ display: "flex", background: "#0f3b38", borderRadius: 14, padding: "8px 18px" }}><img src="/weevo-logo.png" alt="Weevo" style={{ height: 30, width: "auto" }} /></Link>
       <span className="lb nw" style={{ color: C.mute }}>Cabueta do Elon Musk</span>
       <span className="mu nw">Atualizado às {d.atualizadoEm}</span>
       <div style={{ flex: 1 }} />
       <Link href="/" className="bt nw" title="Voltar para a tela inicial do Cabueta">← Tela inicial</Link>
+      {!d.demo && <BotaoAtualizarCrm />}
       <button type="button" onClick={trocarTema} className="bt nw" data-tema-botao aria-label={tema === "escuro" ? "Mudar para o modo claro" : "Mudar para o modo escuro"}>{tema === "escuro" ? "☀ Modo claro" : "☾ Modo escuro"}</button>
       <BotaoTelaCheia />
       {d.demo && <span className="st nw" style={{ background: TOM.neutro.bg, color: TOM.neutro.c }}>EXEMPLO · NÚMEROS FICTÍCIOS</span>}
