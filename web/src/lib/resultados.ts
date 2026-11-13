@@ -158,7 +158,7 @@ type CrmCruzado = Crm & { comprovante?: string; dia: string; fone: string; tipo:
 // Dia da VENDA (nao o dia em que o negocio foi marcado como ganho: o time lanca vendas antigas de uma vez no CRM).
 // 0) data de venda preenchida no CRM; produto acrescentado depois (o dia em que apareceu); COMPROVANTE do cliente na
 //    conversa ate 2 dias antes (ou 1 depois) do fechamento: o dia do comprovante (a conversa manda: ex. Rila, 12/11);
-// 1) "Data do diagnostico" do negocio; 2) workshop: o dia em que o negocio foi aberto (quando o link foi mandado);
+// 1) "Data do diagnostico" do negocio (ate 3 dias antes do ganho: o dia do ganho); 2) workshop: o dia em que o negocio foi aberto (quando o link foi mandado);
 // 3) aberto ate 7 dias antes do ganho: o dia da abertura; 4) aberto ha mais de 30 dias (venda antiga lancada agora): a
 //    abertura; 5) senao, o ganho. O cruzamento com a conversa ainda pode
 // antecipar a venda grande sem diagnostico para o dia em que ela apareceu na conversa.
@@ -188,7 +188,9 @@ export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; cam
   if (v.comprovante && tipo !== "workshop") return { dia: diaBR(v.comprovante), certo: true }; // cliente mandou o comprovante na conversa
   const ganho = diaBR(v.ganho_em);
   const diag = typeof v.campos?.["data-do-diagnostico"] === "string" ? (v.campos["data-do-diagnostico"] as string).slice(0, 10) : "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(diag) && diag <= ganho) return { dia: diag, certo: true };
+  // diagnostico ate 3 dias antes do fechamento: a reuniao foi num dia e a venda fechou depois (ex.: Pedro e Daniele, reuniao
+  // 12/11, venda 13/11): vale o dia em que o cartao foi ganho. Diagnostico mais antigo = venda antiga lancada agora: vale o diagnostico.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(diag) && diag <= ganho) return { dia: distDias(diag, ganho) <= 3 ? ganho : diag, certo: true };
   const aberto = v.aberto_em ? diaBR(v.aberto_em) : "";
   if (aberto && aberto <= ganho && (tipo === "workshop" || distDias(aberto, ganho) <= 7)) return { dia: aberto, certo: tipo === "workshop" };
   // negocio aberto ha mais de 30 dias e ganho agora, sem diagnostico, sem data e sem comprovante: e venda antiga lancada
