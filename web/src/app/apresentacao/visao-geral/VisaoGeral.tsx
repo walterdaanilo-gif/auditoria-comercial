@@ -95,41 +95,42 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
   const N = periodo.diasUteisMes, du = periodo.diaUtil;
   const r = calcularRitmo(fat.real, fat.meta, du, N);
   const eixo = eixoY(Math.max(fat.meta ?? 0, r.projecao ?? 0, fat.real));
-  // o desenho termina em XF; a direita fica a coluna dos rotulos de meta e projecao (nunca em cima das linhas)
-  const XF = 1010;
-  const X = (i: number) => 80 + ((i - 1) / Math.max(N - 1, 1)) * (XF - 80);
+  // Eixo X = dias corridos do periodo (como no painel de referencia): as linhas so sobem nos dias uteis e ficam retas
+  // nos fins de semana e feriados. A meta e distribuida pelos dias uteis; o realizado e o acumulado de cada dia.
+  const ano = Number(periodo.de.slice(0, 4)) || new Date().getFullYear();
+  const isoDe = (ddmm: string, base: number) => `${Number(ddmm.slice(3, 5)) < Number(periodo.de.slice(5, 7)) ? base + 1 : base}-${ddmm.slice(3, 5)}-${ddmm.slice(0, 2)}`; // virada de ano
+  const uteis = new Set(fat.datasUteis.map((t) => isoDe(t, ano)));
+  const ini = fat.datasUteis.length ? `${periodo.de.slice(0, 8)}01` : periodo.de;
+  const fimIso = fat.datasUteis.length ? (() => { const u = isoDe(fat.datasUteis[fat.datasUteis.length - 1], ano); const f = new Date(u + "T12:00:00Z"); const ult = new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth() + 1, 0)); return periodo.mensal ? ult.toISOString().slice(0, 10) : u; })() : periodo.ate;
+  const dias: { iso: string; du: number }[] = [];
+  for (let t = new Date((periodo.mensal ? ini : periodo.de) + "T12:00:00Z"), n = 0; t.toISOString().slice(0, 10) <= fimIso && dias.length < 62; t.setUTCDate(t.getUTCDate() + 1)) {
+    const iso = t.toISOString().slice(0, 10);
+    if (uteis.has(iso)) n++;
+    dias.push({ iso, du: n });
+  }
+  const D = Math.max(dias.length, 2);
+  const hojeK = Math.max(0, Math.min(D - 1, dias.findIndex((x) => x.iso === periodo.ate) >= 0 ? dias.findIndex((x) => x.iso === periodo.ate) : dias.filter((x) => x.du <= du).length - 1));
+  const X0 = 150, XF = 1010;
+  const X = (k: number) => X0 + (k / (D - 1)) * (XF - X0);
   const Y = (v: number) => Math.max(14, 480 - (v / eixo.topo) * 440);
-  const pts = fat.serie.map((s) => `${X(s.du).toFixed(1)},${Y(s.real).toFixed(1)}`);
-  // curva suave passando pelo acumulado de cada dia util (cubica monotona: nunca sobe ou desce alem dos pontos do dia)
-  const curva = (() => {
-    const P = fat.serie.map((s) => [X(s.du), Y(s.real)] as [number, number]);
-    if (P.length < 2) return "";
-    const n = P.length, d = P.slice(0, -1).map((p, i) => (P[i + 1][1] - p[1]) / (P[i + 1][0] - p[0]));
-    const m = P.map((_, i) => (i === 0 ? d[0] : i === n - 1 ? d[n - 2] : d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2));
-    for (let i = 0; i < n - 1; i++) {
-      if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
-      const a = m[i] / d[i], b = m[i + 1] / d[i], h = a * a + b * b;
-      if (h > 9) { const t = 3 / Math.sqrt(h); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
-    }
-    let path = `M${P[0][0].toFixed(1)},${P[0][1].toFixed(1)}`;
-    for (let i = 0; i < n - 1; i++) {
-      const dx = (P[i + 1][0] - P[i][0]) / 3;
-      path += ` C${(P[i][0] + dx).toFixed(1)},${(P[i][1] + m[i] * dx).toFixed(1)} ${(P[i + 1][0] - dx).toFixed(1)},${(P[i + 1][1] - m[i + 1] * dx).toFixed(1)} ${P[i + 1][0].toFixed(1)},${P[i + 1][1].toFixed(1)}`;
-    }
-    return path;
-  })();
-  const ult = fat.serie[fat.serie.length - 1];
-  const xh = ult ? X(ult.du) : X(1);
-  const mil = (v: number) => String(Math.round(v / 1000));
-  // meta e projecao: rotulo de duas linhas (nome e valor) na coluna da direita, na altura do fim de cada linha,
-  // com 70 de distancia no minimo entre os dois (o de valor maior fica em cima)
+  // acumulado realizado de cada dia: o da serie do ultimo dia util ate aquele dia
+  const realAte = (dk: number) => { let v = 0; for (const s of fat.serie) if (s.du <= dk) v = s.real; return v; };
+  const ptsReal = dias.slice(0, hojeK + 1).map((x, k) => [X(k), Y(k === hojeK ? fat.real : realAte(x.du))] as [number, number]);
+  const linha = (P: [number, number][]) => P.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const ptsMeta = fat.meta ? dias.map((x, k) => [X(k), Y((fat.meta! * x.du) / N)] as [number, number]) : [];
+  const ritmoDia = fat.real / Math.max(du, 1);
+  const ptsProj = du < N ? dias.slice(hojeK).map((x, k) => [X(hojeK + k), Y(fat.real + ritmoDia * Math.max(x.du - du, 0))] as [number, number]) : [];
+  const xh = X(hojeK), yh = Y(fat.real);
+  const mil = (v: number) => (v === 0 ? "0" : `${Math.round(v / 1000)} mil`);
+  const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+  // meta e projecao: rotulo de duas linhas (nome e valor) na coluna da direita, na altura do fim de cada linha
   const fins = [
     ...(fat.meta ? [{ nome: "meta", valor: moeda(fat.meta), v: fat.meta, cor: C.mute }] : []),
-    ...(ult && du < N && r.projecao !== null ? [{ nome: "projeção", valor: moeda(r.projecao), v: r.projecao, cor: C.texto }] : []),
+    ...(du < N && r.projecao !== null ? [{ nome: "projeção", valor: moeda(r.projecao), v: r.projecao, cor: C.texto }] : []),
   ].sort((a, b) => b.v - a.v);
   const rotulosFim: { nome: string; valor: string; y: number; cor: string }[] = [];
   fins.forEach((f, i) => {
-    let y = Math.min(Math.max(Y(f.v), 34), 446); // y = centro do rotulo
+    let y = Math.min(Math.max(Y(f.v), 34), 446);
     if (i > 0) y = Math.max(y, rotulosFim[0].y + 70);
     if (y > 446) { y = 446; rotulosFim[0].y = Math.min(rotulosFim[0].y, y - 70); }
     rotulosFim.push({ ...f, y });
@@ -137,28 +138,28 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, minHeight: 0 }}>
       <div className="row" style={{ gap: 16 }}>
-        <span className="lb nw" style={{ color: C.mute }}>Acumulado por dia útil</span><div style={{ flex: 1 }} />
-        <span className="row" style={{ gap: 8 }}><span style={{ width: 24, height: 5, background: C.real, borderRadius: 3 }} /><span className="mu" style={{ fontSize: 16 }}>Real</span></span>
-        <span className="row" style={{ gap: 8 }}><span style={{ width: 24, borderTop: `3px dashed ${C.mute}` }} /><span className="mu" style={{ fontSize: 16 }}>Meta</span></span>
+        <span className="lb nw" style={{ color: C.mute }}>Acumulado x meta</span><div style={{ flex: 1 }} />
+        <span className="row" style={{ gap: 8 }}><span style={{ width: 24, height: 5, background: C.real, borderRadius: 3 }} /><span className="mu" style={{ fontSize: 16 }}>Realizado</span></span>
+        <span className="row" style={{ gap: 8 }}><span style={{ width: 24, borderTop: `3px dashed ${C.mute}` }} /><span className="mu" style={{ fontSize: 16 }}>Meta pelos dias úteis</span></span>
         <span className="row" style={{ gap: 8 }}><span style={{ width: 24, borderTop: `3px dotted ${C.texto}` }} /><span className="mu" style={{ fontSize: 16 }}>Projeção</span></span>
       </div>
       <svg width="100%" viewBox="0 0 1240 560" preserveAspectRatio="xMidYMid meet" style={{ flex: 1, minHeight: 0 }} role="img" aria-label={`Faturamento acumulado: ${moeda(fat.real)} no dia útil ${du}${fat.meta ? `, meta ${moeda(fat.meta)}` : ""}`}>
         <defs><linearGradient id="vgar" x1="0" y1="0" x2="0" y2="1.3"><stop offset="0" stopColor={C.real} stopOpacity=".28" /><stop offset="1" stopColor={C.real} stopOpacity="0" /></linearGradient></defs>
         {/* linhas horizontais do eixo, bem visiveis */}
-        <g stroke="var(--vg-tracejado)" strokeWidth="2.2" strokeDasharray="8 6">{eixo.marcas.map((m) => <line key={m} x1="80" y1={Y(m)} x2={XF} y2={Y(m)} />)}</g>
-        <g fill={C.mute} fontSize="32" textAnchor="end">{eixo.marcas.map((m) => <text key={m} x="68" y={Y(m) + 11}>{mil(m)}</text>)}</g>
-        {ult && pts.length > 1 && <path d={`${curva} L${X(ult.du).toFixed(1)},480 L${X(1).toFixed(1)},480 Z`} fill="url(#vgar)" />}
-        {fat.meta ? <line x1={X(1)} y1={Y(fat.meta / N)} x2={XF} y2={Y(fat.meta)} stroke={C.mute} strokeWidth="5" strokeDasharray="14 9" /> : null}
-        {ult && du < N && <line x1={xh} y1={Y(ult.real)} x2={XF} y2={Y(r.projecao ?? 0)} stroke={C.texto} strokeWidth="5.5" strokeDasharray="2 9" strokeLinecap="round" />}
-        {/* realizado: curva que passa pelo acumulado de cada dia util */}
-        {pts.length > 1 && <path d={curva} fill="none" stroke={C.real} strokeWidth="6" strokeLinejoin="round" strokeLinecap="round" />}
-        {ult && <circle cx={xh} cy={Y(ult.real)} r="10" fill={C.real} stroke="var(--vg-quadro)" strokeWidth="3" />}
-        {/* rotulos da meta e da projecao: o de valor maior fica acima da linha dele, o outro abaixo, nunca um em cima do outro */}
+        <g stroke="var(--vg-tracejado)" strokeWidth="2.2">{eixo.marcas.map((m) => <line key={m} x1={X0} y1={Y(m)} x2={XF} y2={Y(m)} />)}</g>
+        <g fill={C.mute} fontSize="28" textAnchor="end">{eixo.marcas.map((m) => <text key={m} x={X0 - 14} y={Y(m) + 10}>{mil(m)}</text>)}</g>
+        {/* hoje: linha vertical pontilhada */}
+        <line x1={xh} y1={Y(eixo.topo)} x2={xh} y2="480" stroke={C.mute} strokeWidth="2.5" strokeDasharray="3 6" />
+        <text x={xh + 10} y={Y(eixo.topo) + 26} fill={C.texto} fontSize="26" fontWeight="700">hoje</text>
+        {ptsReal.length > 1 && <path d={`${linha(ptsReal)} L${xh.toFixed(1)},480 L${X(0).toFixed(1)},480 Z`} fill="url(#vgar)" />}
+        {ptsMeta.length > 1 && <path d={linha(ptsMeta)} fill="none" stroke={C.mute} strokeWidth="5" strokeDasharray="14 9" strokeLinejoin="round" />}
+        {ptsProj.length > 1 && <path d={linha(ptsProj)} fill="none" stroke={C.texto} strokeWidth="5.5" strokeDasharray="2 9" strokeLinecap="round" strokeLinejoin="round" />}
+        {/* realizado: sobe nos dias com venda e fica reto nos dias sem venda e nos fins de semana */}
+        {ptsReal.length > 1 && <path d={linha(ptsReal)} fill="none" stroke={C.real} strokeWidth="6" strokeLinejoin="round" strokeLinecap="round" />}
+        <circle cx={xh} cy={yh} r="10" fill={C.real} stroke="var(--vg-quadro)" strokeWidth="3" />
         {rotulosFim.map((l) => <g key={l.nome}><text x={XF + 16} y={l.y - 6} fill={C.mute} fontSize="25" fontWeight="600">{l.nome}</text><text x={XF + 16} y={l.y + 25} fill={l.cor} fontSize="29" fontWeight="800">{l.valor}</text></g>)}
-        {/* o dia de cada dia util embaixo da sua linha e "hoje" embaixo do dia de hoje (o mes esta no periodo, no alto da tela) */}
-        <g fill={C.mute} fontSize="23" textAnchor="middle">{fat.datasUteis.slice(0, N).map((t, i) => <text key={i} x={X(i + 1)} y="512" fill={i + 1 === du ? C.texto : undefined} fontWeight={i + 1 === du ? 800 : 500}>{t.slice(0, 2)}</text>)}</g>
-        {ult && <text x={xh} y="546" fill={C.texto} fontSize="27" fontWeight="800" textAnchor="middle">hoje</text>}
-        <text x="18" y="266.7" fill={C.mute} fontSize="26" transform="rotate(-90 18 266.7)" textAnchor="middle">R$ mil</text>
+        {/* datas de 7 em 7 dias, como no painel de referencia */}
+        <g fill={C.mute} fontSize="26" textAnchor="middle">{dias.map((x, k) => (k % 7 === 0 ? <text key={x.iso} x={X(k)} y="520">{ddmm(x.iso)}</text> : null))}</g>
       </svg>
     </div>
   );
