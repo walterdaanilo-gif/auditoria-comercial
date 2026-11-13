@@ -96,7 +96,7 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
   const r = calcularRitmo(fat.real, fat.meta, du, N);
   const eixo = eixoY(Math.max(fat.meta ?? 0, r.projecao ?? 0, fat.real));
   // o desenho termina em XF; a direita fica a coluna dos rotulos de meta e projecao (nunca em cima das linhas)
-  const XF = 680;
+  const XF = 1010;
   const X = (i: number) => 80 + ((i - 1) / Math.max(N - 1, 1)) * (XF - 80);
   const Y = (v: number) => Math.max(14, 480 - (v / eixo.topo) * 440);
   const pts = fat.serie.map((s) => `${X(s.du).toFixed(1)},${Y(s.real).toFixed(1)}`);
@@ -142,11 +142,11 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
         <span className="row" style={{ gap: 8 }}><span style={{ width: 24, borderTop: `3px dashed ${C.mute}` }} /><span className="mu" style={{ fontSize: 16 }}>Meta</span></span>
         <span className="row" style={{ gap: 8 }}><span style={{ width: 24, borderTop: `3px dotted ${C.texto}` }} /><span className="mu" style={{ fontSize: 16 }}>Projeção</span></span>
       </div>
-      <svg width="100%" viewBox="0 0 900 560" style={{ flex: 1, minHeight: 0 }} role="img" aria-label={`Faturamento acumulado: ${moeda(fat.real)} no dia útil ${du}${fat.meta ? `, meta ${moeda(fat.meta)}` : ""}`}>
+      <svg width="100%" viewBox="0 0 1240 560" preserveAspectRatio="xMidYMid meet" style={{ flex: 1, minHeight: 0 }} role="img" aria-label={`Faturamento acumulado: ${moeda(fat.real)} no dia útil ${du}${fat.meta ? `, meta ${moeda(fat.meta)}` : ""}`}>
         <defs><linearGradient id="vgar" x1="0" y1="0" x2="0" y2="1.3"><stop offset="0" stopColor={C.real} stopOpacity=".28" /><stop offset="1" stopColor={C.real} stopOpacity="0" /></linearGradient></defs>
         {/* linhas horizontais do eixo, bem visiveis */}
         <g stroke="var(--vg-tracejado)" strokeWidth="2.2" strokeDasharray="8 6">{eixo.marcas.map((m) => <line key={m} x1="80" y1={Y(m)} x2={XF} y2={Y(m)} />)}</g>
-        <g fill={C.mute} fontSize="28" textAnchor="end">{eixo.marcas.map((m) => <text key={m} x="68" y={Y(m) + 9.3}>{mil(m)}</text>)}</g>
+        <g fill={C.mute} fontSize="32" textAnchor="end">{eixo.marcas.map((m) => <text key={m} x="68" y={Y(m) + 11}>{mil(m)}</text>)}</g>
         {ult && pts.length > 1 && <path d={`${curva} L${X(ult.du).toFixed(1)},480 L${X(1).toFixed(1)},480 Z`} fill="url(#vgar)" />}
         {fat.meta ? <line x1={X(1)} y1={Y(fat.meta / N)} x2={XF} y2={Y(fat.meta)} stroke={C.mute} strokeWidth="5" strokeDasharray="14 9" /> : null}
         {ult && du < N && <line x1={xh} y1={Y(ult.real)} x2={XF} y2={Y(r.projecao ?? 0)} stroke={C.texto} strokeWidth="5.5" strokeDasharray="2 9" strokeLinecap="round" />}
@@ -154,11 +154,11 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
         {pts.length > 1 && <path d={curva} fill="none" stroke={C.real} strokeWidth="6" strokeLinejoin="round" strokeLinecap="round" />}
         {ult && <circle cx={xh} cy={Y(ult.real)} r="10" fill={C.real} stroke="var(--vg-quadro)" strokeWidth="3" />}
         {/* rotulos da meta e da projecao: o de valor maior fica acima da linha dele, o outro abaixo, nunca um em cima do outro */}
-        {rotulosFim.map((l) => <g key={l.nome}><text x={XF + 16} y={l.y - 6} fill={C.mute} fontSize="22" fontWeight="600">{l.nome}</text><text x={XF + 16} y={l.y + 22} fill={l.cor} fontSize="25" fontWeight="800">{l.valor}</text></g>)}
+        {rotulosFim.map((l) => <g key={l.nome}><text x={XF + 16} y={l.y - 6} fill={C.mute} fontSize="25" fontWeight="600">{l.nome}</text><text x={XF + 16} y={l.y + 25} fill={l.cor} fontSize="29" fontWeight="800">{l.valor}</text></g>)}
         {/* o dia de cada dia util embaixo da sua linha e "hoje" embaixo do dia de hoje (o mes esta no periodo, no alto da tela) */}
-        <g fill={C.mute} fontSize="19" textAnchor="middle">{fat.datasUteis.slice(0, N).map((t, i) => <text key={i} x={X(i + 1)} y="508" fill={i + 1 === du ? C.texto : undefined} fontWeight={i + 1 === du ? 800 : 500}>{t.slice(0, 2)}</text>)}</g>
-        {ult && <text x={xh} y="542" fill={C.texto} fontSize="24" fontWeight="800" textAnchor="middle">hoje</text>}
-        <text x="16" y="266.7" fill={C.mute} fontSize="24" transform="rotate(-90 16 266.7)" textAnchor="middle">R$ mil</text>
+        <g fill={C.mute} fontSize="23" textAnchor="middle">{fat.datasUteis.slice(0, N).map((t, i) => <text key={i} x={X(i + 1)} y="512" fill={i + 1 === du ? C.texto : undefined} fontWeight={i + 1 === du ? 800 : 500}>{t.slice(0, 2)}</text>)}</g>
+        {ult && <text x={xh} y="546" fill={C.texto} fontSize="27" fontWeight="800" textAnchor="middle">hoje</text>}
+        <text x="18" y="266.7" fill={C.mute} fontSize="26" transform="rotate(-90 18 266.7)" textAnchor="middle">R$ mil</text>
       </svg>
     </div>
   );
@@ -218,7 +218,7 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
   const [aberto, setAberto] = useState<string | null>(null);
   const produtoAberto = fat.porProduto?.find((x) => x.produto === aberto) ?? null;
   return (
-    <div className="cd" style={{ background: "linear-gradient(125deg,var(--vg-destaque) 0%,var(--vg-quadro) 62%)", borderColor: "var(--vg-borda-fat)", padding: "20px 34px 22px", overflow: "hidden", minHeight: 0, display: "grid", gridTemplateRows: "minmax(0,1fr)", gridTemplateColumns: comGrafico ? "minmax(0,1fr) minmax(0,1.05fr)" : "minmax(0,1fr)", gap: 34 }}>
+    <div className="cd" style={{ background: "linear-gradient(125deg,var(--vg-destaque) 0%,var(--vg-quadro) 62%)", borderColor: "var(--vg-borda-fat)", padding: "20px 34px 22px", overflow: "hidden", minHeight: 0, display: "grid", gridTemplateRows: "minmax(0,1fr)", gridTemplateColumns: comGrafico ? "minmax(0,1fr) minmax(0,1.2fr)" : "minmax(0,1fr)", gap: 28 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: fat.porProduto?.length ? 8 : 10, minWidth: 0, minHeight: 0 }}>
         <div className="row"><span className="lb nw" style={{ fontSize: 18 }}>{tituloDe(q)}</span><div style={{ flex: 1 }} />
           {r.selo && <Selo tom={r.selo.tom}>{r.selo.texto}</Selo>}</div>
