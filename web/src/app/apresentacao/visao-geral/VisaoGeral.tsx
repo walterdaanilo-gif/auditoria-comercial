@@ -15,8 +15,8 @@ const tom = (t: Tom) => ({ c: `var(--vg-${t}-c)`, bg: `var(--vg-${t}-bg)`, barra
 const TOM: Record<Tom, { c: string; bg: string; barra: string }> = { ok: tom("ok"), warn: tom("warn"), bad: tom("bad"), neutro: tom("neutro") };
 const C = { texto: "var(--vg-texto)", mute: "var(--vg-mute)", label: "var(--vg-label)", linha: "var(--vg-linha)", trilho: "var(--vg-trilho)", real: "var(--vg-real)" };
 // [claro, escuro] de cada cor
-const TEMA_CLARO = "--vg-texto:#10201e;--vg-mute:#4f6462;--vg-label:#0d6b5f;--vg-linha:#d3dddb;--vg-trilho:#e2eae8;--vg-real:#0f9b86;--vg-ok-c:#0a7a4b;--vg-ok-bg:#dcf4e7;--vg-ok-barra:#1fa86a;--vg-warn-c:#8a5a00;--vg-warn-bg:#fdf0cc;--vg-warn-barra:#e0a100;--vg-bad-c:#b42318;--vg-bad-bg:#fde3e0;--vg-bad-barra:#e5484d;--vg-neutro-c:#3d5250;--vg-neutro-bg:#e6eeed;--vg-neutro-barra:#9bb0ad;--vg-quadro:#fff;--vg-caixa:#f7faf9;--vg-dentro:#eef6f4;--vg-destaque:#e3f4f0;--vg-grade:#d9e3e1;--vg-borda-fat:#b7dad3;--vg-tracejado:#b3c4c1;--vg-avatar:#c9d6d3;--vg-kpi-ruim-bg:#fff1ef;--vg-kpi-ruim-borda:#f1b8b2;--vg-fundo:#f3f6f5;--vg-brilho:rgba(109,207,192,.18);--vg-veu:rgba(16,32,30,.45);--vg-sombra:rgba(16,32,30,.05);--vg-forte-bg:#0f3b38;--vg-forte-texto:#fff;--vg-forte-borda:#0f3b38";
-const TEMA_ESCURO = "--vg-texto:#f0faf7;--vg-mute:#9ba5a4;--vg-label:#6dcfc0;--vg-linha:#2b3433;--vg-trilho:#1d2527;--vg-real:#6dcfc0;--vg-ok-c:#5fd39a;--vg-ok-bg:rgba(95,211,154,.14);--vg-ok-barra:#5fd39a;--vg-warn-c:#e5a85f;--vg-warn-bg:rgba(229,168,95,.15);--vg-warn-barra:#e5a85f;--vg-bad-c:#ff7b6b;--vg-bad-bg:rgba(255,123,107,.14);--vg-bad-barra:#ff7b6b;--vg-neutro-c:#9ba5a4;--vg-neutro-bg:#1d2527;--vg-neutro-barra:#5b6a68;--vg-quadro:#151b1e;--vg-caixa:#1a2225;--vg-dentro:#212b2e;--vg-destaque:#16302e;--vg-grade:#2b3433;--vg-borda-fat:#24433f;--vg-tracejado:#3a4746;--vg-avatar:#2b3433;--vg-kpi-ruim-bg:rgba(255,123,107,.08);--vg-kpi-ruim-borda:#5c2c27;--vg-fundo:#0c1212;--vg-brilho:rgba(28,71,70,.45);--vg-veu:rgba(0,0,0,.6);--vg-sombra:rgba(0,0,0,.35);--vg-forte-bg:linear-gradient(90deg,#86dccd,#5fbcae);--vg-forte-texto:#0c1212;--vg-forte-borda:transparent";
+const TEMA_CLARO = "--vg-meta:#12a150;--vg-texto:#10201e;--vg-mute:#4f6462;--vg-label:#0d6b5f;--vg-linha:#d3dddb;--vg-trilho:#e2eae8;--vg-real:#0f9b86;--vg-ok-c:#0a7a4b;--vg-ok-bg:#dcf4e7;--vg-ok-barra:#1fa86a;--vg-warn-c:#8a5a00;--vg-warn-bg:#fdf0cc;--vg-warn-barra:#e0a100;--vg-bad-c:#b42318;--vg-bad-bg:#fde3e0;--vg-bad-barra:#e5484d;--vg-neutro-c:#3d5250;--vg-neutro-bg:#e6eeed;--vg-neutro-barra:#9bb0ad;--vg-quadro:#fff;--vg-caixa:#f7faf9;--vg-dentro:#eef6f4;--vg-destaque:#e3f4f0;--vg-grade:#d9e3e1;--vg-borda-fat:#b7dad3;--vg-tracejado:#b3c4c1;--vg-avatar:#c9d6d3;--vg-kpi-ruim-bg:#fff1ef;--vg-kpi-ruim-borda:#f1b8b2;--vg-fundo:#f3f6f5;--vg-brilho:rgba(109,207,192,.18);--vg-veu:rgba(16,32,30,.45);--vg-sombra:rgba(16,32,30,.05);--vg-forte-bg:#0f3b38;--vg-forte-texto:#fff;--vg-forte-borda:#0f3b38";
+const TEMA_ESCURO = "--vg-meta:#3ee07f;--vg-texto:#f0faf7;--vg-mute:#9ba5a4;--vg-label:#6dcfc0;--vg-linha:#2b3433;--vg-trilho:#1d2527;--vg-real:#6dcfc0;--vg-ok-c:#5fd39a;--vg-ok-bg:rgba(95,211,154,.14);--vg-ok-barra:#5fd39a;--vg-warn-c:#e5a85f;--vg-warn-bg:rgba(229,168,95,.15);--vg-warn-barra:#e5a85f;--vg-bad-c:#ff7b6b;--vg-bad-bg:rgba(255,123,107,.14);--vg-bad-barra:#ff7b6b;--vg-neutro-c:#9ba5a4;--vg-neutro-bg:#1d2527;--vg-neutro-barra:#5b6a68;--vg-quadro:#151b1e;--vg-caixa:#1a2225;--vg-dentro:#212b2e;--vg-destaque:#16302e;--vg-grade:#2b3433;--vg-borda-fat:#24433f;--vg-tracejado:#3a4746;--vg-avatar:#2b3433;--vg-kpi-ruim-bg:rgba(255,123,107,.08);--vg-kpi-ruim-borda:#5c2c27;--vg-fundo:#0c1212;--vg-brilho:rgba(28,71,70,.45);--vg-veu:rgba(0,0,0,.6);--vg-sombra:rgba(0,0,0,.35);--vg-forte-bg:linear-gradient(90deg,#86dccd,#5fbcae);--vg-forte-texto:#0c1212;--vg-forte-borda:transparent";
 type Tema = "claro" | "escuro";
 const CSS = `
 .vg{${TEMA_CLARO};color-scheme:light;font-family:'Inter Variable',Inter,system-ui,sans-serif;color:${C.texto}}
@@ -125,7 +125,7 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
   const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
   // meta e projecao: rotulo de duas linhas (nome e valor) na coluna da direita, na altura do fim de cada linha
   const fins = [
-    ...(fat.meta ? [{ nome: "meta", valor: moeda(fat.meta), v: fat.meta, cor: C.mute }] : []),
+    ...(fat.meta ? [{ nome: "meta", valor: moeda(fat.meta), v: fat.meta, cor: "var(--vg-meta)" }] : []),
     ...(du < N && r.projecao !== null ? [{ nome: "projeção", valor: moeda(r.projecao), v: r.projecao, cor: C.texto }] : []),
   ].sort((a, b) => b.v - a.v);
   const rotulosFim: { nome: string; valor: string; y: number; cor: string }[] = [];
@@ -140,7 +140,7 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
       <div className="row" style={{ gap: 16 }}>
         <span className="lb nw" style={{ color: C.mute }}>Acumulado x meta</span><div style={{ flex: 1 }} />
         <span className="row" style={{ gap: 8 }}><span style={{ width: 24, height: 5, background: C.real, borderRadius: 3 }} /><span className="mu" style={{ fontSize: 16 }}>Realizado</span></span>
-        <span className="row" style={{ gap: 8 }}><span style={{ width: 24, borderTop: `3px dashed ${C.mute}` }} /><span className="mu" style={{ fontSize: 16 }}>Meta pelos dias úteis</span></span>
+        <span className="row" style={{ gap: 8 }}><span style={{ width: 24, borderTop: "3px dashed var(--vg-meta)" }} /><span className="mu" style={{ fontSize: 16, color: "var(--vg-meta)", fontWeight: 700 }}>Meta pelos dias úteis</span></span>
         <span className="row" style={{ gap: 8 }}><span style={{ width: 24, borderTop: `3px dotted ${C.texto}` }} /><span className="mu" style={{ fontSize: 16 }}>Projeção</span></span>
       </div>
       <svg width="100%" viewBox="0 0 1240 560" preserveAspectRatio="xMidYMid meet" style={{ flex: 1, minHeight: 0 }} role="img" aria-label={`Faturamento acumulado: ${moeda(fat.real)} no dia útil ${du}${fat.meta ? `, meta ${moeda(fat.meta)}` : ""}`}>
@@ -152,12 +152,12 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
         <line x1={xh} y1={Y(eixo.topo)} x2={xh} y2="480" stroke={C.mute} strokeWidth="2.5" strokeDasharray="3 6" />
         <text x={xh + 10} y={Y(eixo.topo) + 26} fill={C.texto} fontSize="26" fontWeight="700">hoje</text>
         {ptsReal.length > 1 && <path d={`${linha(ptsReal)} L${xh.toFixed(1)},480 L${X(0).toFixed(1)},480 Z`} fill="url(#vgar)" />}
-        {ptsMeta.length > 1 && <path d={linha(ptsMeta)} fill="none" stroke={C.mute} strokeWidth="5" strokeDasharray="14 9" strokeLinejoin="round" />}
+        {ptsMeta.length > 1 && <path d={linha(ptsMeta)} fill="none" stroke="var(--vg-meta)" strokeWidth="5" strokeDasharray="14 9" strokeLinejoin="round" />}
         {ptsProj.length > 1 && <path d={linha(ptsProj)} fill="none" stroke={C.texto} strokeWidth="5.5" strokeDasharray="2 9" strokeLinecap="round" strokeLinejoin="round" />}
         {/* realizado: sobe nos dias com venda e fica reto nos dias sem venda e nos fins de semana */}
         {ptsReal.length > 1 && <path d={linha(ptsReal)} fill="none" stroke={C.real} strokeWidth="6" strokeLinejoin="round" strokeLinecap="round" />}
         <circle cx={xh} cy={yh} r="10" fill={C.real} stroke="var(--vg-quadro)" strokeWidth="3" />
-        {rotulosFim.map((l) => <g key={l.nome}><text x={XF + 16} y={l.y - 6} fill={C.mute} fontSize="25" fontWeight="600">{l.nome}</text><text x={XF + 16} y={l.y + 25} fill={l.cor} fontSize="29" fontWeight="800">{l.valor}</text></g>)}
+        {rotulosFim.map((l) => <g key={l.nome}><text x={XF + 16} y={l.y - 6} fill={l.nome === "meta" ? "var(--vg-meta)" : C.mute} fontSize="25" fontWeight="600">{l.nome}</text><text x={XF + 16} y={l.y + 25} fill={l.cor} fontSize="29" fontWeight="800">{l.valor}</text></g>)}
         {/* datas de 7 em 7 dias, como no painel de referencia */}
         <g fill={C.mute} fontSize="26" textAnchor="middle">{dias.map((x, k) => (k % 7 === 0 ? <text key={x.iso} x={X(k)} y="520">{ddmm(x.iso)}</text> : null))}</g>
       </svg>
