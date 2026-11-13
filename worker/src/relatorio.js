@@ -125,6 +125,61 @@ export function textoResumo(d, dia, { turno = "dia", parados = new Map(), modelo
   ].join("\n"));
 }
 
+// Numeros da apresentacao (TV): o site calcula (mesma conta da tela) e o resumo so formata. null = site fora do ar.
+export async function numerosDaApresentacao(db, orgId) {
+  if (!orgId) return null;
+  try {
+    const [t] = await db.select("worker_token", { select: "token", filters: { id: "eq.1" } });
+    if (!t?.token) return null;
+    const r = await fetch(`${SITE}/api/resumo?org=${encodeURIComponent(orgId)}`, { headers: { "x-worker-token": t.token }, signal: AbortSignal.timeout(50000) });
+    const j = await r.json().catch(() => null);
+    return r.ok && j?.ok ? j : null;
+  } catch (e) { console.error("[relatorio] numeros da apresentacao:", e.message); return null; }
+}
+const NOME_PRODUTO = { plataforma: "Plataforma", imersao: "Imersão", incompany: "In-Company", workshop: "Workshop", outro: "Outro" };
+const brlc = n => Number(n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// Resumo com os numeros da apresentacao: vendas do dia por produto (do que mais vendeu para o que menos), marcacoes e
+// reunioes contra a meta do turno, follow-ups atrasados (o mesmo retrato da TV) e o mes contra a meta.
+export function textoResumoApresentacao(ap, d, dia, { turno = "dia", modelos } = {}) {
+  const { s, time } = d;
+  const pessoas = ap.dia.pessoas || [];
+  const metaSdr = s.meta_sdr_marcacoes ?? 6, metaCloser = s.meta_closer_reunioes ?? null;
+  const sdrs = pessoas.filter(p => p.tipo === "sdr"), closers = pessoas.filter(p => p.tipo === "closer");
+  const marc = sdrs.reduce((n, p) => n + (p.marcacoes || 0), 0), metaTime = metaSdr * sdrs.length;
+  const prods = [...(ap.dia.produtos || [])].sort((a, b) => b.valor - a.valor);
+  const vendas = prods.length
+    ? `${brlc(ap.dia.total)} (${prods.map(p => `${plural(p.n, NOME_PRODUTO[p.produto] ?? p.produto, NOME_PRODUTO[p.produto] ?? p.produto)} ${brlc(p.valor)}`).join(" · ")})`
+    : "nenhuma ainda";
+  const atencao = pessoas.map(p => {
+    const closer = p.tipo === "closer", meta = closer ? metaCloser : metaSdr, feito = closer ? p.reunioes : p.marcacoes;
+    const alvoT = alvo(meta, turno), abaixo = meta != null && feito != null && feito < alvoT, fu = p.followups || 0;
+    if (!abaixo && !fu) return null;
+    const partes = [];
+    if (abaixo) partes.push(`${feito}/${meta} ${closer ? "reuniões" : "marcações"}`);
+    if (fu) partes.push(plural(fu, "follow-up atrasado", "follow-ups atrasados"));
+    return `⚠️ ${p.nome} ${partes.join(" · ")}`;
+  }).filter(Boolean);
+  const top = [...pessoas].filter(p => p.vendasValor > 0).sort((a, b) => b.vendasValor - a.vendasValor)[0];
+  const destaque = top ? `👑 ${top.nome}: ${brlc(top.vendasValor)} em ${plural(top.vendasN, "venda", "vendas")}` : "";
+  const m = ap.mes || {};
+  const mes = m.meta ? `${brlc(m.real)} de ${brlc(m.meta)} (${Math.round(m.pct ?? 0)}%)${m.precisaPorDia != null ? ` · precisa ${brlc(m.precisaPorDia)}/dia útil` : ""}${m.projecao != null ? ` · projeção ${brlc(m.projecao)}` : ""}`
+    : `${brlc(m.real)} no mês`;
+  const hora = hh(turno === "manha" ? s.resumo_manha_hora || "13:00" : s.rodada_final_hora || "19:00");
+  const ligacoes = time.ligAt ? `${plural(time.ligAt, "atendida", "atendidas")}${time.ligSeg ? ` · ${dur(time.ligSeg)}` : ""}` : "nenhuma atendida";
+  const vars = { hora, data: ddmm(dia), vendas, marcacoes: `${marc}${metaTime ? `/${metaTime}` : ""}`, ligacoes, atencao: atencao.join("\n"), destaque, mes, painel: SITE };
+  return textoDe(modelos, turno === "manha" ? "resumo_manha" : "resumo_dia", vars, () => [
+    `🚀 *Resumo ${hora} · ${ddmm(dia)}*`, ``,
+    `💰 Vendas hoje: ${vendas}`,
+    `📈 Mês: ${mes}`,
+    `📅 Marcações: ${vars.marcacoes}`,
+    ...(closers.length && metaCloser ? [`🤝 Reuniões: ${closers.reduce((n, p) => n + (p.reunioes || 0), 0)}/${metaCloser * closers.length}`] : []),
+    `📞 Ligações: ${ligacoes}`,
+    ...(atencao.length || destaque ? [``, ...atencao, ...(destaque ? [destaque] : [])] : []),
+    ``, `Detalhes 👉 ${SITE}`,
+  ].join("\n"));
+}
+
 // Para quem e por onde mandar (Configuracoes > Alertas ao gestor); null = nao manda hoje (com o motivo)
 export async function destinoResumo(db, s) {
   if (!s?.resumo_ativo) return { motivo: "resumo desligado" };
@@ -155,7 +210,10 @@ export async function enviarRelatorio(db, { turno = "dia", envio = enviarWhatsAp
   let parados = new Map();
   try { for (const l of await leadsParados(db, await carregarRegras(db))) parados.set(l.vendedor_id, (parados.get(l.vendedor_id) || 0) + 1); }
   catch (e) { console.error("[relatorio] follow-up:", e.message); }
-  const texto = textoResumo(d, hoje, { turno, parados, modelos });
+  // numeros da apresentacao (os mesmos da TV); se o site nao responder, cai no resumo antigo (conta do proprio worker)
+  const ap = await numerosDaApresentacao(db, d.s.org_id);
+  if (!ap) console.warn("[relatorio] apresentacao indisponivel: resumo com a conta do worker");
+  const texto = ap ? textoResumoApresentacao(ap, d, hoje, { turno, modelos }) : textoResumo(d, hoje, { turno, parados, modelos });
   await notificar(db, await gestores(db), { categoria: "resumo", titulo: `${turno === "manha" ? "☀️ Resumo das 13h" : "🌙 Resumo do dia"} · ${ddmm(hoje)}`, texto: texto.replace(/^.*\n\n/, ""), link: "/" });
   const ok = await mandar(db, dest, texto, envio, "relatorio");
   if (ok) await db.update("audit_settings", { id: "eq.1" }, { resumo_ultimo_envio: new Date().toISOString() });

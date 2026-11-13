@@ -25,14 +25,15 @@ const FRASE = { k: "frase", desc: "Frase pronta do sistema (varia a cada convers
 const RESUMO: Variavel[] = [
   { k: "hora", desc: "Hora do resumo", ex: "13h" },
   { k: "data", desc: "Dia (dd/mm)", ex: "30/10" },
-  { k: "vendas", desc: "Vendas do time", ex: "1 imersão R$ 4.800,00 · 2 convites" },
+  { k: "vendas", desc: "Vendas de hoje por produto (as mesmas da apresentação)", ex: "R$ 1.904,00 (1 Imersão R$ 1.610,00 · 2 Workshop R$ 294,00)" },
+  { k: "mes", desc: "Faturamento do mês contra a meta (o mesmo da apresentação)", ex: "R$ 38.788,00 de R$ 100.000,00 (39%) · precisa R$ 5.564,75/dia útil" },
   { k: "marcacoes", desc: "Marcações / meta do time", ex: "5/12" },
   { k: "ligacoes", desc: "Ligações atendidas e tempo", ex: "9 atendidas · 42min" },
   { k: "atencao", desc: "Quem está abaixo da meta ou com follow-up atrasado (uma linha por pessoa)", ex: "⚠️ Ruan 2/6 marcações" },
   { k: "destaque", desc: "Destaque do turno", ex: "👑 Nick: 5 marcações" },
   { k: "painel", desc: "Link do painel", ex: "https://auditoria-comercial-omega.vercel.app" },
 ];
-const RESUMO_PADRAO = "🚀 *Resumo {hora} · {data}*\n\n💰 Vendas: {vendas}\n📅 Marcações: {marcacoes}\n📞 Ligações: {ligacoes}\n\n{atencao}\n{destaque}\n\nDetalhes 👉 {painel}";
+const RESUMO_PADRAO = "🚀 *Resumo {hora} · {data}*\n\n💰 Vendas hoje: {vendas}\n📈 Mês: {mes}\n📅 Marcações: {marcacoes}\n📞 Ligações: {ligacoes}\n\n{atencao}\n{destaque}\n\nDetalhes 👉 {painel}";
 
 export const MODELOS: ModeloMensagem[] = [
   {
