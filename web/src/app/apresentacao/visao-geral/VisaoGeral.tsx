@@ -95,7 +95,9 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
   const N = periodo.diasUteisMes, du = periodo.diaUtil;
   const r = calcularRitmo(fat.real, fat.meta, du, N);
   const eixo = eixoY(Math.max(fat.meta ?? 0, r.projecao ?? 0, fat.real));
-  const X = (i: number) => 80 + ((i - 1) / Math.max(N - 1, 1)) * 780;
+  // o desenho termina em XF; a direita fica a coluna dos rotulos de meta e projecao (nunca em cima das linhas)
+  const XF = 750;
+  const X = (i: number) => 80 + ((i - 1) / Math.max(N - 1, 1)) * (XF - 80);
   const Y = (v: number) => Math.max(14, 480 - (v / eixo.topo) * 440);
   const pts = fat.serie.map((s) => `${X(s.du).toFixed(1)},${Y(s.real).toFixed(1)}`);
   const ult = fat.serie[fat.serie.length - 1];
@@ -106,19 +108,20 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
     rotulos.push({ x: Math.max(X(1), 96), t: fat.datasUteis[0] });
     if (du >= 9 && fat.datasUteis[5]) rotulos.push({ x: X(6), t: fat.datasUteis[5] });
     rotulos.push({ x: xh, t: "hoje", hoje: true });
-    if (du < N - 1) rotulos.push({ x: 840, t: fat.datasUteis[N - 1] ?? "" });
+    if (du < N - 1) rotulos.push({ x: XF, t: fat.datasUteis[N - 1] ?? "" });
   }
-  // meta e projecao no fim do grafico: o de valor maior acima da propria linha, o outro abaixo, com 36 de distancia no minimo
+  // meta e projecao: rotulo de duas linhas (nome e valor) na coluna da direita, na altura do fim de cada linha,
+  // com 70 de distancia no minimo entre os dois (o de valor maior fica em cima)
   const fins = [
-    ...(fat.meta ? [{ t: `meta ${mil(fat.meta)}`, v: fat.meta, cor: C.mute }] : []),
-    ...(ult && du < N && r.projecao !== null ? [{ t: `projeção ${mil(r.projecao)}`, v: r.projecao, cor: C.texto }] : []),
+    ...(fat.meta ? [{ nome: "meta", valor: mil(fat.meta), v: fat.meta, cor: C.mute }] : []),
+    ...(ult && du < N && r.projecao !== null ? [{ nome: "projeção", valor: mil(r.projecao), v: r.projecao, cor: C.texto }] : []),
   ].sort((a, b) => b.v - a.v);
-  const rotulosFim: { t: string; y: number; cor: string }[] = [];
+  const rotulosFim: { nome: string; valor: string; y: number; cor: string }[] = [];
   fins.forEach((f, i) => {
-    let y = i === 0 ? Y(f.v) - 12 : Y(f.v) + 36;
-    if (i === 0) y = Math.max(y, 30);
-    else y = Math.min(Math.max(y, rotulosFim[0].y + 36), 470);
-    rotulosFim.push({ t: f.t, y, cor: f.cor });
+    let y = Math.min(Math.max(Y(f.v), 34), 446); // y = centro do rotulo
+    if (i > 0) y = Math.max(y, rotulosFim[0].y + 70);
+    if (y > 446) { y = 446; rotulosFim[0].y = Math.min(rotulosFim[0].y, y - 70); }
+    rotulosFim.push({ ...f, y });
   });
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, minHeight: 0 }}>
@@ -130,15 +133,15 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
       </div>
       <svg width="100%" viewBox="0 0 900 560" style={{ flex: 1, minHeight: 0 }} role="img" aria-label={`Faturamento acumulado: ${moeda(fat.real)} no dia útil ${du}${fat.meta ? `, meta ${moeda(fat.meta)}` : ""}`}>
         <defs><linearGradient id="vgar" x1="0" y1="0" x2="0" y2="1.3"><stop offset="0" stopColor={C.real} stopOpacity=".28" /><stop offset="1" stopColor={C.real} stopOpacity="0" /></linearGradient></defs>
-        <g stroke="var(--vg-grade)" strokeWidth="1.5" strokeDasharray="3 7">{eixo.marcas.map((m) => <line key={m} x1="80" y1={Y(m)} x2="860" y2={Y(m)} />)}</g>
+        <g stroke="var(--vg-grade)" strokeWidth="1.5" strokeDasharray="3 7">{eixo.marcas.map((m) => <line key={m} x1="80" y1={Y(m)} x2={XF} y2={Y(m)} />)}</g>
         <g fill={C.mute} fontSize="28" textAnchor="end">{eixo.marcas.map((m) => <text key={m} x="68" y={Y(m) + 9.3}>{mil(m)}</text>)}</g>
         {ult && pts.length > 1 && <polygon points={`${pts.join(" ")} ${X(ult.du)},480 ${X(1)},480`} fill="url(#vgar)" />}
-        {fat.meta ? <line x1={X(1)} y1={Y(fat.meta / N)} x2="860" y2={Y(fat.meta)} stroke={C.mute} strokeWidth="3.5" strokeDasharray="10 8" /> : null}
-        {ult && du < N && <line x1={xh} y1={Y(ult.real)} x2="860" y2={Y(r.projecao ?? 0)} stroke={C.texto} strokeWidth="4" strokeDasharray="2 8" strokeLinecap="round" />}
+        {fat.meta ? <line x1={X(1)} y1={Y(fat.meta / N)} x2={XF} y2={Y(fat.meta)} stroke={C.mute} strokeWidth="3.5" strokeDasharray="10 8" /> : null}
+        {ult && du < N && <line x1={xh} y1={Y(ult.real)} x2={XF} y2={Y(r.projecao ?? 0)} stroke={C.texto} strokeWidth="4" strokeDasharray="2 8" strokeLinecap="round" />}
         {pts.length > 1 && <polyline points={pts.join(" ")} fill="none" stroke={C.real} strokeWidth="6" strokeLinejoin="round" strokeLinecap="round" />}
         {ult && <circle cx={xh} cy={Y(ult.real)} r="10" fill={C.real} stroke="var(--vg-quadro)" strokeWidth="3" />}
         {/* rotulos da meta e da projecao: o de valor maior fica acima da linha dele, o outro abaixo, nunca um em cima do outro */}
-        {rotulosFim.map((l) => <text key={l.t} x="858" y={l.y} fill={l.cor} fontSize="28" fontWeight="700" textAnchor="end" stroke="var(--vg-quadro)" strokeWidth="8" strokeLinejoin="round" paintOrder="stroke">{l.t}</text>)}
+        {rotulosFim.map((l) => <g key={l.nome}><text x={XF + 22} y={l.y - 6} fill={C.mute} fontSize="24" fontWeight="600">{l.nome}</text><text x={XF + 22} y={l.y + 26} fill={l.cor} fontSize="34" fontWeight="800">{l.valor}</text></g>)}
         <g fill={C.mute} fontSize="28" textAnchor="middle">{rotulos.map((l) => <text key={l.t + l.x} x={l.x} y="534" fill={l.hoje ? C.texto : undefined} fontWeight={l.hoje ? 800 : undefined}>{l.t}</text>)}</g>
         <text x="16" y="266.7" fill={C.mute} fontSize="24" transform="rotate(-90 16 266.7)" textAnchor="middle">R$ mil</text>
       </svg>
@@ -204,7 +207,7 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
       <div style={{ display: "flex", flexDirection: "column", gap: fat.porProduto?.length ? 8 : 10, minWidth: 0, minHeight: 0 }}>
         <div className="row"><span className="lb nw" style={{ fontSize: 18 }}>{tituloDe(q)}</span><div style={{ flex: 1 }} />
           {r.selo && <Selo tom={r.selo.tom}>{r.selo.texto}</Selo>}</div>
-        <span className="vl nw" style={{ fontSize: fat.porProduto?.length ? 80 : 108 }}>{moeda(fat.real)}</span>
+        <span className="vl nw" style={{ fontSize: fat.porProduto?.length ? 72 : 108 }}>{moeda(fat.real)}</span>
         {fat.meta ? (
           <>
             <span className="nw" style={{ fontSize: 28, color: C.mute, fontWeight: 500 }}>de <b style={{ color: C.texto }}>{moeda(fat.meta)}</b> · <b style={{ color: C.label, fontSize: 34 }}>{Math.round(r.pctMeta ?? 0)}%</b></span>
@@ -277,7 +280,7 @@ function MetaBarra({ rotulo, v, meta, ritmoPct }: { rotulo: string; v: number; m
 }
 function Cartao({ p, ritmoPct, q }: { p: Pessoa; ritmoPct: number; q: QuadroCfg }) {
   return (
-    <div style={{ background: "var(--vg-caixa)", border: `1px solid ${C.linha}`, borderRadius: 16, padding: "14px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 10, minWidth: 0, minHeight: 0 }}>
+    <div style={{ background: "var(--vg-caixa)", border: `1px solid ${C.linha}`, borderRadius: 16, padding: "14px 20px", display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 12, minWidth: 0, minHeight: 0 }}>
       <div className="row" style={{ gap: 12 }}>
         {p.foto ? <img src={p.foto} alt="" style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover" }} /> : <span style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--vg-avatar)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, color: C.texto }}>{p.sigla}</span>}
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}><span className="vl nw" style={{ fontSize: 28, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span><span className="lb nw" style={{ fontSize: 13, color: C.mute }}>{p.tipo === "sdr" ? "SDR" : "Closer"}</span></div>
@@ -297,9 +300,9 @@ function Cartao({ p, ritmoPct, q }: { p: Pessoa; ritmoPct: number; q: QuadroCfg 
           </div>
         );
       })()}
-      {temItem(q, "vendas") && <div style={{ background: "var(--vg-destaque)", borderRadius: 12, padding: "10px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
+      {temItem(q, "vendas") && <div style={{ marginTop: "auto", background: "var(--vg-destaque)", borderRadius: 12, padding: "10px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
         <span className="mu" style={{ fontWeight: 600, color: C.texto, fontSize: 19 }}>Vendas pagas</span>
-        <span className="vl nw" style={{ fontSize: p.tipo === "closer" ? 36 : 30, fontVariantNumeric: "tabular-nums" }}>{moeda(p.vendasValor)}</span>
+        <span className="vl nw" style={{ fontSize: 32, fontVariantNumeric: "tabular-nums" }}>{moeda(p.vendasValor)}</span>
         <span className="mu nw" style={{ fontSize: 17 }}>{p.vendasN} venda{p.vendasN === 1 ? "" : "s"}</span>
       </div>}
     </div>

@@ -86,8 +86,9 @@ export function calcularRitmo(real: number, meta: number | null, diaUtil: number
 
 // Eixo "bonito" do grafico: 0 ate o topo, em 3 divisoes (mesma unidade: R$ mil)
 export function eixoY(maximo: number): { topo: number; marcas: number[] } {
-  const bruto = Math.max(maximo, 1000) / 1000 / 3;
+  // 3 faixas com passo "redondo"; o topo fica logo acima do maior valor (sem sobrar meio grafico vazio)
+  const bruto = Math.max(maximo, 1000) * 1.04 / 1000 / 3;
   const pot = Math.pow(10, Math.floor(Math.log10(bruto)));
-  const passo = ([1, 2, 2.5, 5, 10].map((m) => m * pot).find((p) => p >= bruto * 0.92) ?? bruto) * 1000;
+  const passo = ([1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].map((m) => m * pot).find((p) => p >= bruto) ?? bruto) * 1000;
   return { topo: passo * 3, marcas: [0, 1, 2, 3].map((i) => i * passo) };
 }
