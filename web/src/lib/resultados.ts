@@ -157,7 +157,8 @@ type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | 
   dia_venda_manual?: string | null; rateio_manual?: Record<string, number> | null };
 type CrmCruzado = Crm & { comprovante?: string; dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string; diaCerto?: boolean };
 
-// Dia da VENDA = o dia em que a venda foi alimentada no CRM (cartao ganho). Antes disso, nesta ordem:
+// Dia da VENDA = o dia em que a venda foi alimentada no CRM (cartao ganho), para negocios ganhos A PARTIR DE 16/11/2026
+// (os ganhos antes disso seguem a regra antiga, pela "Data do diagnostico"). Antes disso, nesta ordem:
 // 0) dia acertado a mao; data de venda preenchida no CRM; produto acrescentado depois (o dia em que apareceu);
 //    comprovante do cliente na conversa ate 2 dias antes (ou 1 depois) do fechamento: o dia do comprovante.
 // 1) workshop: o dia em que o negocio foi aberto. 2) aberto ha mais de 30 dias sem diagnostico (venda antiga): a abertura.
@@ -180,16 +181,26 @@ export function dataDoCampo(campos: Record<string, unknown> | null | undefined, 
   return k ? ler(campos[k]) : "";
 }
 
+// Regra do dia da venda pela alimentacao no CRM vale para negocios ganhos a partir deste dia (pedido da gestao, 16/11/2026)
+const REGRA_ALIMENTACAO_DESDE = "2026-11-16";
 export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; campos?: Record<string, unknown> | null; comprovante?: string; dia_venda_manual?: string | null }, tipo: string, item?: { visto_em?: string | null } | null): { dia: string; certo: boolean } {
   if (v.dia_venda_manual) return { dia: String(v.dia_venda_manual).slice(0, 10), certo: true }; // dia acertado a mao pela gestao vale sobre tudo
   const doCampo = dataDoCampo(v.campos, tipo);
   if (doCampo) return { dia: doCampo, certo: true };
   if (item?.visto_em) return { dia: diaBR(item.visto_em), certo: true }; // produto acrescentado depois num negocio que ja existia
   if (v.comprovante && tipo !== "workshop") return { dia: diaBR(v.comprovante), certo: true }; // cliente mandou o comprovante na conversa
-  // A venda conta no dia em que foi ALIMENTADA no CRM (cartao ganho em "Venda fechada"), pedido da gestao em 16/11/2026.
-  // A "Data do diagnostico" nao muda mais o dia da venda.
   const ganho = diaBR(v.ganho_em);
   const aberto = v.aberto_em ? diaBR(v.aberto_em) : "";
+  // ATE 15/11/2026 (regra antiga, as vendas ja contadas ficam como estao): a "Data do diagnostico" decide o dia
+  if (ganho < REGRA_ALIMENTACAO_DESDE) {
+    const diag = typeof v.campos?.["data-do-diagnostico"] === "string" ? (v.campos["data-do-diagnostico"] as string).slice(0, 10) : "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(diag) && diag <= ganho) return { dia: distDias(diag, ganho) <= 3 ? ganho : diag, certo: true };
+    if (aberto && aberto <= ganho && (tipo === "workshop" || distDias(aberto, ganho) <= 7)) return { dia: aberto, certo: tipo === "workshop" };
+    if (aberto && aberto <= ganho && distDias(aberto, ganho) > 30) return { dia: aberto, certo: true };
+    return { dia: ganho, certo: false };
+  }
+  // A PARTIR DE 16/11/2026: a venda conta no dia em que foi ALIMENTADA no CRM (cartao ganho em "Venda fechada").
+  // A "Data do diagnostico" nao muda mais o dia da venda.
   // workshop: o dia em que o negocio foi aberto (quando o link foi mandado e pago)
   if (tipo === "workshop" && aberto && aberto <= ganho) return { dia: aberto, certo: true };
   // negocio aberto ha mais de 30 dias, ganho agora e sem diagnostico: arrumacao do funil (venda antiga), fica na abertura
