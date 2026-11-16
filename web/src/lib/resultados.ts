@@ -55,7 +55,7 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
     db.from("resultados_vendas").select("*").eq("org_id", org).gte("data", de).lte("data", ate).limit(5000),
     // todos os negocios ganhos (de qualquer data): o negocio novo do CRM repete os produtos que o cliente ja comprou antes
     // e os negocios ABERTOS com produto, de qualquer funil (pos-venda, plataforma...): produto no negocio = vendido
-    db.from("crm_vendas").select("deal_id,status,contato_crm_id,telefone,cliente,valor_cents,aberto_em,ganho_em,sincronizado_em,vendedor_id,produto,tipo,produtos,campos").eq("org_id", org).in("status", ["won", "open"]).limit(5000),
+    db.from("crm_vendas").select("deal_id,status,contato_crm_id,telefone,cliente,valor_cents,aberto_em,ganho_em,sincronizado_em,vendedor_id,produto,tipo,produtos,campos,dia_venda_manual,rateio_manual").eq("org_id", org).in("status", ["won", "open"]).limit(5000),
     // quem leva as vendas de workshop (Configuracoes; na Weevo, o Ruan)
     db.from("audit_settings").select("vendedor_workshop,workshop_valor_padrao").eq("org_id", org).maybeSingle(),
     db.from("profiles").select("id,nome,org_id,ativo").limit(1000),
@@ -152,7 +152,9 @@ export function indicadorDoCrm(campos: Record<string, unknown> | null | undefine
 }
 
 // ---------- cruzamento ----------
-type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | null; cliente: string | null; valor_cents: number | null; aberto_em?: string | null; ganho_em: string; vendedor_id: string | null; produto: string | null; tipo: string | null; produtos?: unknown; campos: Record<string, unknown> | null };
+type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | null; cliente: string | null; valor_cents: number | null; aberto_em?: string | null; ganho_em: string; vendedor_id: string | null; produto: string | null; tipo: string | null; produtos?: unknown; campos: Record<string, unknown> | null;
+  // ajuste feito a mao (gestao): dia da venda e divisao do valor entre os produtos, ex.: {"imersao":0.5,"plataforma":0.5}
+  dia_venda_manual?: string | null; rateio_manual?: Record<string, number> | null };
 type CrmCruzado = Crm & { comprovante?: string; dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string; diaCerto?: boolean };
 
 // Dia da VENDA (nao o dia em que o negocio foi marcado como ganho: o time lanca vendas antigas de uma vez no CRM).
@@ -181,7 +183,8 @@ export function dataDoCampo(campos: Record<string, unknown> | null | undefined, 
   return k ? ler(campos[k]) : "";
 }
 
-export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; campos?: Record<string, unknown> | null; comprovante?: string }, tipo: string, item?: { visto_em?: string | null } | null): { dia: string; certo: boolean } {
+export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; campos?: Record<string, unknown> | null; comprovante?: string; dia_venda_manual?: string | null }, tipo: string, item?: { visto_em?: string | null } | null): { dia: string; certo: boolean } {
+  if (v.dia_venda_manual) return { dia: String(v.dia_venda_manual).slice(0, 10), certo: true }; // dia acertado a mao pela gestao vale sobre tudo
   const doCampo = dataDoCampo(v.campos, tipo);
   if (doCampo) return { dia: doCampo, certo: true };
   if (item?.visto_em) return { dia: diaBR(item.visto_em), certo: true }; // produto acrescentado depois num negocio que ja existia
@@ -260,7 +263,14 @@ export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
       const tipo = it ? tipoDoProduto(it.nome) : assinaturaPlataforma(v) ? "plataforma" : tipoDoProduto(v.produto, v.valor_cents);
       const { dia, certo } = diaDaVenda(v, tipo, it);
       return { ...v, deal_id: it ? `${v.deal_id}#${n}` : v.deal_id, produto: it?.nome ?? v.produto, tipo, dia, diaCerto: certo,
-        valor_cents: it ? Math.round((it.total_cents ?? 0) * fator(dono)) : v.valor_cents, ...extra };
+        valor_cents: it ? Math.round((it.total_cents ?? 0) * fator(dono)) : v.valor_cents, ...extra, ...rateado(v, it, tipo) };
+    };
+    // divisao do valor do negocio acertada a mao (rateio_manual): cada produto fica com a parte dele, igual entre as unidades
+    const rateado = (v: CrmCruzado, it: Item | null, tipo: string): Partial<CrmCruzado> => {
+      const parte = it && v.rateio_manual && v.valor_cents != null ? Number(v.rateio_manual[tipo]) : NaN;
+      if (!Number.isFinite(parte)) return {};
+      const unidades = abrirUnidades((Array.isArray(v.produtos) ? v.produtos : []) as Item[]).filter((x) => tipoDoProduto(x.nome) === tipo).length || 1;
+      return { valor_cents: Math.round(((v.valor_cents as number) * parte) / unidades) };
     };
     for (const v of negocios) {
       const itens = abrirUnidades((Array.isArray(v.produtos) ? v.produtos : []) as Item[]);
