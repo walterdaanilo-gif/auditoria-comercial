@@ -100,9 +100,10 @@ async function lerContato(ctx: Ctx, contato: string, info: Info, assinatura?: st
     // quem vendeu: o vendedor da conversa no sistema; sem ele (ex.: Comercial inbound), o closer e depois o SDR do CRM
     const daConversa = info.chats.get(d.chat_id) ?? null;
     const peloCampo = [campos.closer, campos.sdr].map((n) => porPrimeiroNome(n)).find((l) => l.length === 1)?.[0]?.id ?? null;
+    // negocio marcado como "removido" (teste, apagado) continua removido mesmo se o CRM ainda mostrar ele ganho
     linhas.push({
       deal_id: d.id, org_id: org.id, chat_id: d.chat_id || null, contato_crm_id: contato,
-      telefone: info.telefone ?? ant?.telefone ?? null, cliente: info.nome ?? ant?.cliente ?? null, status: d.status || null, valor_cents: d.value_cents ?? null,
+      telefone: info.telefone ?? ant?.telefone ?? null, cliente: info.nome ?? ant?.cliente ?? null, status: ant?.status === "removido" ? "removido" : d.status || null, valor_cents: d.value_cents ?? null,
       aberto_em: d.opened_at || null, ganho_em: d.won_at || (d.status === "won" ? d.closed_at || d.opened_at : null) || null, dono_crm_id: d.owner_user_id || null,
       vendedor_id: daConversa || peloCampo, sdr: typeof campos.sdr === "string" ? campos.sdr : null, closer: typeof campos.closer === "string" ? campos.closer : null,
       produto, tipo: tipoDe(produto), produtos: itens, campos: { ...campos, instancia: d.instance_name ?? campos.instancia ?? null }, sincronizado_em: new Date().toISOString(),
