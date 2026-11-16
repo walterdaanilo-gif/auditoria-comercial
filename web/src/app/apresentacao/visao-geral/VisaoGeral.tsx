@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
-import AutoRefresh from "@/components/AutoRefresh";
 import { duracao } from "@/lib/format";
 import PeriodoSeletor from "./PeriodoSeletor";
 import BotaoAtualizarCrm from "./BotaoAtualizarCrm";
@@ -377,7 +376,6 @@ export default function VisaoGeral({ dados }: { dados: VisaoGeralDados }) {
   return (
     <div className="vg" data-tema={tema} style={{ position: "fixed", inset: 0, zIndex: 30, background: "radial-gradient(1400px 700px at 0 0, var(--vg-brilho), transparent 60%), var(--vg-fundo)", overflow: "hidden" }}>
       <style>{CSS}</style>
-      {!dados.demo && <AutoRefresh segundos={60} />}
       <div style={{ position: "absolute", left: "50%", top: "50%", width: 1920, height: 1080, transform: `translate(-50%,-50%) scale(${esc ?? 1})`, visibility: esc ? "visible" : "hidden", padding: "22px 30px", background: "transparent", display: "flex", flexDirection: "column", gap: 16 }}>
         <Cabecalho d={dados} tema={tema} trocarTema={trocarTema} />
         {fat && <div style={{ display: "grid", gridTemplateRows: "minmax(0,1fr)", flex: pes || pequenos.length ? 0.95 : 1, minHeight: 0 }}><Faturamento d={dados} q={fat} /></div>}

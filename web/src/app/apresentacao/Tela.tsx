@@ -2,7 +2,6 @@ import Link from "next/link";
 import Marca from "@/components/Marca";
 import { Suspense } from "react";
 import AbasPainel from "@/components/AbasPainel";
-import AutoRefresh from "@/components/AutoRefresh";
 import { corNota, duracao, nota } from "@/lib/format";
 import { corSdr, diasUteis } from "@/lib/metas";
 import { diasEntre, type Periodo } from "@/lib/periodo";
@@ -224,7 +223,6 @@ export function Tela({ periodo, hoje, atualizadoEm, perfis, linhas, equipe, meta
   return (
     <div data-org={empresa?.slug ?? "weevo"} className="flex min-h-screen flex-col gap-[clamp(8px,0.9vh,16px)] bg-bg px-[clamp(16px,1.4vw,32px)] py-[clamp(8px,0.9vh,16px)] text-ink lg:h-screen lg:overflow-hidden"
       style={{ fontSize: "clamp(11px, 0.55vw + 0.55vh, 18px)" }}>
-      <AutoRefresh segundos={60} />
 
       {/* cabecalho */}
       <header className="flex flex-wrap items-center justify-between gap-4">

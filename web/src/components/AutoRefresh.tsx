@@ -1,27 +1,24 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
-// Atualiza a tela sozinha: na hora em que a IA grava uma auditoria ou entra ligacao ou mensagem nova
-// (Supabase Realtime, respeitando a RLS de quem esta logado) e, por garantia, a cada N segundos.
-export default function AutoRefresh({ segundos = 60, tabelas = ["auditorias", "ligacoes", "conversas"] }: { segundos?: number; tabelas?: string[] }) {
+// Atualizar a tela: SO quando a pessoa clica (economia de consumo do banco, pedido da gestao em 16/11/2026).
+// Nada de recarregar sozinho nem de ouvir o banco em tempo real. A excecao e "auto": usado so enquanto um
+// WhatsApp esta conectando (QR), para a tela mostrar o QR novo sem a pessoa ficar clicando.
+export default function AutoRefresh({ segundos = 0, auto = false }: { segundos?: number; tabelas?: string[]; auto?: boolean }) {
   const router = useRouter();
-  const chave = tabelas.join(",");
+  const [girando, setGirando] = useState(false);
   useEffect(() => {
-    let espera: ReturnType<typeof setTimeout> | undefined;
-    // varias mudancas juntas (ex.: rodada de auditoria) viram uma atualizacao so
-    const atualizar = () => { clearTimeout(espera); espera = setTimeout(() => { if (document.visibilityState === "visible") router.refresh(); }, 1500); };
-    const id = setInterval(atualizar, segundos * 1000);
-    const supabase = createClient();
-    const canal = chave ? supabase.channel(`tela-${chave}-${Math.random().toString(36).slice(2)}`) : null;
-    if (canal) {
-      for (const t of chave.split(",")) canal.on("postgres_changes", { event: "*", schema: "public", table: t }, atualizar);
-      canal.subscribe();
-    }
-    const voltou = () => { if (document.visibilityState === "visible") atualizar(); };
-    document.addEventListener("visibilitychange", voltou);
-    return () => { clearInterval(id); clearTimeout(espera); document.removeEventListener("visibilitychange", voltou); if (canal) supabase.removeChannel(canal); };
-  }, [router, segundos, chave]);
-  return null;
+    if (!auto || !segundos) return;
+    const id = setInterval(() => { if (document.visibilityState === "visible") router.refresh(); }, segundos * 1000);
+    return () => clearInterval(id);
+  }, [router, segundos, auto]);
+  if (auto) return null;
+  const atualizar = () => { setGirando(true); router.refresh(); setTimeout(() => setGirando(false), 1500); };
+  return (
+    <button type="button" onClick={atualizar} title="Buscar os dados mais novos"
+      className="fixed bottom-5 right-5 z-40 rounded-full border border-line bg-card px-4 py-2 text-sm font-semibold text-ink shadow-lg hover:border-brand">
+      <span className={girando ? "inline-block animate-spin" : "inline-block"}>↻</span> Atualizar
+    </button>
+  );
 }

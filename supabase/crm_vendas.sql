@@ -68,3 +68,7 @@ alter table public.audit_settings add column if not exists workshop_valor_padrao
 
 -- Botao "Atualizar do CRM" (cabecalho da Apresentacao, ao lado de Tela inicial): o servidor dispara crm_disparar_vendas() e acompanha com
 -- crm_resposta_disparo(id) (so codigo HTTP e se a rodada foi pulada; so service_role).
+
+-- 16/11/2026: projeto bloqueado (402) por estourar a cota do plano Free. A busca de 3 em 3 min foi DESLIGADA
+-- (cron.alter_job(..., active := false) em crm-vendas-3min). As vendas entram pelo aviso instantaneo do CRM e pelo
+-- botao Atualizar da apresentacao. As telas so atualizam quando a pessoa clica em Atualizar.

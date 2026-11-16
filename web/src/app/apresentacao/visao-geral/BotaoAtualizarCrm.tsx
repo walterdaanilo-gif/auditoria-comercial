@@ -26,10 +26,10 @@ export default function BotaoAtualizarCrm() {
     setTimeout(() => setEstado((e) => (e === "buscando" ? e : "parado")), 6000);
   }
 
-  const texto = { parado: "↻ Atualizar do CRM", buscando: "Buscando no CRM…", ok: "✓ Atualizado", erro: "Tente de novo" }[estado];
+  const texto = { parado: "↻ Atualizar", buscando: "Buscando no CRM…", ok: "✓ Atualizado", erro: "Tente de novo" }[estado];
   return (
     <button type="button" onClick={buscar} disabled={estado === "buscando"} className="bt nw" aria-live="polite"
-      title="Busca agora as vendas no CRM, sem esperar a atualização automática" style={estado === "buscando" ? { opacity: 0.7, cursor: "wait" } : undefined}>
+      title="Busca as vendas no CRM e atualiza a tela (a tela não atualiza sozinha)" style={estado === "buscando" ? { opacity: 0.7, cursor: "wait" } : undefined}>
       {texto}
     </button>
   );

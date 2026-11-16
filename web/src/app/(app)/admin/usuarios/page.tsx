@@ -40,7 +40,7 @@ export default async function Usuarios({ searchParams: searchParamsP }: { search
   return (
     <div className="space-y-5">
       {/* enquanto alguma conexao espera o QR, atualiza a cada 5 s; depois, a cada minuto */}
-      <AutoRefresh segundos={pendente ? 5 : 60} tabelas={["instancias_whatsapp"]} />
+      {pendente ? <AutoRefresh segundos={5} auto /> : <AutoRefresh />}
       <div><h1 className="page-title">Usuários e WhatsApp</h1>
         <p className="page-sub">{admin
           ? <>Cada pessoa tem aqui o login e a conexão de WhatsApp dela. Só o admin cria usuários. Não existe cadastro público. Trocar o e-mail muda o login da pessoa na hora; a senha continua a mesma.{` Você está vendo os usuários da retaguarda ${atual?.nome ?? ""}.`}{eu.super_admin ? " Em Retaguarda você escolhe em quais empresas a pessoa entra." : ""}</>
