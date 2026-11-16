@@ -157,13 +157,10 @@ type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | 
   dia_venda_manual?: string | null; rateio_manual?: Record<string, number> | null };
 type CrmCruzado = Crm & { comprovante?: string; dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string; diaCerto?: boolean };
 
-// Dia da VENDA (nao o dia em que o negocio foi marcado como ganho: o time lanca vendas antigas de uma vez no CRM).
-// 0) data de venda preenchida no CRM; produto acrescentado depois (o dia em que apareceu); COMPROVANTE do cliente na
-//    conversa ate 2 dias antes (ou 1 depois) do fechamento: o dia do comprovante (a conversa manda: ex. Rila, 12/11);
-// 1) "Data do diagnostico" do negocio (ate 3 dias antes do ganho: o dia do ganho); 2) workshop: o dia em que o negocio foi aberto (quando o link foi mandado);
-// 3) aberto ate 7 dias antes do ganho: o dia da abertura; 4) aberto ha mais de 30 dias (venda antiga lancada agora): a
-//    abertura; 5) senao, o ganho. O cruzamento com a conversa ainda pode
-// antecipar a venda grande sem diagnostico para o dia em que ela apareceu na conversa.
+// Dia da VENDA = o dia em que a venda foi alimentada no CRM (cartao ganho). Antes disso, nesta ordem:
+// 0) dia acertado a mao; data de venda preenchida no CRM; produto acrescentado depois (o dia em que apareceu);
+//    comprovante do cliente na conversa ate 2 dias antes (ou 1 depois) do fechamento: o dia do comprovante.
+// 1) workshop: o dia em que o negocio foi aberto. 2) aberto ha mais de 30 dias sem diagnostico (venda antiga): a abertura.
 // Datas preenchidas no CRM: "data da venda/fechamento" do negocio ou a data de um produto (ex.: "Data venda plataforma").
 // tipo vazio = so a data do negocio. Aceita AAAA-MM-DD ou DD/MM/AAAA.
 export function dataDoCampo(campos: Record<string, unknown> | null | undefined, tipo: string): string {
@@ -189,17 +186,16 @@ export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; cam
   if (doCampo) return { dia: doCampo, certo: true };
   if (item?.visto_em) return { dia: diaBR(item.visto_em), certo: true }; // produto acrescentado depois num negocio que ja existia
   if (v.comprovante && tipo !== "workshop") return { dia: diaBR(v.comprovante), certo: true }; // cliente mandou o comprovante na conversa
+  // A venda conta no dia em que foi ALIMENTADA no CRM (cartao ganho em "Venda fechada"), pedido da gestao em 16/11/2026.
+  // A "Data do diagnostico" nao muda mais o dia da venda.
   const ganho = diaBR(v.ganho_em);
-  const diag = typeof v.campos?.["data-do-diagnostico"] === "string" ? (v.campos["data-do-diagnostico"] as string).slice(0, 10) : "";
-  // diagnostico ate 3 dias antes do fechamento: a reuniao foi num dia e a venda fechou depois (ex.: Pedro e Daniele, reuniao
-  // 12/11, venda 13/11): vale o dia em que o cartao foi ganho. Diagnostico mais antigo = venda antiga lancada agora: vale o diagnostico.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(diag) && diag <= ganho) return { dia: distDias(diag, ganho) <= 3 ? ganho : diag, certo: true };
   const aberto = v.aberto_em ? diaBR(v.aberto_em) : "";
-  if (aberto && aberto <= ganho && (tipo === "workshop" || distDias(aberto, ganho) <= 7)) return { dia: aberto, certo: tipo === "workshop" };
-  // negocio aberto ha mais de 30 dias e ganho agora, sem diagnostico, sem data e sem comprovante: e venda antiga lancada
-  // agora no CRM (arrumacao do funil). Fica no dia da abertura, nao entra como venda de hoje.
-  if (aberto && aberto <= ganho && distDias(aberto, ganho) > 30) return { dia: aberto, certo: true };
-  return { dia: ganho, certo: false };
+  // workshop: o dia em que o negocio foi aberto (quando o link foi mandado e pago)
+  if (tipo === "workshop" && aberto && aberto <= ganho) return { dia: aberto, certo: true };
+  // negocio aberto ha mais de 30 dias, ganho agora e sem diagnostico: arrumacao do funil (venda antiga), fica na abertura
+  const temDiag = /^\d{4}-\d{2}-\d{2}/.test(String(v.campos?.["data-do-diagnostico"] ?? ""));
+  if (!temDiag && aberto && aberto <= ganho && distDias(aberto, ganho) > 30) return { dia: aberto, certo: true };
+  return { dia: ganho, certo: true };
 }
 
 type Item = { produto_id?: string | null; nome?: string | null; quantidade?: number | null; total_cents?: number | null; visto_em?: string | null };
