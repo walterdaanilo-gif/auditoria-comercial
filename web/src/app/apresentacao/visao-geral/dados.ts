@@ -29,7 +29,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const ritmoPct = (Math.max(diaUtil, 1) / diasUteisMes) * 100;
   const db = createAdminClient();
 
-  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem, rEtapas, rFup, rDiag] = await Promise.all([
+  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem, rEtapas, rFup, rDiag, rPres] = await Promise.all([
     db.rpc("resumo_sdr2", { p_from: ini, p_to: hoje }),
     db.from("profiles").select("id,nome,funcao,ativo,foto_url").order("nome"),
     db.from("instancias_whatsapp").select("vendedor_id").eq("org_id", org),
@@ -46,6 +46,9 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     db.from("followups_atrasados").select("vendedor_id,qtd,mais_antigo_dias,dias_regra,calculado_em").limit(1000),
     // closer: negocios do CRM com "Data do diagnostico" (reuniao feita) e o campo Closer; cobre o que veio antes do historico de etapas
     db.from("crm_vendas").select("deal_id,chat_id,contato_crm_id,closer,campos").eq("org_id", org).not("closer", "is", null).limit(5000),
+    // conversao do evento: cartoes que entraram em "Participou da experiencia" (veio ao workshop) no periodo
+    db.from("crm_etapas").select("conversa_id").eq("org_id", org).like("etapa", "%participou_da_experiencia")
+      .gte("em", `${ini}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(5000),
   ]);
 
   const nomeDe = new Map(((rPerf.data ?? []) as Perfil[]).map((p) => [p.id, p.nome])); // quem vendeu, na lista de vendas do produto
@@ -143,6 +146,15 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     convites: { valor: inteiro(resultados.convites.filter((id) => ids.has(id)).length), sub: "cupom 100% ou Carbone · R$ 0", tom: "neutro" },
   };
 
+  // conversao do evento = vendas (Imersao, In-Company, Plataforma) / presentes no workshop, mesmo periodo. Workshop nao entra: e a entrada.
+  const presentes = rPres.error ? null : new Set(((rPres.data ?? []) as { conversa_id: string }[]).map((e) => e.conversa_id)).size;
+  const ALTOS = ["imersao", "incompany", "plataforma"];
+  const conversao = presentes === null ? null : {
+    presentes,
+    total: vendas.filter((v) => ALTOS.includes(v.produto ?? "")).length,
+    produtos: ALTOS.map((produto) => ({ produto, vendas: vendas.filter((v) => v.produto === produto).length })),
+  };
+
   return {
     demo: false,
     atualizadoEm: horaBR(),
@@ -154,6 +166,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
           .sort((a, b) => b.valor - a.valor);
         return { produto, valor: l.reduce((t, v) => t + (v.valor ?? 0), 0), n: l.length, vendas: lista };
       }).filter((x) => x.n > 0).sort((a, b) => b.valor - a.valor) }, // do produto que mais vendeu para o que menos vendeu
+    conversao,
     pessoas: [...sdrs.map((p) => pessoa(p, "sdr")), ...closers.map((p) => pessoa(p, "closer"))],
     quadros: resolverQuadros(cfg.tv_quadros),
     kpis,

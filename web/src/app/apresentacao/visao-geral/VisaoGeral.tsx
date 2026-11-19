@@ -293,7 +293,27 @@ function MetaBarra({ rotulo, v, meta, ritmoPct }: { rotulo: string; v: number; m
     </div>
   );
 }
-function Cartao({ p, ritmoPct, q }: { p: Pessoa; ritmoPct: number; q: QuadroCfg }) {
+const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
+// Conversao do evento (time): vendas contra quem veio ao workshop (etapa "Participou da experiencia" do CRM), no periodo
+function Conversao({ c }: { c: VisaoGeralDados["conversao"] }) {
+  return (
+    <div style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "10px 16px", display: "flex", flexDirection: "column", gap: 6 }} aria-label="Conversão do evento">
+      <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
+        <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 19 }}>Conversão do evento</span><div style={{ flex: 1 }} />
+        <span className="vl nw" style={{ fontSize: 40 }}>{c ? pct(c.total, c.presentes) : "—"}</span>
+      </div>
+      {c ? (
+        <>
+          <span className="mu nw" style={{ fontSize: 16 }}>{c.total} venda{c.total === 1 ? "" : "s"} de {c.presentes} que vieram ao workshop</span>
+          <div className="row nw" style={{ gap: 14, flexWrap: "wrap" }}>
+            {c.produtos.map((x) => <span key={x.produto} className="mu" style={{ fontSize: 16 }}>{NOME_PRODUTO[x.produto]} <b style={{ color: C.texto }}>{pct(x.vendas, c.presentes)}</b> ({x.vendas})</span>)}
+          </div>
+        </>
+      ) : <span className="mu" style={{ fontSize: 16 }}>sem dado do funil ainda</span>}
+    </div>
+  );
+}
+function Cartao({ p, ritmoPct, q, conv }: { p: Pessoa; ritmoPct: number; q: QuadroCfg; conv: VisaoGeralDados["conversao"] }) {
   return (
     <div style={{ background: "var(--vg-caixa)", border: `1px solid ${C.linha}`, borderRadius: 16, padding: "14px 20px", display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 12, minWidth: 0, minHeight: 0 }}>
       <div className="row" style={{ gap: 12 }}>
@@ -302,7 +322,7 @@ function Cartao({ p, ritmoPct, q }: { p: Pessoa; ritmoPct: number; q: QuadroCfg 
       </div>
       {p.conversas && temItem(q, "conversas") && <MetaBarra rotulo="Conversas trocadas" v={p.conversas.v} meta={p.conversas.meta} ritmoPct={ritmoPct} />}
       {p.marcacoes && temItem(q, "marcacoes") && <MetaBarra rotulo="Marcações" v={p.marcacoes.v} meta={p.marcacoes.meta} ritmoPct={ritmoPct} />}
-      {p.reunioes && temItem(q, "funil") && <MetaBarra rotulo="Reuniões realizadas" v={p.reunioes.v} meta={p.reunioes.meta} ritmoPct={ritmoPct} />}
+      {p.tipo === "closer" && temItem(q, "funil") && <Conversao c={conv} />}
       {p.followups && temItem(q, "followup") && (() => {
         const f = p.followups, tom = f.qtd > 0 ? TOM.bad : TOM.ok;
         return (
@@ -329,7 +349,7 @@ function PorPessoa({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
     <div className="cd" style={{ padding: "16px 24px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
       <div className="row" style={{ gap: 16 }}><span className="lb nw" style={{ fontSize: 18 }}>{tituloDe(q)}</span><span className="mu nw">real / meta do período</span></div>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(d.pessoas.length, 1)},minmax(0,1fr))`, gridTemplateRows: "minmax(0,1fr)", columnGap: 14, flex: 1, minHeight: 0 }}>
-        {d.pessoas.map((p) => <Cartao key={p.id} p={p} ritmoPct={ritmoPct} q={q} />)}
+        {d.pessoas.map((p) => <Cartao key={p.id} p={p} ritmoPct={ritmoPct} q={q} conv={d.conversao ?? null} />)}
         {!d.pessoas.length && <span className="mu" style={{ gridColumn: "1 / -1" }}>Nenhum vendedor com WhatsApp cadastrado em Usuários.</span>}
       </div>
     </div>
