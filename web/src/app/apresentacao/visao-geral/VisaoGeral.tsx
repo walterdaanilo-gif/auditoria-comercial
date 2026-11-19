@@ -296,20 +296,19 @@ function MetaBarra({ rotulo, v, meta, ritmoPct }: { rotulo: string; v: number; m
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
 // Conversao do evento (time): vendas contra quem veio ao workshop (etapa "Participou da experiencia" do CRM), no periodo
 function Conversao({ c }: { c: VisaoGeralDados["conversao"] }) {
+  const curto: Record<string, string> = { imersao: "Imersão", incompany: "In-Co.", plataforma: "Plat." };
   return (
-    <div style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "10px 16px", display: "flex", flexDirection: "column", gap: 6 }} aria-label="Conversão do evento">
+    <div style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "8px 14px", display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }} aria-label="Conversão do evento">
       <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
-        <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 19 }}>Conversão do evento</span><div style={{ flex: 1 }} />
-        <span className="vl nw" style={{ fontSize: 40 }}>{c ? pct(c.total, c.presentes) : "—"}</span>
+        <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>Conversão do evento</span><div style={{ flex: 1 }} />
+        <span className="vl nw" style={{ fontSize: 34 }}>{c ? pct(c.total, c.presentes) : "—"}</span>
       </div>
       {c ? (
         <>
-          <span className="mu nw" style={{ fontSize: 16 }}>{c.total} venda{c.total === 1 ? "" : "s"} de {c.presentes} que vieram ao workshop</span>
-          <div className="row nw" style={{ gap: 14, flexWrap: "wrap" }}>
-            {c.produtos.map((x) => <span key={x.produto} className="mu" style={{ fontSize: 16 }}>{NOME_PRODUTO[x.produto]} <b style={{ color: C.texto }}>{pct(x.vendas, c.presentes)}</b> ({x.vendas})</span>)}
-          </div>
+          <span className="mu nw" style={{ fontSize: 14 }}>{c.total} venda{c.total === 1 ? "" : "s"} / {c.presentes} que vieram ao workshop</span>
+          <span className="mu" style={{ fontSize: 14, display: "flex", flexWrap: "wrap", columnGap: 10 }}>{c.produtos.map((x) => <span key={x.produto} className="nw">{curto[x.produto]} {pct(x.vendas, c.presentes)} ({x.vendas})</span>)}</span>
         </>
-      ) : <span className="mu" style={{ fontSize: 16 }}>sem dado do funil ainda</span>}
+      ) : <span className="mu" style={{ fontSize: 14 }}>sem dado do funil ainda</span>}
     </div>
   );
 }

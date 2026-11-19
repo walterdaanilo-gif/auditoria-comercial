@@ -17,6 +17,7 @@ export const visaoGeralDemo: VisaoGeralDados = {
     { id: "c1", nome: "Closer 1", sigla: "C1", foto: null, tipo: "closer", conversas: null, marcacoes: null, vendasValor: 82000, vendasN: 15, reunioes: { v: 52, meta: 63 }, followups: { qtd: 4, maisAntigo: 12, dias: 6 } },
     { id: "c2", nome: "Closer 2", sigla: "C2", foto: null, tipo: "closer", conversas: null, marcacoes: null, vendasValor: 53000, vendasN: 8, reunioes: { v: 31, meta: 63 }, followups: { qtd: 0, maisAntigo: null, dias: 6 } },
   ],
+  conversao: { presentes: 40, total: 6, produtos: [{ produto: "imersao", vendas: 4 }, { produto: "incompany", vendas: 1 }, { produto: "plataforma", vendas: 1 }] },
   quadros: PADRAO_QUADROS,
   kpis: {
     semretorno: { valor: "7", sub: "o lead escreveu e ficou mais de 15 min sem resposta", tom: "bad" },
