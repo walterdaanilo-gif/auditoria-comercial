@@ -78,11 +78,11 @@ export async function enviarFoto(fd: FormData): Promise<{ ok: boolean; url?: str
   const url = `${admin.storage.from("fotos").getPublicUrl(caminho).data.publicUrl}?v=${Date.now()}`; // ?v= troca a foto na hora (sem cache)
   const { error } = await admin.from("profiles").update({ foto_url: url }).eq("id", id);
   if (error) return { ok: false, erro: error.message };
-  revalidatePath("/configuracoes"); revalidatePath("/conversas");
+  revalidatePath("/configuracoes"); revalidatePath("/conversas"); revalidatePath("/admin/usuarios");
   return { ok: true, url };
 }
 export async function removerFoto(id: string): Promise<void> {
   await exigirGestor();
   await createAdminClient().from("profiles").update({ foto_url: null }).eq("id", id);
-  revalidatePath("/configuracoes"); revalidatePath("/conversas");
+  revalidatePath("/configuracoes"); revalidatePath("/conversas"); revalidatePath("/admin/usuarios");
 }

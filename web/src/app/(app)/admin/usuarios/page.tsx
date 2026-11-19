@@ -7,6 +7,7 @@ import { fmtDataHora } from "@/lib/format";
 import NovoUsuarioForm from "./NovoUsuarioForm";
 import BotaoExcluir from "./BotaoExcluir";
 import WhatsAppDoUsuario from "./WhatsAppDoUsuario";
+import FotoVendedor from "@/components/FotoVendedor";
 import { atualizarUsuario, redefinirSenha } from "./actions";
 import { criarVendedorWhatsApp } from "./whatsapp-actions";
 
@@ -78,6 +79,7 @@ export default async function Usuarios({ searchParams: searchParamsP }: { search
           <div key={u.id} className={`card ${u.ativo ? "" : "opacity-70"}`}>
             {admin ? (
               <>
+                <div className="mb-3"><FotoVendedor v={{ id: u.id, nome: u.nome, foto_url: u.foto_url }} /></div>
                 <form action={atualizarUsuario} className="grid items-end gap-3 md:grid-cols-6">
                   <input type="hidden" name="id" value={u.id} />
                   <div className="md:col-span-2"><label className="label">Nome</label><input name="nome" defaultValue={u.nome} className="input" required /></div>
@@ -115,6 +117,7 @@ export default async function Usuarios({ searchParams: searchParamsP }: { search
               </>
             ) : (
               <div className="flex flex-wrap items-center gap-3">
+                <FotoVendedor v={{ id: u.id, nome: u.nome, foto_url: u.foto_url }} />
                 <b>{u.nome}</b>
                 <span className="chip border-line text-mute">{PAPEL[u.papel] ?? u.papel}</span>
                 {u.funcao && <span className="chip border-brand text-brand">{FUNCAO[u.funcao] ?? u.funcao}</span>}
