@@ -4,7 +4,7 @@ import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./config";
 
 // /api/closer/sync e chamada pelo Apps Script da planilha, sem login: a rota confere o segredo
 // /api/resumo e chamada pelo worker (resumo de WhatsApp), sem login: a rota confere a chave worker_token
-const PUBLICAS = ["/login", "/recuperar-senha", "/auth/callback", "/privacidade", "/api/closer/sync", "/api/resumo"];
+const PUBLICAS = ["/login", "/recuperar-senha", "/auth/callback", "/privacidade", "/api/closer/sync", "/api/resumo", "/ao-vivo", "/api/ao-vivo"];
 
 // Renova a sessao e protege todas as rotas: sem login, vai para /login
 export async function updateSession(request: NextRequest) {

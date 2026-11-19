@@ -72,3 +72,10 @@ alter table public.audit_settings add column if not exists workshop_valor_padrao
 -- 16/11/2026: projeto bloqueado (402) por estourar a cota do plano Free. A busca de 3 em 3 min foi DESLIGADA
 -- (cron.alter_job(..., active := false) em crm-vendas-3min). As vendas entram pelo aviso instantaneo do CRM e pelo
 -- botao Atualizar da apresentacao. As telas so atualizam quando a pessoa clica em Atualizar.
+
+-- 19/11/2026: pagina /ao-vivo (resultados em tempo real para a diretoria). Link secreto: /ao-vivo?k=<token da tabela ao_vivo_link>.
+-- Dados em /api/ao-vivo (so numeros agregados e primeiro nome, cache de 60 s). Para trocar o link: update ao_vivo_link set token = encode(gen_random_bytes(24),'hex');
+create table if not exists public.ao_vivo_link (id int primary key default 1 check (id = 1), token text not null default encode(gen_random_bytes(24), 'hex'), criado_em timestamptz not null default now());
+alter table public.ao_vivo_link enable row level security;
+revoke all on public.ao_vivo_link from anon, authenticated;
+insert into public.ao_vivo_link (id) values (1) on conflict (id) do nothing;
