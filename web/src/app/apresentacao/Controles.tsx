@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import BotaoAtualizar from "./visao-geral/BotaoAtualizarCrm";
 
 const PRESETS: [string, string][] = [["hoje", "Hoje"], ["semana", "Semana atual"], ["7", "Últimos 7 dias"], ["mes", "Mês atual"], ["30", "Últimos 30 dias"], ["livre", "Personalizado"]];
 
@@ -32,7 +33,7 @@ export default function Controles({ p, de, ate, atualizadoEm }: { p: string; de:
       </div>
       <div className="flex items-center gap-2 whitespace-nowrap text-sm text-mute">
         <span className="hidden xl:inline">Atualizado às {atualizadoEm}</span>
-        <button onClick={() => router.refresh()} className="rounded-full border border-line bg-card px-4 py-1.5 font-semibold text-ink hover:border-brand">Atualizar</button>
+        <BotaoAtualizar estilo="rounded-full border border-line bg-card px-4 py-1.5 font-semibold text-ink hover:border-brand" />
         <button onClick={telaCheia} className="rounded-full bg-gradient-to-r from-[#86dccd] to-[#5fbcae] px-4 py-1.5 font-bold text-bg hover:brightness-110">Tela cheia</button>
       </div>
     </>
