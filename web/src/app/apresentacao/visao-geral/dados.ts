@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { duracao, nota } from "@/lib/format";
-import { diasUteis } from "@/lib/metas";
+import { diasUteis, ehUtil } from "@/lib/metas";
 import { diasEntre, type Periodo } from "@/lib/periodo";
 import { resolverQuadros } from "@/lib/quadrosTv";
 import { contaNoFaturamento, listarResultados } from "@/lib/resultados";
@@ -14,7 +14,7 @@ type Tempos = { vendedor_id: string; primeira_resposta_seg: number | null; tempo
 const n = (x: unknown) => Number(x) || 0;
 const ORDEM_PRODUTOS = ["plataforma", "imersao", "incompany", "workshop", "outro"]; // desempate (a TV ordena pelo valor vendido)
 const ddmm = (d: string) => d.slice(8, 10) + "/" + d.slice(5, 7);
-const util = (d: string) => { const w = new Date(d + "T12:00:00Z").getUTCDay(); return w !== 0 && w !== 6; };
+const util = ehUtil; // seg a sex, sem feriado nacional
 const sigla = (nome: string) => nome.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase() || "?";
 const horaBR = () => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
 const seloRitmo = (difPts: number) => (difPts >= 0 ? "no ritmo" : `${Math.round(-difPts)} pts abaixo`);

@@ -10,12 +10,32 @@ export const METAS = [
 ] as const;
 export type ChaveMeta = (typeof METAS)[number]["soma"][number];
 
-// Dias uteis (seg a sex) entre duas datas YYYY-MM-DD, inclusive. Minimo 1 para nao zerar a meta num fim de semana.
+// Feriados nacionais (ficam fora dos dias uteis, da meta e da projecao): fixos + Sexta-feira Santa (Pascoa, calculada para qualquer ano).
+// Feriado estadual ou municipal e ponto facultativo (Carnaval, Corpus Christi) NAO entram: se a empresa para nesses dias, avise para incluir.
+const FERIADOS_FIXOS = ["01-01", "04-21", "05-01", "09-07", "10-12", "11-02", "11-15", "11-20", "12-25"];
+const cacheFeriados = new Map<number, Set<string>>();
+function feriadosDoAno(ano: number): Set<string> {
+  const c = cacheFeriados.get(ano); if (c) return c;
+  // Pascoa (algoritmo de Meeus/Jones/Butcher); Sexta-feira Santa = 2 dias antes
+  const a = ano % 19, b = Math.floor(ano / 100), c2 = ano % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c2 / 4), k = c2 % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+  const sexta = new Date(Date.UTC(ano, mes - 1, dia - 2)).toISOString().slice(0, 10);
+  const set = new Set([...FERIADOS_FIXOS.map((x) => `${ano}-${x}`), sexta]);
+  cacheFeriados.set(ano, set); return set;
+}
+export const ehFeriado = (iso: string) => feriadosDoAno(Number(iso.slice(0, 4))).has(iso);
+// Dia util = segunda a sexta que nao e feriado nacional
+export function ehUtil(iso: string) {
+  const w = new Date(iso + "T12:00:00Z").getUTCDay();
+  return w !== 0 && w !== 6 && !ehFeriado(iso);
+}
+
+// Dias uteis entre duas datas YYYY-MM-DD, inclusive (sem fins de semana e sem feriados). Minimo 1 para nao zerar a meta num dia sem util.
 export function diasUteis(de: string, ate: string) {
   let n = 0;
   for (let d = new Date(de + "T12:00:00Z"); d <= new Date(ate + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + 1)) {
-    const w = d.getUTCDay();
-    if (w !== 0 && w !== 6) n++;
+    if (ehUtil(d.toISOString().slice(0, 10))) n++;
   }
   return Math.max(n, 1);
 }

@@ -3,7 +3,7 @@ import Marca from "@/components/Marca";
 import { Suspense } from "react";
 import AbasPainel from "@/components/AbasPainel";
 import { corNota, duracao, nota } from "@/lib/format";
-import { corSdr, diasUteis } from "@/lib/metas";
+import { corSdr, diasUteis, ehUtil } from "@/lib/metas";
 import { diasEntre, type Periodo } from "@/lib/periodo";
 import BarraMeta from "@/components/BarraMeta";
 import Carrossel from "./Carrossel";
@@ -26,7 +26,7 @@ const contatos = (t: Tot) => Number(t.contatadas) + Number(t.ligacoes);
 const media = (t: Tot) => (t.auditadas ? t.nota_soma / t.auditadas : null);
 const fmtPct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : "—");
 const ddmm = (d: string) => d.slice(8, 10) + "/" + d.slice(5, 7);
-const util = (d: string) => { const w = new Date(d + "T12:00:00Z").getUTCDay(); return w !== 0 && w !== 6; };
+const util = ehUtil;
 
 // Estado frente a meta: verde bateu, ambar perto (75%+), vermelho abaixo. Sempre com texto, nunca so cor.
 type Est = "good" | "warn" | "crit" | "none";
