@@ -1,0 +1,7 @@
+-- 23/11/2026: aviso no WhatsApp quando uma REUNIAO (nunca workshop) fica marcada e o cliente confirmou.
+-- Gatilho tg_aviso_reuniao (tabela auditorias) -> Edge Function reuniao-aviso (supabase/functions/reuniao-aviso) -> WhatsApp do closer.
+-- Destino: audit_settings.telefone_aviso_reuniao (Weevo: o WhatsApp conectado do Walter). Um aviso por conversa + dia/hora (remarcar avisa de novo).
+-- Regras do gatilho: reuniao com dia e hora, tipo diferente de workshop, cliente_confirmou = true, data de hoje em diante.
+-- A migracao aplicada esta no Supabase (aviso_reuniao_whatsapp); este arquivo e so a documentacao.
+-- Para desligar: alter table public.auditorias disable trigger tg_aviso_reuniao;  | Para mudar o destino: update audit_settings set telefone_aviso_reuniao = '55...' where org_id = ...;
+-- Conferir envios: select * from avisos_reuniao order by id desc;  (erro preenchido = nao enviou)
