@@ -10,6 +10,8 @@ const ASSUNTO = { interesse_workshop: "interesse no workshop", interesse_imersao
 const fone = t => { const m = String(t || "").match(/^55(\d{2})(\d{4,5})(\d{4})$/); return m ? `(${m[1]}) ${m[2]}-${m[3]}` : null; };
 const digitos = t => String(t || "").replace(/\D/g, "");
 const MAX_LISTA = 25;
+// notas internas do CRM contam como contato do time nos follow-ups a partir deste dia (pedido da gestao, 24/11/2026)
+export const NOTAS_DESDE = "2026-11-24T00:00:00-03:00";
 export const encerradoNoCrm = status => /_(perdido|ganho)$/.test(String(status || ""));
 
 // Clientes potenciais sem follow-up: a ultima mensagem DO VENDEDOR (WhatsApp ou historico do CRM) tem N dias ou mais
@@ -39,19 +41,17 @@ export async function leadsParados(db, R, { agora = Date.now() } = {}) {
   // se alguem do time ja falou com o cliente, ele nao esta sem follow-up
   const equipe = new Map();
   const viu = (fone, quando) => { if (fone && quando && (!equipe.has(fone) || quando > equipe.get(fone))) equipe.set(fone, quando); };
-  const cardCrm = new Map(); // conversa do CRM -> telefone e responsavel pelo card
-  for (const c of await db.selectAll("crm_conversas", { select: "id,vendedor_id,telefone,status,ultima_msg_sdr_em,responsavel_crm_id" })) {
+  const cardCrm = new Map(); // conversa do CRM -> telefone
+  for (const c of await db.selectAll("crm_conversas", { select: "id,vendedor_id,telefone,status,ultima_msg_sdr_em" })) {
     if (c.vendedor_id && c.telefone) crm.set(`${c.vendedor_id}|${chaveTelefone(digitos(c.telefone))}`, c.status);
-    if (c.telefone) { cardCrm.set(c.id, { fone: chaveTelefone(digitos(c.telefone)), resp: c.responsavel_crm_id }); viu(cardCrm.get(c.id).fone, c.ultima_msg_sdr_em); }
+    if (c.telefone) { cardCrm.set(c.id, { fone: chaveTelefone(digitos(c.telefone)) }); viu(cardCrm.get(c.id).fone, c.ultima_msg_sdr_em); }
   }
   // nota interna no CRM conta como contato do time SO para os follow-ups atrasados (pedido da gestao, 24/11/2026):
   // o vendedor registrou que tratou o cliente (ex.: falou por ligacao). Nas outras contas a nota continua fora.
-  // So vale a nota escrita pelo RESPONSAVEL do card: notas automaticas (limpeza do funil, "passado para", duplicado) e de
-  // outras pessoas nao contam (em 23/11 uma conta automatica escreveu notas em massa e tirava clientes da lista sem ninguem falar com eles).
-  for (const m of await db.selectAll("crm_mensagens", { select: "conversa_id,enviada_em,autor_crm_id", filters: { nota_interna: "is.true", apagada_em: "is.null", enviada_em: `gte.${desde}` } })) {
-    const card = cardCrm.get(m.conversa_id);
-    if (card?.resp && m.autor_crm_id === card.resp) viu(card.fone, m.enviada_em);
-  }
+  // Vale qualquer nota interna (de qualquer pessoa), mas so as de 24/11 em diante: as notas automaticas da limpeza do funil
+  // de 23/11 ficam de fora.
+  for (const m of await db.selectAll("crm_mensagens", { select: "conversa_id,enviada_em", filters: { nota_interna: "is.true", apagada_em: "is.null", enviada_em: `gte.${NOTAS_DESDE}` } }))
+    viu(cardCrm.get(m.conversa_id)?.fone, m.enviada_em);
   for (const c of convs) viu(c.telefone ? chaveTelefone(c.telefone) : c.contato, ultVend.get(c.id));
 
   const leads = new Map();
