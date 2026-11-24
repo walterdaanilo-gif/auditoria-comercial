@@ -184,7 +184,7 @@ function VendasDoProduto({ p, fechar }: { p: ProdutoFat; fechar: () => void }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
             <span className="lb nw">Vendas de {nome}</span>
             <span className="vl nw" style={{ fontSize: 52 }}>{moeda(p.valor)}</span>
-            <span className="mu nw">{p.n} venda{p.n === 1 ? "" : "s"} no período</span>
+            <span className="mu nw">{p.produto === "workshop" ? `${p.n} inscrito${p.n === 1 ? "" : "s"}${vendas.some((v) => v.cortesia) ? ` (${vendas.filter((v) => v.cortesia).length} cortesia${vendas.filter((v) => v.cortesia).length === 1 ? "" : "s"})` : ""}` : `${p.n} venda${p.n === 1 ? "" : "s"}`} no período</span>
           </div>
           <div style={{ flex: 1 }} />
           <button type="button" className="bt" onClick={fechar} aria-label="Fechar" autoFocus>✕ Fechar</button>
@@ -201,7 +201,7 @@ function VendasDoProduto({ p, fechar }: { p: ProdutoFat; fechar: () => void }) {
               </div>
               <span className="nw" style={{ fontSize: 20, color: v.vendedor ? C.texto : C.mute, overflow: "hidden", textOverflow: "ellipsis" }}>{v.vendedor ?? "—"}</span>
               <span className="mu nw" style={{ fontSize: 20, fontVariantNumeric: "tabular-nums" }}>{v.data}</span>
-              <span className="nw" style={{ fontSize: 24, fontWeight: 800, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{moeda(v.valor)}</span>
+              <span className="nw" style={{ fontSize: 24, fontWeight: 800, textAlign: "right", fontVariantNumeric: "tabular-nums", color: v.cortesia ? C.mute : undefined }}>{v.cortesia ? "Cortesia" : moeda(v.valor)}</span>
             </div>
           )) : <span className="mu">Sem vendas listadas.</span>}
         </div>
@@ -293,23 +293,133 @@ function MetaBarra({ rotulo, v, meta, ritmoPct }: { rotulo: string; v: number; m
     </div>
   );
 }
-const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
-// Conversao do evento (time): vendas contra quem veio ao workshop (etapa "Participou da experiencia" do CRM), no periodo
+// conversao sempre em porcentagem (sem ninguem que veio ao workshop ainda: 0%)
+const pct = (a: number, b: number) => `${b > 0 ? Math.round((a / b) * 100) : 0}%`;
+// Conversao do workshop (time): vendas fechadas contra quem veio ao workshop, no periodo do filtro (desde 24/11: etapas "Venda fechada" e "Veio ao workshop" do CRM)
+// Detalhe da conversao por produto (abre ao clicar no card; mesmo padrao da lista de vendas do produto):
+// os MESMOS numeros do card (c.total e c.produtos), na ordem de produtos do calculo, contra o mesmo denominador
+const GRADE_CONV = "minmax(0,1fr) 160px 180px";
+function DetalheConversao({ c, fechar }: { c: NonNullable<VisaoGeralDados["conversao"]>; fechar: () => void }) {
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => { if (e.key === "Escape") fechar(); };
+    document.addEventListener("keydown", f);
+    return () => document.removeEventListener("keydown", f);
+  }, [fechar]);
+  const linha = (rotulo: string, n: number, forte = false) => (
+    <div key={rotulo} style={{ display: "grid", gridTemplateColumns: GRADE_CONV, gap: "0 18px", alignItems: "center", background: forte ? "var(--vg-destaque)" : "var(--vg-dentro)", borderRadius: 12, padding: "14px 16px" }}>
+      <span className="nw" style={{ fontSize: 22, fontWeight: forte ? 800 : 700 }}>{rotulo}</span>
+      <span className="nw" style={{ fontSize: 24, fontWeight: 800, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{inteiro(n)}</span>
+      <span className="nw" style={{ fontSize: 24, fontWeight: 800, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{pct(n, c.presentes)}</span>
+    </div>
+  );
+  return (
+    // position fixed dentro da tela escalada: cobre a tela 1920x1080 inteira e escala junto
+    <div onClick={fechar} style={{ position: "fixed", inset: 0, zIndex: 50, background: "var(--vg-veu)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div role="dialog" aria-modal="true" aria-label="Conversão do workshop por produto" onClick={(e) => e.stopPropagation()} className="cd"
+        style={{ width: 900, maxHeight: 860, display: "flex", flexDirection: "column", padding: "26px 32px", gap: 18, borderColor: "var(--vg-borda-fat)" }}>
+        <div className="row" style={{ gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+            <span className="lb nw">Conversão do workshop por produto</span>
+            <span className="vl nw" style={{ fontSize: 52 }}>{pct(c.total, c.presentes)}</span>
+            <span className="mu nw">{c.total} venda{c.total === 1 ? "" : "s"} fechada{c.total === 1 ? "" : "s"} / {c.presentes} que vieram ao workshop, no período (conta a partir de 24/11)</span>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button type="button" className="bt" onClick={fechar} aria-label="Fechar" autoFocus>✕ Fechar</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: GRADE_CONV, gap: "0 18px", padding: "0 16px", fontSize: 15, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.mute }}>
+          <span>Produto</span><span style={{ textAlign: "right" }}>Vendas</span><span style={{ textAlign: "right" }}>Conversão</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {c.produtos.map((x) => linha(NOME_PRODUTO[x.produto] ?? x.produto, x.vendas))}
+          {linha("Total", c.total, true)}
+        </div>
+        <span className="mu" style={{ fontSize: 16 }}>Uma venda pode ter mais de um produto, por isso a soma das linhas pode passar do total.</span>
+      </div>
+    </div>
+  );
+}
 function Conversao({ c }: { c: VisaoGeralDados["conversao"] }) {
   const curto: Record<string, string> = { imersao: "Imersão", incompany: "In-Co.", plataforma: "Plat." };
+  const [aberto, setAberto] = useState(false);
   return (
-    <div style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "8px 14px", display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }} aria-label="Conversão do evento">
+    <>
+    {/* clicar no card abre o detalhe por produto (mesmo botao "pr" da faixa de produtos do faturamento) */}
+    <button type="button" className="pr" onClick={() => c && setAberto(true)} disabled={!c} aria-haspopup="dialog" title={c ? "Ver a conversão por produto" : undefined}
+      style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "8px 14px", display: "flex", flexDirection: "column", gap: 2, minWidth: 0, width: "100%", textAlign: "left", color: "inherit", cursor: c ? "pointer" : "default" }} aria-label="Conversão do workshop">
       <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
-        <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>Conversão do evento</span><div style={{ flex: 1 }} />
+        <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>Conversão do workshop</span><div style={{ flex: 1 }} />
         <span className="vl nw" style={{ fontSize: 34 }}>{c ? pct(c.total, c.presentes) : "—"}</span>
       </div>
       {c ? (
         <>
-          <span className="mu nw" style={{ fontSize: 14 }}>{c.total} venda{c.total === 1 ? "" : "s"} / {c.presentes} que vieram ao workshop</span>
+          <span className="mu nw" style={{ fontSize: 14 }}>{c.total} venda{c.total === 1 ? "" : "s"} fechada{c.total === 1 ? "" : "s"} / {c.presentes} que vieram ao workshop</span>
           <span className="mu" style={{ fontSize: 14, display: "flex", flexWrap: "wrap", columnGap: 10 }}>{c.produtos.map((x) => <span key={x.produto} className="nw">{curto[x.produto]} {pct(x.vendas, c.presentes)} ({x.vendas})</span>)}</span>
         </>
-      ) : <span className="mu" style={{ fontSize: 14 }}>sem dado do funil ainda</span>}
+      ) : <span className="mu" style={{ fontSize: 14 }}>a conversão conta a partir de 24/11</span>}
+    </button>
+    {aberto && c && <DetalheConversao c={c} fechar={() => setAberto(false)} />}
+    </>
+  );
+}
+// Follow-ups atrasados: o quadro do cartao; clicar abre quem sao e a data da ultima mensagem (mesmo padrao das outras listas)
+type Fups = NonNullable<Pessoa["followups"]>;
+const GRADE_FUP = "minmax(0,1fr) 200px 120px";
+function ListaFollowups({ f, nome, fechar }: { f: Fups; nome: string; fechar: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") fechar(); };
+    document.addEventListener("keydown", k);
+    return () => document.removeEventListener("keydown", k);
+  }, [fechar]);
+  const lista = f.lista ?? [];
+  return (
+    // position fixed dentro da tela escalada: cobre a tela 1920x1080 inteira e escala junto
+    <div onClick={fechar} style={{ position: "fixed", inset: 0, zIndex: 50, background: "var(--vg-veu)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div role="dialog" aria-modal="true" aria-label={`Follow-ups atrasados de ${nome}`} onClick={(e) => e.stopPropagation()} className="cd"
+        style={{ width: 1000, maxHeight: 860, display: "flex", flexDirection: "column", padding: "26px 32px", gap: 18, borderColor: "var(--vg-borda-fat)" }}>
+        <div className="row" style={{ gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+            <span className="lb nw">Follow-ups atrasados · {nome}</span>
+            <span className="vl nw" style={{ fontSize: 52, color: f.qtd > 0 ? TOM.bad.c : TOM.ok.c }}>{inteiro(f.qtd)}</span>
+            <span className="mu nw">clientes há {f.dias} dias ou mais sem mensagem do time</span>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button type="button" className="bt" onClick={fechar} aria-label="Fechar" autoFocus>✕ Fechar</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: GRADE_FUP, gap: "0 18px", padding: "0 16px", fontSize: 15, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.mute }}>
+          <span>Cliente</span><span>Última mensagem</span><span style={{ textAlign: "right" }}>Parado</span>
+        </div>
+        <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+          {lista.map((l, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: GRADE_FUP, gap: "0 18px", alignItems: "center", background: "var(--vg-dentro)", borderRadius: 12, padding: "12px 16px" }}>
+              <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                <span className="nw" style={{ fontSize: 22, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis" }}>{l.nome}</span>
+                {l.semResposta && <span className="nw" style={{ fontSize: 15, fontWeight: 700, color: TOM.bad.c }}>cliente escreveu e nunca teve resposta</span>}
+              </div>
+              <span className="nw" style={{ fontSize: 20, fontVariantNumeric: "tabular-nums" }}>{l.quando}</span>
+              <span className="nw" style={{ fontSize: 24, fontWeight: 800, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{l.dias} dias</span>
+            </div>
+          ))}
+          {f.qtd > lista.length && <span className="mu">{lista.length ? `...e mais ${f.qtd - lista.length} no sistema.` : "A lista aparece no próximo cálculo dos follow-ups (a cada 15 min)."}</span>}
+        </div>
+      </div>
     </div>
+  );
+}
+function QuadroFollowups({ f, nome }: { f: Fups; nome: string }) {
+  const [aberto, setAberto] = useState(false);
+  const tom = f.qtd > 0 ? TOM.bad : TOM.ok, clica = f.qtd > 0;
+  return (
+    <>
+      <button type="button" className="pr row" onClick={() => clica && setAberto(true)} disabled={!clica} aria-haspopup="dialog" title={clica ? "Ver quem são" : undefined}
+        style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "10px 16px", gap: 12, minWidth: 0, width: "100%", textAlign: "left", color: "inherit", cursor: clica ? "pointer" : "default" }} aria-label="Follow-ups atrasados">
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
+          <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>Follow-ups atrasados</span>
+          <span className="mu nw" style={{ fontSize: 15, overflow: "hidden", textOverflow: "ellipsis" }}>{f.qtd > 0 ? `${f.dias}+ dias sem mensagem${f.maisAntigo != null ? ` · mais antigo ${f.maisAntigo} dias` : ""}` : "nenhum cliente esperando"}</span>
+        </div>
+        <span className="vl nw" style={{ fontSize: 40, color: tom.c }}>{inteiro(f.qtd)}</span>
+      </button>
+      {aberto && <ListaFollowups f={f} nome={nome} fechar={() => setAberto(false)} />}
+    </>
   );
 }
 function Cartao({ p, ritmoPct, q, conv }: { p: Pessoa; ritmoPct: number; q: QuadroCfg; conv: VisaoGeralDados["conversao"] }) {
@@ -322,18 +432,7 @@ function Cartao({ p, ritmoPct, q, conv }: { p: Pessoa; ritmoPct: number; q: Quad
       {p.conversas && temItem(q, "conversas") && <MetaBarra rotulo="Conversas trocadas" v={p.conversas.v} meta={p.conversas.meta} ritmoPct={ritmoPct} />}
       {p.marcacoes && temItem(q, "marcacoes") && <MetaBarra rotulo="Marcações" v={p.marcacoes.v} meta={p.marcacoes.meta} ritmoPct={ritmoPct} />}
       {p.tipo === "closer" && temItem(q, "funil") && <Conversao c={conv} />}
-      {p.followups && temItem(q, "followup") && (() => {
-        const f = p.followups, tom = f.qtd > 0 ? TOM.bad : TOM.ok;
-        return (
-          <div className="row" style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "10px 16px", gap: 12, minWidth: 0 }} aria-label="Follow-ups atrasados">
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
-              <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>Follow-ups atrasados</span>
-              <span className="mu nw" style={{ fontSize: 15, overflow: "hidden", textOverflow: "ellipsis" }}>{f.qtd > 0 ? `${f.dias}+ dias sem mensagem${f.maisAntigo != null ? ` · mais antigo ${f.maisAntigo} dias` : ""}` : "nenhum cliente esperando"}</span>
-            </div>
-            <span className="vl nw" style={{ fontSize: 40, color: tom.c }}>{inteiro(f.qtd)}</span>
-          </div>
-        );
-      })()}
+      {p.followups && temItem(q, "followup") && <QuadroFollowups f={p.followups} nome={p.nome} />}
       {temItem(q, "vendas") && <div style={{ marginTop: "auto", background: "var(--vg-destaque)", borderRadius: 12, padding: "10px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
         <span className="mu" style={{ fontWeight: 600, color: C.texto, fontSize: 19 }}>Vendas pagas</span>
         <span className="vl nw" style={{ fontSize: 32, fontVariantNumeric: "tabular-nums" }}>{moeda(p.vendasValor)}</span>

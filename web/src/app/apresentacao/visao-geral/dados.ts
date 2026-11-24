@@ -3,7 +3,7 @@ import { duracao, nota } from "@/lib/format";
 import { diasUteis, ehUtil } from "@/lib/metas";
 import { diasEntre, type Periodo } from "@/lib/periodo";
 import { resolverQuadros } from "@/lib/quadrosTv";
-import { contaNoFaturamento, listarResultados } from "@/lib/resultados";
+import { contaNaQuantidade, contaNoFaturamento, listarResultados, REGRA_ETAPAS_DESDE } from "@/lib/resultados";
 import { inteiro, tomPorDiferenca, type Kpi, type Pessoa, type VisaoGeralDados } from "./calc";
 
 // Tela fixa da TV com dados REAIS do mes atual. So leitura. Dado que o Cabueta nao mede nao entra na tela.
@@ -43,12 +43,13 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     db.from("crm_etapas").select("conversa_id,vendedor_id,etapa").eq("org_id", org).like("etapa", "%diagnostico_realizado")
       .gte("em", `${ini}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(5000),
     // follow-ups atrasados agora, por vendedor (retrato que o worker grava a cada 15 min, mesma regra do aviso)
-    db.from("followups_atrasados").select("vendedor_id,qtd,mais_antigo_dias,dias_regra,calculado_em").limit(1000),
+    // "*": a coluna "leads" (lista dos clientes) pode ainda nao existir no banco; sem ela a TV mostra so o numero
+    db.from("followups_atrasados").select("*").limit(1000),
     // closer: negocios do CRM com "Data do diagnostico" (reuniao feita) e o campo Closer; cobre o que veio antes do historico de etapas
     db.from("crm_vendas").select("deal_id,chat_id,contato_crm_id,closer,campos").eq("org_id", org).not("closer", "is", null).limit(5000),
-    // conversao do evento: cartoes que entraram em "Participou da experiencia" (veio ao workshop) no periodo
-    db.from("crm_etapas").select("conversa_id").eq("org_id", org).like("etapa", "%participou_da_experiencia")
-      .gte("em", `${ini}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(5000),
+    // conversao do workshop: quem veio ao workshop (etapa "Veio ao workshop" do funil Workshop), so de 24/11 em diante
+    db.from("crm_etapas").select("conversa_id").eq("org_id", org).like("etapa", "%veio_ao_workshop")
+      .gte("em", `${ini > REGRA_ETAPAS_DESDE ? ini : REGRA_ETAPAS_DESDE}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(5000),
   ]);
 
   const nomeDe = new Map(((rPerf.data ?? []) as Perfil[]).map((p) => [p.id, p.nome])); // quem vendeu, na lista de vendas do produto
@@ -59,7 +60,9 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const ids = new Set(time.map((p) => p.id)), sdrIds = new Set(sdrs.map((p) => p.id));
   const linhas = ((rRes.data ?? []) as Linha[]).filter((l) => ids.has(l.vendedor_id));
   // vendas da IA: so de quem e do time; vendas do CRM e manuais entram todas (mesmo sem vendedor). Ja vem sem duplicar.
-  const vendas = resultados.linhas.filter((r) => contaNoFaturamento(r) && (r.origem !== "ia" || (r.vendedorId != null && ids.has(r.vendedorId))));
+  const doTime = (r: { origem: string; vendedorId: string | null }) => r.origem !== "ia" || (r.vendedorId != null && ids.has(r.vendedorId));
+  const vendas = resultados.linhas.filter((r) => contaNoFaturamento(r) && doTime(r));
+  const noTime = resultados.linhas.filter((r) => contaNaQuantidade(r) && doTime(r)); // vendas + cortesias do workshop (quantidade)
   const tempos = ((rTem.data ?? []) as unknown as Tempos[]).filter((t) => ids.has(t.vendedor_id));
   const cfg = (rCfg.data ?? {}) as Record<string, unknown>;
 
@@ -100,9 +103,11 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     return chaves.size;
   };
   // retrato com mais de 1 h = worker parado: melhor nao mostrar numero velho
-  type Fup = { vendedor_id: string; qtd: number; mais_antigo_dias: number | null; dias_regra: number | null; calculado_em: string };
+  type Fup = { vendedor_id: string; qtd: number; mais_antigo_dias: number | null; dias_regra: number | null; calculado_em: string; leads?: { nome: string; desde: string | null; dias: number; sem_resposta: boolean }[] | null };
+  const quandoBR = (iso: string | null) => (iso ? new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(iso)).replace(",", "") : "—");
   const fups = new Map(((rFup.error ? [] : rFup.data ?? []) as Fup[]).filter((f) => Date.now() - Date.parse(f.calculado_em) < 3600_000).map((f) => [f.vendedor_id, f]));
-  const followupsDe = (id: string) => { const f = fups.get(id); return f ? { qtd: n(f.qtd), maisAntigo: f.mais_antigo_dias, dias: n(f.dias_regra ?? cfg.followup_alerta_d ?? 6) } : null; };
+  const followupsDe = (id: string) => { const f = fups.get(id); return f ? { qtd: n(f.qtd), maisAntigo: f.mais_antigo_dias, dias: n(f.dias_regra ?? cfg.followup_alerta_d ?? 6),
+    ...(Array.isArray(f.leads) ? { lista: f.leads.map((l) => ({ nome: l.nome, quando: quandoBR(l.desde), dias: n(l.dias), semResposta: !!l.sem_resposta })) } : {}) } : null; };
   const pessoa = (p: Perfil, tipo: "sdr" | "closer"): Pessoa => {
     const vs = vendas.filter((v) => v.vendedorId === p.id), t = somaDe(p.id);
     return {
@@ -143,16 +148,20 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     ligacoes: { valor: inteiro(tot.atend), sub: `de ${inteiro(tot.lig)} ligações no período`, tom: "neutro" },
     conversas_time: contraMeta(conversasTime, metaConvDia),
     marcacoes_time: contraMeta(marcacoesTime, metaMarcDia),
-    convites: { valor: inteiro(resultados.convites.filter((id) => ids.has(id)).length), sub: "cupom 100% ou Carbone · R$ 0", tom: "neutro" },
+    convites: { valor: inteiro(resultados.convites.filter((id) => ids.has(id)).length), sub: "cupom 100%, Carbone ou cortesia · R$ 0", tom: "neutro" },
   };
 
-  // conversao do evento = vendas (Imersao, In-Company, Plataforma) / presentes no workshop, mesmo periodo. Workshop nao entra: e a entrada.
-  const presentes = rPres.error ? null : new Set(((rPres.data ?? []) as { conversa_id: string }[]).map((e) => e.conversa_id)).size;
+  // conversao do workshop = vendas fechadas / quem veio ao workshop, no periodo do filtro. Workshop nao entra: e a entrada.
+  // So conta de 24/11 em diante (antes disso o CRM da Weevo nao tem a presenca no workshop): cartoes que entraram em
+  // "Venda fechada" (Ganho do funil Vendas) / cartoes que entraram em "Veio ao workshop" (funil Workshop).
+  // Periodo todo antes de 24/11: null (o card avisa que a conversao comeca em 24/11).
   const ALTOS = ["imersao", "incompany", "plataforma"];
-  const conversao = presentes === null ? null : {
-    presentes,
-    total: vendas.filter((v) => ALTOS.includes(v.produto ?? "")).length,
-    produtos: ALTOS.map((produto) => ({ produto, vendas: vendas.filter((v) => v.produto === produto).length })),
+  const fechadas = vendas.filter((v) => v.data >= REGRA_ETAPAS_DESDE && v.etapa === "venda_fechada");
+  const negocio = (v: { chave: string }) => v.chave.replace(/#\d+$/, ""); // um negocio com 2 produtos e uma venda fechada so
+  const conversao = rPres.error || hoje < REGRA_ETAPAS_DESDE ? null : {
+    presentes: new Set(((rPres.data ?? []) as { conversa_id: string }[]).map((e) => e.conversa_id)).size,
+    total: new Set(fechadas.map(negocio)).size,
+    produtos: ALTOS.map((produto) => ({ produto, vendas: new Set(fechadas.filter((v) => v.produto === produto).map(negocio)).size })),
   };
 
   return {
@@ -161,8 +170,9 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     periodo: { p: periodo.p, de: ini, ate: hoje, mensal, rotulo: periodo.rotulo, intervalo: mensal ? `01 a ${fim.slice(8)}/${fim.slice(5, 7)}` : ini === hoje ? ddmm(ini) : `${ddmm(ini)} a ${ddmm(hoje)}`, diaUtil, diasUteisMes },
     fat: { real: acc, meta: mensal && cfg.meta_fat_mes != null ? Number(cfg.meta_fat_mes) : null, serie, datasUteis: diasEntre(ini, fim).filter(util).map(ddmm),
       porProduto: ORDEM_PRODUTOS.map((produto) => {
-        const l = vendas.filter((v) => (v.produto ?? "outro") === produto);
-        const lista = l.map((v) => ({ cliente: v.cliente || "Cliente sem nome", empresa: v.empresa, vendedor: v.vendedorId ? nomeDe.get(v.vendedorId) ?? null : null, data: ddmm(v.data), valor: v.valor ?? 0 }))
+        // quantidade: vendas + cortesias do workshop (R$ 0, desde 24/11); valor: so o que soma no faturamento
+        const l = noTime.filter((v) => (v.produto ?? "outro") === produto);
+        const lista = l.map((v) => ({ cliente: v.cliente || "Cliente sem nome", empresa: v.empresa, vendedor: v.vendedorId ? nomeDe.get(v.vendedorId) ?? null : null, data: ddmm(v.data), valor: v.valor ?? 0, ...(v.cortesia ? { cortesia: true } : {}) }))
           .sort((a, b) => b.valor - a.valor);
         return { produto, valor: l.reduce((t, v) => t + (v.valor ?? 0), 0), n: l.length, vendas: lista };
       }).filter((x) => x.n > 0).sort((a, b) => b.valor - a.valor) }, // do produto que mais vendeu para o que menos vendeu

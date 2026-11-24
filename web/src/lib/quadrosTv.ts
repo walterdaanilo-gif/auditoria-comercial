@@ -10,7 +10,7 @@ export const CATALOGO: Record<QuadroId, DefQuadro> = {
   faturamento: { nome: "Faturamento", grande: true, descricao: "Soma da aba Resultados no período (vendas da IA, com seus ajustes, e vendas manuais). No Mês atual: contra a meta do mês, com ritmo, projeção e gráfico.", meta: "meta_fat_mes",
     itens: [{ id: "precisa", rotulo: "Precisa por dia útil" }, { id: "projecao", rotulo: "Projeção do mês" }, { id: "grafico", rotulo: "Gráfico acumulado" }] },
   pessoas: { nome: "Por pessoa", grande: true, descricao: "Um cartão por vendedor: conversas e marcações contra a meta (SDR) e vendas pagas (da aba Resultados).",
-    itens: [{ id: "conversas", rotulo: "Conversas trocadas (SDR)" }, { id: "marcacoes", rotulo: "Marcações (SDR)" }, { id: "funil", rotulo: "Conversão do evento (Closer, funil do CRM)" }, { id: "followup", rotulo: "Follow-ups atrasados (Closer)" }, { id: "vendas", rotulo: "Vendas pagas" }] },
+    itens: [{ id: "conversas", rotulo: "Conversas trocadas (SDR)" }, { id: "marcacoes", rotulo: "Marcações (SDR)" }, { id: "funil", rotulo: "Conversão do workshop (Closer, funil do CRM)" }, { id: "followup", rotulo: "Follow-ups atrasados (Closer)" }, { id: "vendas", rotulo: "Vendas pagas" }] },
   semretorno: { nome: "Leads sem retorno", grande: false, descricao: "Conversas em que o lead escreveu e ficou mais de 15 min sem resposta." },
   primeira: { nome: "Tempo de 1ª resposta", grande: false, descricao: "Média do período, comparada ao SLA da empresa.", meta: "sla_primeira_resposta_min" },
   nota: { nome: "Nota média da auditoria", grande: false, descricao: "Média das notas da IA nas conversas e ligações auditadas do período." },
@@ -18,7 +18,7 @@ export const CATALOGO: Record<QuadroId, DefQuadro> = {
   ligacoes: { nome: "Ligações atendidas", grande: false, descricao: "Ligações atendidas no período, do total de ligações feitas." },
   conversas_time: { nome: "Conversas trocadas do time", grande: false, descricao: "Soma dos SDRs contra a meta do período.", meta: "meta_sdr_conversas" },
   marcacoes_time: { nome: "Marcações do time", grande: false, descricao: "Workshop + reunião de imersão, soma dos SDRs contra a meta do período.", meta: "meta_sdr_marcacoes" },
-  convites: { nome: "Convites do workshop", grande: false, descricao: "Inscrições por cupom 100% ou membro Carbone (R$ 0) no período." },
+  convites: { nome: "Convites do workshop", grande: false, descricao: "Inscrições por cupom 100%, membro Carbone ou cortesia (inscrito no workshop com valor zerado no CRM, desde 24/11), R$ 0, no período." },
 };
 export const IDS_QUADROS = Object.keys(CATALOGO) as QuadroId[];
 export const PADRAO_QUADROS: QuadroCfg[] = [{ id: "faturamento" }, { id: "pessoas" }, { id: "semretorno" }, { id: "primeira" }];

@@ -106,7 +106,7 @@ export default async function Resultados({ searchParams: spP }: { searchParams: 
                 <td className="td">{rotuloProduto(r.produto)}</td>
                 <td className="td">{rotuloForma(r.forma)}</td>
                 <td className={`td whitespace-nowrap text-right font-semibold tabular-nums ${r.excluida ? "line-through" : ""}`}>
-                  {r.valor == null ? <span className="font-normal text-warn">sem valor</span> : brlCompleto(r.valor)}
+                  {r.cortesia ? <span className="font-normal text-mute">Cortesia (R$ 0)</span> : r.valor == null ? <span className="font-normal text-warn">sem valor</span> : brlCompleto(r.valor)}
                   {r.ajustada && r.valorIA != null && r.valorIA !== r.valor && <div className="text-xs font-normal text-mute">IA leu {brlCompleto(r.valorIA)}</div>}
                 </td>
                 <td className="td whitespace-nowrap">

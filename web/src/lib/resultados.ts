@@ -2,7 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { telefone, um } from "@/lib/format";
 
 // Resultados (vendas). Fonte unica das vendas em dinheiro: a aba Resultados e o faturamento da TV leem daqui.
-// = vendas ganhas no CRM Q5 (tabela crm_vendas, com o produto do CRM)
+// = vendas ganhas no CRM Q5 (tabela crm_vendas, com o produto do CRM); desde 24/11/2026, so o negocio cujo cartao entrou
+//   numa etapa de venda do funil (ver ETAPAS_VENDA), no dia da entrada
 // + vendas que a IA detectou nas conversas (tabela auditorias), com os ajustes feitos na aba Resultados,
 // + vendas lancadas a mao (tabela resultados_vendas).
 // Cruzamento sem duplicar (cada venda conta uma vez):
@@ -37,7 +38,32 @@ export type Resultado = {
   naConversa: boolean;              // venda do CRM que tambem foi vista na conversa
   valorEstimado?: "crm" | "padrao"; // venda da IA sem valor na conversa: valor do negocio do CRM ou o padrao da empresa
   indicadoPor?: string;             // so na venda do CRM: "Indicado por" do negocio (vazio = nao foi indicado ou nao informado)
+  etapa?: EtapaVenda;               // a partir de 24/11/2026: etapa do funil em que a venda entrou (ver ETAPAS_VENDA)
+  cortesia?: boolean;               // desde 24/11: inscrito no workshop com valor zerado no CRM (R$ 0): conta como inscrito, nao soma
 };
+
+// ---------- regra das etapas do funil (a partir de 24/11/2026, pedido da gestao) ----------
+// Desde este dia o faturamento do CRM vem do cartao que ENTROU numa destas etapas (o dia da venda e o dia da entrada;
+// valor e produtos vem do negocio daquela conversa). Antes disso tudo segue como estava.
+//   Funil Workshop -> "Inscrito no workshop" (workshop; o workshop deixa de vir das conversas)
+//   Funil Vendas (o "Vendas 2" do CRM) -> "Venda fechada" = a etapa Ganho dele (codigo custom_vendas_2_ganho) (produtos do negocio)
+//   Pos-vendas Imersao aberta -> "Comprou a plataforma" = a etapa Ganho dele (codigo custom_pos_vendas_ganho) (Plataforma)
+//   Pos-vendas Plataforma -> "Renovacao" = a etapa Ganho dele (codigo custom_plataforma_ganho; o funil que tem a etapa "Ativo")
+//     (Plataforma, conta mesmo que o cliente ja tivesse a Plataforma). A etapa "Ativo" desse funil NAO conta.
+// Inscrito no workshop com valor zerado no negocio e cortesia: vai para os convites (R$ 0), nao para o faturamento.
+// A etapa vem do CRM como "custom_<funil>_<nome da etapa>"; aqui vale o fim do codigo (o nome na tela pode ser outro).
+export const REGRA_ETAPAS_DESDE = "2026-11-24";
+export const ETAPAS_VENDA = { inscrito_no_workshop: "workshop", venda_fechada: null, comprou_a_plataforma: "plataforma", renovacao: "plataforma" } as const;
+export type EtapaVenda = keyof typeof ETAPAS_VENDA;
+// fim do codigo da etapa no CRM -> etapa de venda
+const CODIGOS_ETAPA: [string, EtapaVenda][] = [
+  ["inscrito_no_workshop", "inscrito_no_workshop"],
+  ["vendas_2_ganho", "venda_fechada"], ["vendas_2_venda_fechada", "venda_fechada"],
+  ["pos_vendas_ganho", "comprou_a_plataforma"], ["comprou_a_plataforma", "comprou_a_plataforma"],
+  ["plataforma_ganho", "renovacao"], ["renovacao", "renovacao"],
+];
+export const etapaDeVenda = (etapa: string | null | undefined): EtapaVenda | null =>
+  CODIGOS_ETAPA.find(([c]) => String(etapa ?? "").endsWith(c))?.[1] ?? null;
 
 type Ajuste = { id: string; data: string; vendedor_id: string | null; cliente: string | null; empresa: string | null; produto: string | null; forma_pagamento: string | null; valor: number | string | null; auditoria_id: string | null; excluida: boolean };
 type Aud = { id: string; vendedor_id: string; venda_tipo: string | null; venda_valor: number | string | null; venda_cupom: boolean; conversas: { id: string; data: string; contato: string | null; contato_nome: string | null; telefone: string | null } | { id: string; data: string; contato: string | null; contato_nome: string | null; telefone: string | null }[] | null };
@@ -49,13 +75,14 @@ const num = (x: unknown): number | null => (x == null || x === "" ? null : Numbe
 export async function listarResultados(db: SupabaseClient, org: string, de: string, ate: string): Promise<{ linhas: Resultado[]; convites: string[]; tabelaOk: boolean; erro: string | null }> {
   // janela maior para achar a mesma venda antes ou depois do periodo (e nao contar de novo)
   const deLargo = somaDias(de, -JANELA_CRM);
-  const [rAud, rAj, rCrm, rCfg, rPerf, rWs, rComp] = await Promise.all([
+  const comEtapas = ate >= REGRA_ETAPAS_DESDE;
+  const [rAud, rAj, rCrm, rCfg, rPerf, rWs, rComp, rEt] = await Promise.all([
     db.from("auditorias").select("id,vendedor_id,venda_tipo,venda_valor,venda_cupom,conversas!inner(id,data,canal,contato,contato_nome,telefone)")
       .eq("org_id", org).eq("venda", true).neq("conversas.canal", "importada").gte("conversas.data", deLargo).lte("conversas.data", ate).limit(5000),
     db.from("resultados_vendas").select("*").eq("org_id", org).gte("data", de).lte("data", ate).limit(5000),
     // todos os negocios ganhos (de qualquer data): o negocio novo do CRM repete os produtos que o cliente ja comprou antes
     // e os negocios ABERTOS com produto, de qualquer funil (pos-venda, plataforma...): produto no negocio = vendido
-    db.from("crm_vendas").select("deal_id,status,contato_crm_id,telefone,cliente,valor_cents,aberto_em,ganho_em,sincronizado_em,vendedor_id,produto,tipo,produtos,campos,dia_venda_manual,rateio_manual").eq("org_id", org).in("status", ["won", "open"]).limit(5000),
+    db.from("crm_vendas").select("deal_id,chat_id,status,contato_crm_id,telefone,cliente,valor_cents,aberto_em,ganho_em,sincronizado_em,vendedor_id,produto,tipo,produtos,campos,dia_venda_manual,rateio_manual").eq("org_id", org).in("status", ["won", "open"]).limit(5000),
     // quem leva as vendas de workshop (Configuracoes; na Weevo, o Ruan)
     db.from("audit_settings").select("vendedor_workshop,workshop_valor_padrao").eq("org_id", org).maybeSingle(),
     db.from("profiles").select("id,nome,org_id,ativo").limit(1000),
@@ -63,6 +90,12 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
     db.from("crm_vendas").select("telefone,valor_cents,aberto_em").eq("org_id", org).neq("status", "lost").gt("valor_cents", 0).lte("valor_cents", 100000).limit(5000),
     // imagens e documentos que o cliente mandou no WhatsApp (comprovante): so contato e hora
     db.rpc("crm_comprovantes", { p_org: org, p_de: `${somaDias(deLargo, -3)}T00:00:00-03:00`, p_ate: `${somaDias(ate, 2)}T23:59:59-03:00` }),
+    // cartoes que entraram nas etapas de venda desde 24/11 (historico de etapas, tabela crm_etapas)
+    comEtapas
+      ? db.from("crm_etapas").select("conversa_id,vendedor_id,etapa,em").eq("org_id", org)
+        .or(CODIGOS_ETAPA.map(([c]) => `etapa.like.%${c}`).join(","))
+        .gte("em", `${REGRA_ETAPAS_DESDE}T00:00:00-03:00`).lte("em", `${ate}T23:59:59.999-03:00`).order("em").limit(5000)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   const tabelaOk = !rAj.error;
   const ajustes = (tabelaOk ? rAj.data ?? [] : []) as Ajuste[];
@@ -106,22 +139,82 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
     const antes = l.filter((t) => t <= g);
     return new Date(antes.length ? Math.max(...antes) : Math.min(...l)).toISOString(); // o ultimo antes do fechamento, senao o primeiro depois
   };
-  const negociosCrm = ((rCrm.error ? [] : rCrm.data ?? []) as (Crm & { status?: string; sincronizado_em?: string | null })[])
-    .filter((v) => v.status !== "open" || (Array.isArray(v.produtos) && v.produtos.length > 0))
+  type Neg = Crm & { chat_id?: string | null; status?: string; sincronizado_em?: string | null };
+  const brutos = (rCrm.error ? [] : rCrm.data ?? []) as Neg[];
+  // ---- etapas de venda (desde 24/11): uma entrada por conversa e etapa (cartao que vai e volta nao conta de novo em 30 dias)
+  type Entrada = { conversa_id: string; vendedor_id: string | null; etapa: EtapaVenda; em: string; dia: string; negocio?: Neg };
+  const entradas: Entrada[] = [];
+  for (const e of (rEt.error ? [] : rEt.data ?? []) as { conversa_id: string; vendedor_id: string | null; etapa: string; em: string }[]) {
+    const etapa = etapaDeVenda(e.etapa), dia = diaBR(e.em);
+    if (!etapa || dia < REGRA_ETAPAS_DESDE) continue;
+    const ant = entradas.filter((x) => x.conversa_id === e.conversa_id && x.etapa === etapa).at(-1);
+    if (ant && distDias(ant.dia, dia) <= JANELA) continue;
+    entradas.push({ conversa_id: e.conversa_id, vendedor_id: e.vendedor_id, etapa, em: e.em, dia });
+  }
+  // o negocio da conversa: o mais recente aberto ate a entrada na etapa (ganho ou aberto; perdido nao conta)
+  const porChat = new Map<string, Neg[]>();
+  for (const v of brutos) if (v.chat_id) porChat.set(v.chat_id, [...(porChat.get(v.chat_id) ?? []), v]);
+  for (const e of entradas) {
+    const l = [...(porChat.get(e.conversa_id) ?? [])].sort((a, b) => String(b.aberto_em ?? "").localeCompare(String(a.aberto_em ?? "")));
+    e.negocio = l.find((v) => !v.aberto_em || Date.parse(v.aberto_em) <= Date.parse(e.em) + 86400_000) ?? l[0];
+  }
+  // negocio que entrou numa etapa de venda (menos Renovacao, que vira linha propria): a venda e do dia da entrada.
+  // So vale para negocio que ainda nao tinha sido ganho antes de 24/11 (o que ja foi contado fica onde estava).
+  const entradaDoNegocio = new Map<string, Entrada>();
+  for (const e of entradas) if (e.etapa !== "renovacao" && e.negocio && !entradaDoNegocio.has(e.negocio.deal_id)
+    && (!e.negocio.ganho_em || diaBR(e.negocio.ganho_em) >= somaDias(REGRA_ETAPAS_DESDE, -1))) entradaDoNegocio.set(e.negocio.deal_id, e);
+  const etapasDoChat = new Map<string, EtapaVenda[]>();
+  for (const e of entradas) etapasDoChat.set(e.conversa_id, [...(etapasDoChat.get(e.conversa_id) ?? []), e.etapa]);
+
+  const negociosCrm = brutos
+    .filter((v) => v.status !== "open" || (Array.isArray(v.produtos) && v.produtos.length > 0) || (entradaDoNegocio.has(v.deal_id) && (v.valor_cents ?? 0) > 0))
     // negocio aberto nao tem dia de ganho: vale a data de venda do negocio, senao o dia em que o produto apareceu, senao a abertura
-    .map((v) => ({ ...v, comprovante: v.status === "won" && v.ganho_em ? comprovanteDe(v.contato_crm_id, v.ganho_em) : undefined,
-      ganho_em: v.ganho_em || dataDoCampo(v.campos, "") || v.aberto_em || v.sincronizado_em || new Date().toISOString() }));
+    .map((v) => {
+      const e = entradaDoNegocio.get(v.deal_id);
+      return { ...v, comprovante: v.status === "won" && v.ganho_em ? comprovanteDe(v.contato_crm_id, v.ganho_em) : undefined,
+        ganho_em: e?.em || v.ganho_em || dataDoCampo(v.campos, "") || v.aberto_em || v.sincronizado_em || new Date().toISOString(),
+        etapa_em: e?.em, tipoEtapa: e ? ETAPAS_VENDA[e.etapa] ?? undefined : undefined };
+    });
   const todasCrm = produtosNovosCrm(negociosCrm.map((v) => ({ ...v, dia: diaBR(v.ganho_em), fone: chaveFone(v.telefone), tipo: v.tipo || "outro" })));
+  // desde 24/11: venda do CRM so conta se a conversa entrou numa etapa de venda
+  const foraDasEtapas = (v: CrmCruzado & { chat_id?: string | null }): string | null => {
+    if (v.dia < REGRA_ETAPAS_DESDE || v.repetidaDe) return null;
+    const ets = (v.chat_id ? etapasDoChat.get(v.chat_id) : undefined) ?? [];
+    if (!ets.length) return "não entrou nas etapas de venda do CRM (regra de 24/11)";
+    return ets.every((x) => x === "renovacao") ? "contada na etapa Renovação" : null;
+  };
+  // o cruzamento continua com todos os negocios (como antes de 24/11): so tira da conversa o que o CRM ja tem
   cruzar(linhas as (Resultado & { fone?: string })[], todasCrm.filter((v) => !v.repetidaDe));
   // so o periodo pedido (o resto foi buscado so para o cruzamento); o negocio que so repete produtos aparece riscado, sem somar
-  for (const v of todasCrm.filter((x) => x.dia >= de && x.dia <= ate)) {
+  for (const v of todasCrm.filter((x) => x.dia >= de && x.dia <= ate) as (CrmCruzado & { chat_id?: string | null })[]) {
+    const fora = foraDasEtapas(v);
+    const ets = v.dia >= REGRA_ETAPAS_DESDE && v.chat_id ? (etapasDoChat.get(v.chat_id) ?? []).filter((x) => x !== "renovacao") : [];
     linhas.push({
       chave: `c:${v.deal_id}`, origem: "crm", id: null, auditoriaId: null, data: v.dia, vendedorId: (ALTOS.includes(v.tipo) ? closerDe(v.campos) : null) ?? v.vendedor_id ?? v.vendedorConversa ?? null,
       cliente: v.cliente?.trim() ?? "", empresa: typeof v.campos?.["nome-da-empresa"] === "string" ? v.campos["nome-da-empresa"] : "",
       produto: PRODUTOS.some(([k]) => k === v.tipo) ? v.tipo : "outro", forma: null, valor: v.valor_cents != null ? v.valor_cents / 100 : null,
-      valorIA: null, ajustada: false, excluida: false, duplicada: v.repetidaDe ? "produtos já contados em outro negócio do cliente" : null, naoLancada: false, naConversa: !!v.vista,
+      valorIA: null, ajustada: false, excluida: false, duplicada: v.repetidaDe ? "produtos já contados em outro negócio do cliente" : fora, naoLancada: false, naConversa: !!v.vista,
       indicadoPor: indicadorDoCrm(v.campos),
+      ...(ets.length ? { etapa: ets.includes("venda_fechada") ? "venda_fechada" : ets[0] } : {}),
     });
+  }
+  // Renovacao (sempre) e entrada em etapa sem negocio no CRM: linha propria, do dia da entrada
+  const semNegocio = entradas.filter((e) => e.etapa === "renovacao" || !e.negocio);
+  const rConv = semNegocio.length
+    ? await db.from("crm_conversas").select("id,contato_nome,telefone,vendedor_id").in("id", [...new Set(semNegocio.map((e) => e.conversa_id))])
+    : { data: [], error: null };
+  const conv = new Map(((rConv.error ? [] : rConv.data ?? []) as { id: string; contato_nome: string | null; telefone: string | null; vendedor_id: string | null }[]).map((c) => [c.id, c]));
+  for (const e of semNegocio.filter((x) => x.dia >= de && x.dia <= ate)) {
+    const n = e.negocio, c = conv.get(e.conversa_id);
+    linhas.push({
+      chave: `e:${e.conversa_id}:${e.etapa}:${e.dia}`, origem: "crm", id: null, auditoriaId: null, data: e.dia,
+      vendedorId: n?.vendedor_id ?? e.vendedor_id ?? c?.vendedor_id ?? null,
+      cliente: (n?.cliente ?? c?.contato_nome ?? (c?.telefone ? telefone(c.telefone) : "")).trim(),
+      empresa: typeof n?.campos?.["nome-da-empresa"] === "string" ? n.campos["nome-da-empresa"] : "",
+      produto: ETAPAS_VENDA[e.etapa] ?? (n ? tipoDoProduto(n.produto, n.valor_cents) : "outro"), forma: null,
+      valor: n?.valor_cents ? n.valor_cents / 100 : null, valorIA: null, ajustada: false, excluida: false, duplicada: null, naoLancada: false, naConversa: false,
+      indicadoPor: indicadorDoCrm(n?.campos), etapa: e.etapa, fone: chaveFone(n?.telefone ?? c?.telefone),
+    } as Resultado & { fone: string });
   }
   const cfg = (rCfg.error ? null : rCfg.data) as { vendedor_workshop: string | null; workshop_valor_padrao?: number | string | null } | null;
   const doWorkshop = cfg?.vendedor_workshop ?? null;
@@ -133,12 +226,22 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
     const ab = n.aberto_em ?? "";
     if (!pagoNoCrm.has(k) || ab > pagoNoCrm.get(k)!.ab) pagoNoCrm.set(k, { v: n.valor_cents / 100, ab });
   }
+  // desde 24/11 o workshop vem do funil Workshop (etapa "Inscrito no workshop"); o que a IA viu na conversa fica so para conferencia
+  if (brutos.length) for (const r of linhas) if (r.origem === "ia" && r.produto === "workshop" && r.data >= REGRA_ETAPAS_DESDE && !r.duplicada)
+    r.duplicada = "workshop vem do CRM desde 24/11 (etapa Inscrito no workshop)";
   for (const r of linhas as (Resultado & { fone?: string })[]) {
     if (r.origem !== "ia" || r.produto !== "workshop" || r.ajustada || r.duplicada || r.excluida || (r.valor ?? 0) > 0) continue;
     const doCrm = r.fone ? pagoNoCrm.get(r.fone)?.v : undefined;
     if (doCrm) { r.valor = doCrm; r.valorEstimado = "crm"; } else if (padrao && padrao > 0) { r.valor = padrao; r.valorEstimado = "padrao"; }
   }
   if (doWorkshop) for (const r of linhas) if (r.produto === "workshop") r.vendedorId = doWorkshop;
+  // desde 24/11: inscrito no workshop com valor zerado no CRM e cortesia (R$ 0): continua na lista (conta como inscrito)
+  // e nos convites, mas nao soma no faturamento
+  for (const r of linhas) {
+    if (r.etapa !== "inscrito_no_workshop" || r.produto !== "workshop" || r.duplicada || r.excluida || (r.valor ?? 0) > 0) continue;
+    r.valor = 0; r.cortesia = true;
+    if (r.data >= de && r.data <= ate && r.vendedorId) convites.push(r.vendedorId);
+  }
   const noPeriodo = linhas.filter((r) => r.data >= de && r.data <= ate).map(({ ...r }) => { delete (r as { fone?: string }).fone; return r as Resultado; });
   noPeriodo.sort((x, y) => y.data.localeCompare(x.data) || (y.valor ?? -1) - (x.valor ?? -1));
   return { linhas: noPeriodo, convites, tabelaOk, erro: rAud.error?.message ?? null };
@@ -155,7 +258,9 @@ export function indicadorDoCrm(campos: Record<string, unknown> | null | undefine
 type Crm = { deal_id: string; contato_crm_id: string | null; telefone: string | null; cliente: string | null; valor_cents: number | null; aberto_em?: string | null; ganho_em: string; vendedor_id: string | null; produto: string | null; tipo: string | null; produtos?: unknown; campos: Record<string, unknown> | null;
   // ajuste feito a mao (gestao): dia da venda e divisao do valor entre os produtos, ex.: {"imersao":0.5,"plataforma":0.5}
   dia_venda_manual?: string | null; rateio_manual?: Record<string, number> | null };
-type CrmCruzado = Crm & { comprovante?: string; dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string; diaCerto?: boolean };
+type CrmCruzado = Crm & { comprovante?: string; dia: string; fone: string; tipo: string; vista?: boolean; vendedorConversa?: string | null; repetidaDe?: string; diaCerto?: boolean;
+  // desde 24/11: quando o cartao entrou na etapa de venda, e o produto que a etapa diz (negocio sem lista de produtos)
+  etapa_em?: string; tipoEtapa?: string };
 
 // Dia da VENDA = o dia em que a venda foi alimentada no CRM (cartao ganho), para negocios ganhos A PARTIR DE 16/11/2026
 // (os ganhos antes disso seguem a regra antiga, pela "Data do diagnostico"). Antes disso, nesta ordem:
@@ -183,8 +288,9 @@ export function dataDoCampo(campos: Record<string, unknown> | null | undefined, 
 
 // Regra do dia da venda pela alimentacao no CRM vale para negocios ganhos a partir deste dia (pedido da gestao, 16/11/2026)
 const REGRA_ALIMENTACAO_DESDE = "2026-11-16";
-export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; campos?: Record<string, unknown> | null; comprovante?: string; dia_venda_manual?: string | null }, tipo: string, item?: { visto_em?: string | null } | null): { dia: string; certo: boolean } {
+export function diaDaVenda(v: { ganho_em: string; aberto_em?: string | null; campos?: Record<string, unknown> | null; comprovante?: string; dia_venda_manual?: string | null; etapa_em?: string }, tipo: string, item?: { visto_em?: string | null } | null): { dia: string; certo: boolean } {
   if (v.dia_venda_manual) return { dia: String(v.dia_venda_manual).slice(0, 10), certo: true }; // dia acertado a mao pela gestao vale sobre tudo
+  if (v.etapa_em) return { dia: diaBR(v.etapa_em), certo: true }; // desde 24/11: o dia em que o cartao entrou na etapa de venda
   const doCampo = dataDoCampo(v.campos, tipo);
   if (doCampo) return { dia: doCampo, certo: true };
   if (item?.visto_em) return { dia: diaBR(item.visto_em), certo: true }; // produto acrescentado depois num negocio que ja existia
@@ -267,7 +373,7 @@ export function produtosNovosCrm(lista: CrmCruzado[]): CrmCruzado[] {
       return v.valor_cents != null && soma > 0 && soma !== v.valor_cents ? v.valor_cents / soma : 1;
     };
     const linha = (v: CrmCruzado, it: Item | null, n: number, extra: Partial<CrmCruzado> = {}, dono: CrmCruzado = v): CrmCruzado => {
-      const tipo = it ? tipoDoProduto(it.nome) : assinaturaPlataforma(v) ? "plataforma" : tipoDoProduto(v.produto, v.valor_cents);
+      const tipo = it ? tipoDoProduto(it.nome) : v.tipoEtapa ?? (assinaturaPlataforma(v) ? "plataforma" : tipoDoProduto(v.produto, v.valor_cents));
       const { dia, certo } = diaDaVenda(v, tipo, it);
       return { ...v, deal_id: it ? `${v.deal_id}#${n}` : v.deal_id, produto: it?.nome ?? v.produto, tipo, dia, diaCerto: certo,
         valor_cents: it ? Math.round((it.total_cents ?? 0) * fator(dono)) : v.valor_cents, ...extra, ...rateado(v, it, tipo) };
@@ -367,3 +473,5 @@ export function cruzar(linhas: (Resultado & { fone?: string })[], crm: CrmCruzad
 
 // Soma do faturamento: so vendas com valor e que nao foram tiradas
 export const contaNoFaturamento = (r: Resultado) => !r.excluida && !r.duplicada && !r.naoLancada && (r.valor ?? 0) > 0;
+// Quantidade (inscritos/vendas): o que soma no faturamento + as cortesias do workshop (R$ 0)
+export const contaNaQuantidade = (r: Resultado) => contaNoFaturamento(r) || (!!r.cortesia && !r.excluida && !r.duplicada);

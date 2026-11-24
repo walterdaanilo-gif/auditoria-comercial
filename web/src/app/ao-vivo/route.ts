@@ -84,8 +84,8 @@ footer{margin:16px 0 8px;color:var(--mute);font-size:13px;text-align:center}
   <div class="grid" style="margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))" id="prods"></div>
   <div class="grid g4" style="margin-top:14px" id="kpis"></div>
   <div class="grid g2b" style="margin-top:14px" id="duas">
-    <section class="card" aria-label="Conversão do evento">
-      <div class="lb">Conversão do evento</div>
+    <section class="card" aria-label="Conversão do workshop">
+      <div class="lb">Conversão do workshop</div>
       <div id="conv"></div>
     </section>
     <section class="card" aria-label="Time">
@@ -104,7 +104,7 @@ var NOME={plataforma:"Plataforma",imersao:"Imersão",incompany:"In-Company",work
 var $=function(i){return document.getElementById(i)};
 function moeda(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
 function mil(n){return n===0?"0":Math.round(n/1000)+" mil"}
-function pct(a,b){return b>0?Math.round(a/b*100)+"%":"—"}
+function pct(a,b){return (b>0?Math.round(a/b*100):0)+"%"}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function selo(c,t){return '<span class="selo '+c+'">'+esc(t)+'</span>'}
 function grafico(d){
@@ -144,7 +144,7 @@ function pinta(d){
   var k=d.kpis,ks=[["Marcações do time",k.marcacoes],["Conversas trocadas",k.conversas],["Convites (R$ 0)",k.convites],["Nota média da auditoria",k.nota]];
   $("kpis").innerHTML=ks.map(function(a){return '<div class="card"><span class="lb" style="font-size:12px">'+a[0]+'</span><div class="num">'+esc(a[1]&&a[1].valor!=null?a[1].valor:"—")+'</div><span class="mu">'+esc(a[1]?a[1].sub:"")+'</span></div>'}).join("");
   var c=d.conversao;
-  $("conv").innerHTML=c?'<div class="num" style="margin-top:6px">'+pct(c.total,c.presentes)+'</div><div class="mu">'+c.total+' venda'+(c.total===1?"":"s")+' (Imersão, In-Company e Plataforma) / '+c.presentes+' que vieram ao workshop</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">'+c.produtos.map(function(x){return '<div class="prod">'+esc(NOME[x.produto])+'<b>'+pct(x.vendas,c.presentes)+'</b><span class="mu">'+x.vendas+' venda'+(x.vendas===1?"":"s")+'</span></div>'}).join("")+'</div><p class="mu" style="margin-bottom:0">Presença medida no CRM desde 12/11/2026; no começo a taxa oscila.</p>':'<p class="mu">Sem dado do funil ainda.</p>';
+  $("conv").innerHTML=c?'<div class="num" style="margin-top:6px">'+pct(c.total,c.presentes)+'</div><div class="mu">'+c.total+' venda'+(c.total===1?"":"s")+' fechada'+(c.total===1?"":"s")+' / '+c.presentes+' que vieram ao workshop</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">'+c.produtos.map(function(x){return '<div class="prod">'+esc(NOME[x.produto])+'<b>'+pct(x.vendas,c.presentes)+'</b><span class="mu">'+x.vendas+' venda'+(x.vendas===1?"":"s")+'</span></div>'}).join("")+'</div><p class="mu" style="margin-bottom:0">Desde 24/11/2026: etapas Venda fechada (funil Vendas) e Veio ao workshop (funil Workshop) do CRM.</p>':'<p class="mu">A conversão conta a partir de 24/11.</p>';
   $("time").innerHTML=(d.pessoas||[]).map(function(p){return '<tr><td>'+esc(p.nome)+'</td><td>'+(p.tipo==="closer"?"Closer":"SDR")+'</td><td class="r">'+p.vendasN+'</td><td class="r">'+moeda(p.vendasValor)+'</td></tr>'}).join("")||'<tr><td colspan="4" class="mu">Sem time cadastrado.</td></tr>';
   $("msg").hidden=true;$("app").hidden=false;
   $("status").textContent="ao vivo · atualizado às "+d.atualizadoEm;$("dot").className="dot";

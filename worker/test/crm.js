@@ -59,6 +59,17 @@ const R = await carregarRegras(db);
 const parados = await leadsParados(db, R);
 assert.deepEqual(parados.map(l => l.nome), ["Lia"]);
 assert.equal(parados[0].semResposta, true); assert.equal(parados[0].dias, 8);
+// cartao em Perdido ou Ganho no CRM (qualquer funil) nao e mais follow-up
+{
+  const lia = db.tables.crm_conversas.find(c => c.id === "c5"), antes = lia.status;
+  for (const s of ["custom_vendas_2_perdido", "custom_perdido", "custom_vendas_2_ganho", "custom_plataforma_ganho"]) {
+    lia.status = s;
+    assert.deepEqual((await leadsParados(db, R)).map(l => l.nome), [], `etapa ${s}: fora do follow-up`);
+  }
+  lia.status = "custom_vendas_2_em_negociacao";
+  assert.deepEqual((await leadsParados(db, R)).map(l => l.nome), ["Lia"], "em negociacao continua contando");
+  lia.status = antes;
+}
 console.log("OK: historico do CRM sem duplicar, revisao so de clientes potenciais, follow-up juntando WhatsApp e CRM");
 
 // retrato para a TV: 1 lead parado do Nick; rodar de novo antes de 15 min nao recalcula; vendedor que saiu do time some
@@ -68,6 +79,9 @@ console.log("OK: historico do CRM sem duplicar, revisao so de clientes potenciai
   const agora = Date.now();
   await fotografarFollowups(db, { agora });
   assert.deepEqual(db.tables.followups_atrasados.map(f => [f.vendedor_id, f.qtd, f.mais_antigo_dias, f.dias_regra]), [[NICK, 1, 8, 6]]);
+  // a lista vai junto: quem e, desde quando, dias e se o cliente esta sem resposta
+  const [lista] = db.tables.followups_atrasados.map(f => f.leads);
+  assert.equal(lista.length, 1); assert.equal(lista[0].nome, "Lia"); assert.equal(lista[0].dias, 8); assert.equal(lista[0].sem_resposta, true); assert.ok(lista[0].desde);
   assert.equal(await fotografarFollowups(db, { agora: agora + 5 * 60_000 }), "retrato recente");
   console.log("OK: retrato dos follow-ups atrasados para a TV");
 }

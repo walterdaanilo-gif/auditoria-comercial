@@ -13,11 +13,12 @@ export type Pessoa = {
   // meta_closer_reunioes x dias uteis. null = sem fonte ou sem meta
   reunioes?: { v: number; meta: number } | null;
   // so closer: clientes potenciais sem mensagem do time ha "dias" dias ou mais (retrato do worker, agora; nao segue o periodo)
-  followups?: { qtd: number; maisAntigo: number | null; dias: number } | null;
+  // lista: quem sao (clicar no quadro na TV abre), do mais parado para o menos; quando = ultima mensagem (DD/MM HH:MM)
+  followups?: { qtd: number; maisAntigo: number | null; dias: number; lista?: { nome: string; quando: string; dias: number; semResposta: boolean }[] } | null;
 };
 
 // Uma venda na lista do produto: cliente (e empresa), quem vendeu, dia (DD/MM) e valor
-export type VendaProduto = { cliente: string; empresa: string; vendedor: string | null; data: string; valor: number };
+export type VendaProduto = { cliente: string; empresa: string; vendedor: string | null; data: string; valor: number; cortesia?: boolean };
 
 // Tela fixa da TV (Visao geral). O que o Cabueta nao mede nao entra aqui.
 export type VisaoGeralDados = {
@@ -29,7 +30,7 @@ export type VisaoGeralDados = {
   // porProduto: o faturamento dividido pelos produtos (Plataforma primeiro), so os que venderam
   // vendas: as vendas daquele produto (clicar no produto na TV abre a lista), da maior para a menor
   fat: { real: number; meta: number | null; serie: { du: number; real: number; data: string }[]; datasUteis: string[]; porProduto?: { produto: string; valor: number; n: number; vendas?: VendaProduto[] }[] };
-  // conversao do evento: cartoes que ENTRARAM em "Participou da experiencia" no periodo (cada conversa conta uma vez)
+  // conversao do workshop: vendas fechadas / quem veio ao workshop no periodo (desde 24/11: etapas "Venda fechada" e "Veio ao workshop"; antes, "Participou da experiencia")
   // contra as vendas do periodo por produto (Imersao, In-Company, Plataforma). null = sem etapa lida
   conversao?: { presentes: number; total: number; produtos: { produto: string; vendas: number }[] } | null;
   pessoas: Pessoa[];

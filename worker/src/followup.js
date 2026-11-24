@@ -10,10 +10,13 @@ const ASSUNTO = { interesse_workshop: "interesse no workshop", interesse_imersao
 const fone = t => { const m = String(t || "").match(/^55(\d{2})(\d{4,5})(\d{4})$/); return m ? `(${m[1]}) ${m[2]}-${m[3]}` : null; };
 const digitos = t => String(t || "").replace(/\D/g, "");
 const MAX_LISTA = 25;
+export const encerradoNoCrm = status => /_(perdido|ganho)$/.test(String(status || ""));
 
 // Clientes potenciais sem follow-up: a ultima mensagem DO VENDEDOR (WhatsApp ou historico do CRM) tem N dias ou mais
 // (ou o lead escreveu ha N dias e nunca teve resposta). Potencial = a IA viu negociacao (interesse, reuniao, vaga)
 // OU o CRM marca a conversa como ativa. Venda fechada, chat interno, pos-venda perdido e numeros ignorados ficam de fora.
+// Cartao em etapa de Perdido ou de Ganho no CRM (de qualquer funil, ex.: custom_vendas_2_perdido, custom_plataforma_ganho)
+// tambem fica de fora: o negocio ja terminou (pedido da gestao, 24/11/2026).
 // Um lead = vendedor + telefone (DDD + 8 digitos), juntando WhatsApp e CRM.
 export async function leadsParados(db, R, { agora = Date.now() } = {}) {
   const s = R.bruto, dias = s.followup_alerta_d ?? 6;
@@ -61,7 +64,7 @@ export async function leadsParados(db, R, { agora = Date.now() } = {}) {
   const limite = agora - dias * 86400_000;
   return [...leads.values()].map(l => {
     const status = crm.get(`${l.vendedor_id}|${l.lead}`);
-    const potencial = !l.fechado && (l.negociacao || (status !== undefined && crmPotencial(status))) && !(status !== undefined && !crmPotencial(status));
+    const potencial = !l.fechado && (l.negociacao || (status !== undefined && crmPotencial(status))) && !(status !== undefined && !crmPotencial(status)) && !encerradoNoCrm(status);
     // conta desde a ultima mensagem de alguem da equipe para o cliente; ninguem falou: desde que o lead escreveu
     const daEquipe = equipe.get(l.lead) || null;
     const ultimaDoTime = [l.ultimaVendedor, daEquipe].filter(Boolean).sort().pop() || null;
@@ -112,20 +115,30 @@ export function textoGestao(porVendedor, nomes, funcao, dias, modelos) {
 // Retrato dos follow-ups atrasados por vendedor (tabela followups_atrasados), para a TV so ler: a conta e pesada demais
 // para rodar a cada recarga da tela. Mesma regra do aviso (leadsParados). No maximo a cada 15 min; troca o retrato inteiro.
 export const RETRATO_MIN = 15;
+const RETRATO_LISTA = 100; // no maximo 100 clientes por vendedor na lista da TV
 export async function fotografarFollowups(db, { agora = Date.now() } = {}) {
   const [ult] = await db.select("followups_atrasados", { select: "calculado_em", order: "calculado_em.desc", limit: 1 });
   if (ult && agora - Date.parse(ult.calculado_em) < (RETRATO_MIN - 1) * 60_000) return "retrato recente"; // 1 min de folga para o relogio do laco
   const R = await carregarRegras(db);
   const porVendedor = new Map();
   for (const l of await leadsParados(db, R, { agora })) {
-    const v = porVendedor.get(l.vendedor_id) || { qtd: 0, dias: 0 };
-    porVendedor.set(l.vendedor_id, { qtd: v.qtd + 1, dias: Math.max(v.dias, l.dias) });
+    const v = porVendedor.get(l.vendedor_id) || { qtd: 0, dias: 0, leads: [] };
+    // lista para a TV (clicar no quadro): quem e e desde quando (ja vem do mais parado para o menos)
+    if (v.leads.length < RETRATO_LISTA) v.leads.push({ nome: nomeLead(l), desde: l.desdeQuando, dias: l.dias, sem_resposta: !!l.semResposta });
+    porVendedor.set(l.vendedor_id, { qtd: v.qtd + 1, dias: Math.max(v.dias, l.dias), leads: v.leads });
   }
   const em = new Date(agora).toISOString();
   // vendedor sem lead parado tambem ganha linha (qtd 0): a TV distingue "zero" de "ainda nao calculado"
   const vendedores = new Set([...R.nomes.keys(), ...porVendedor.keys()]);
   const linhas = [...vendedores].filter(Boolean).map(v => ({ vendedor_id: v, org_id: R.bruto.org_id ?? null, qtd: porVendedor.get(v)?.qtd ?? 0, mais_antigo_dias: porVendedor.get(v)?.dias ?? null, dias_regra: R.bruto.followup_alerta_d ?? 6, calculado_em: em }));
-  if (linhas.length) await db.insert("followups_atrasados", linhas, { onConflict: "vendedor_id", returning: false });
+  if (linhas.length) {
+    // com a lista (coluna "leads", supabase/followups_atrasados_leads.sql); banco sem a coluna: grava so a quantidade
+    try { await db.insert("followups_atrasados", linhas.map(x => ({ ...x, leads: porVendedor.get(x.vendedor_id)?.leads ?? [] })), { onConflict: "vendedor_id", returning: false }); }
+    catch (e) {
+      if (!/leads/.test(String(e?.message))) throw e;
+      await db.insert("followups_atrasados", linhas, { onConflict: "vendedor_id", returning: false });
+    }
+  }
   await db.delete("followups_atrasados", { calculado_em: `lt.${em}` }); // quem saiu do time
   return `${[...porVendedor.values()].reduce((t, v) => t + v.qtd, 0)} leads parados em ${porVendedor.size} vendedores`;
 }
