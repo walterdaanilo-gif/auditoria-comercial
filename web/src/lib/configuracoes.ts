@@ -164,7 +164,8 @@ export function validar(e: Estado): string[] {
   for (const m of [s.meta_closer_reunioes, s.meta_closer_vendas]) if (m !== null && !inteiro(m, 0, 1000)) erros.push("Metas do closer: use números de 0 a 1000.");
   if (s.meta_fat_mes != null && !inteiro(s.meta_fat_mes, 0, 100000000)) erros.push("Meta de faturamento: use um valor em reais de 0 a 100.000.000.");
   erros.push(...validarQuadros(s.tv_quadros));
-  for (const v of e.vendedores) if (!["sdr", "closer"].includes(v.funcao)) erros.push(`Função inválida para ${v.nome}.`);
+  // gestao (lidera o time) e uma funcao valida: a mesma lista de Usuarios (admin/usuarios/actions.ts)
+  for (const v of e.vendedores) if (!["sdr", "closer", "gestao"].includes(v.funcao)) erros.push(`Função inválida para ${v.nome}.`);
   const rubricas: [string, Criterio[]][] = s.rubrica_modo === "personalizada" ? [["personalizada", e.rubricas.personalizada]] : [["do SDR", e.rubricas.sdr], ["do Closer", e.rubricas.closer]];
   for (const [nome, l] of rubricas) {
     if (!l.some((c) => c.ativo)) erros.push(`Rubrica ${nome}: deixe pelo menos um critério ativo.`);
