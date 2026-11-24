@@ -39,10 +39,14 @@ export async function leadsParados(db, R, { agora = Date.now() } = {}) {
   // se alguem do time ja falou com o cliente, ele nao esta sem follow-up
   const equipe = new Map();
   const viu = (fone, quando) => { if (fone && quando && (!equipe.has(fone) || quando > equipe.get(fone))) equipe.set(fone, quando); };
-  for (const c of await db.selectAll("crm_conversas", { select: "vendedor_id,telefone,status,ultima_msg_sdr_em" })) {
+  const foneCrm = new Map();
+  for (const c of await db.selectAll("crm_conversas", { select: "id,vendedor_id,telefone,status,ultima_msg_sdr_em" })) {
     if (c.vendedor_id && c.telefone) crm.set(`${c.vendedor_id}|${chaveTelefone(digitos(c.telefone))}`, c.status);
-    if (c.telefone) viu(chaveTelefone(digitos(c.telefone)), c.ultima_msg_sdr_em);
+    if (c.telefone) { foneCrm.set(c.id, chaveTelefone(digitos(c.telefone))); viu(foneCrm.get(c.id), c.ultima_msg_sdr_em); }
   }
+  // nota interna no CRM conta como contato do time SO para os follow-ups atrasados (pedido da gestao, 24/11/2026):
+  // o vendedor registrou que tratou o cliente (ex.: falou por ligacao). Nas outras contas a nota continua fora.
+  for (const m of await db.selectAll("crm_mensagens", { select: "conversa_id,enviada_em", filters: { nota_interna: "is.true", apagada_em: "is.null", enviada_em: `gte.${desde}` } })) viu(foneCrm.get(m.conversa_id), m.enviada_em);
   for (const c of convs) viu(c.telefone ? chaveTelefone(c.telefone) : c.contato, ultVend.get(c.id));
 
   const leads = new Map();

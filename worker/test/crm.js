@@ -70,6 +70,15 @@ assert.equal(parados[0].semResposta, true); assert.equal(parados[0].dias, 8);
   assert.deepEqual((await leadsParados(db, R)).map(l => l.nome), ["Lia"], "em negociacao continua contando");
   lia.status = antes;
 }
+// nota interna no CRM conta como contato do time so para o follow-up: com nota da Lia ha 2 dias, ela sai
+{
+  const nota = m("n1", "c5", "internal", addDays(hoje, -2), "10:00", { nota_interna: true });
+  db.tables.crm_mensagens.push(nota);
+  assert.deepEqual((await leadsParados(db, R)).map(l => l.nome), [], "nota interna recente: nao esta atrasado");
+  nota.apagada_em = new Date().toISOString();
+  assert.deepEqual((await leadsParados(db, R)).map(l => l.nome), ["Lia"], "nota apagada nao conta");
+  db.tables.crm_mensagens = db.tables.crm_mensagens.filter(x => x !== nota);
+}
 console.log("OK: historico do CRM sem duplicar, revisao so de clientes potenciais, follow-up juntando WhatsApp e CRM");
 
 // retrato para a TV: 1 lead parado do Nick; rodar de novo antes de 15 min nao recalcula; vendedor que saiu do time some

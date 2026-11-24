@@ -14,6 +14,7 @@ function match(row, filters) {
     const v = row[col];
     if (f === "is.null") return v == null;
     if (f === "not.is.null") return v != null;
+    if (f === "is.true") return v === true;
     const [op, ...rest] = f.split("."); const arg = rest.join(".");
     if (op === "eq") return String(v) === arg;
     if (op === "neq") return String(v) !== arg;
