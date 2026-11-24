@@ -5,7 +5,7 @@ import { duracao } from "@/lib/format";
 import PeriodoSeletor from "./PeriodoSeletor";
 import BotaoAtualizarCrm from "./BotaoAtualizarCrm";
 import { CATALOGO, temItem, tituloDe, type QuadroCfg } from "@/lib/quadrosTv";
-import { calcularRitmo, eixoY, inteiro, moeda, tomPorDiferenca, type Kpi, type Pessoa, type Tom, type VisaoGeralDados } from "./calc";
+import { calcularRitmo, eixoY, inteiro, moeda, tomPorDiferenca, type Kpi, type LeadSemRetorno, type Pessoa, type Tom, type VisaoGeralDados } from "./calc";
 
 // Tela fixa da TV do comercial (sem rodizio), fundo claro, 1920x1080 escalada para qualquer TV.
 // So mostra o que o Cabueta mede. Cores de texto com contraste minimo de 4,5:1 sobre o branco.
@@ -455,15 +455,75 @@ function PorPessoa({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
 }
 
 // ---------------- quadros pequenos ----------------
+// Leads sem retorno: clicar no quadro abre quem sao (mesmo padrao do detalhe da conversao do workshop)
+const GRADE_SEM = "minmax(0,1fr) 220px 170px 150px";
+function ListaSemRetorno({ titulo, k, fechar }: { titulo: string; k: Kpi; fechar: () => void }) {
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => { if (e.key === "Escape") fechar(); };
+    document.addEventListener("keydown", f);
+    return () => document.removeEventListener("keydown", f);
+  }, [fechar]);
+  const lista: LeadSemRetorno[] = k.lista ?? [];
+  return (
+    // position fixed dentro da tela escalada: cobre a tela 1920x1080 inteira e escala junto
+    <div onClick={fechar} style={{ position: "fixed", inset: 0, zIndex: 50, background: "var(--vg-veu)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div role="dialog" aria-modal="true" aria-label={titulo} onClick={(e) => e.stopPropagation()} className="cd"
+        style={{ width: 1300, maxHeight: 900, display: "flex", flexDirection: "column", padding: "26px 32px", gap: 18, borderColor: "var(--vg-borda-fat)" }}>
+        <div className="row" style={{ gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+            <span className="lb nw">{titulo}</span>
+            <span className="vl nw" style={{ fontSize: 52, color: lista.length ? TOM.bad.c : TOM.ok.c }}>{k.valor ?? "—"}</span>
+            <span className="mu nw">o lead escreveu e ficou mais de 15 min sem resposta, no período (da espera mais longa para a mais curta)</span>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button type="button" className="bt" onClick={fechar} aria-label="Fechar" autoFocus>✕ Fechar</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: GRADE_SEM, gap: "0 18px", padding: "0 16px", fontSize: 15, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.mute }}>
+          <span>Cliente e última mensagem</span><span>Vendedor</span><span>Escreveu em</span><span style={{ textAlign: "right" }}>Esperando</span>
+        </div>
+        <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+          {lista.map((l, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: GRADE_SEM, gap: "0 18px", alignItems: "center", background: "var(--vg-dentro)", borderRadius: 12, padding: "12px 16px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                <span className="nw" style={{ fontSize: 22, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis" }}>{l.cliente}</span>
+                {l.texto && <span className="mu nw" style={{ fontSize: 16, overflow: "hidden", textOverflow: "ellipsis" }}>“{l.texto}”</span>}
+              </div>
+              <span className="nw" style={{ fontSize: 20, overflow: "hidden", textOverflow: "ellipsis" }}>{l.vendedor ?? "—"}</span>
+              <span className="nw" style={{ fontSize: 20, fontVariantNumeric: "tabular-nums" }}>{l.quando}</span>
+              <span className="nw" style={{ fontSize: 22, fontWeight: 800, textAlign: "right", fontVariantNumeric: "tabular-nums", color: TOM.bad.c }}>{l.espera}</span>
+            </div>
+          ))}
+          {k.valor === "100+" && <span className="mu">Mostrando as 100 esperas mais longas.</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
 function KpiCard({ q, k, tam }: { q: QuadroCfg; k: Kpi; tam: number }) {
   const ruim = k.tom === "bad";
+  const [aberto, setAberto] = useState(false);
+  const clica = !!k.lista?.length;
+  const caixa: CSSProperties = { flex: 1, padding: "20px 26px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 8, background: ruim ? "var(--vg-kpi-ruim-bg)" : "var(--vg-quadro)", borderColor: ruim ? "var(--vg-kpi-ruim-borda)" : C.linha };
+  if (clica) return (
+    <>
+      <button type="button" className="cd pr" onClick={() => setAberto(true)} aria-haspopup="dialog" title="Ver quem são"
+        style={{ ...caixa, borderStyle: "solid", borderWidth: 1, textAlign: "left", color: "inherit", cursor: "pointer", alignItems: "stretch" }}>
+        <ConteudoKpi q={q} k={k} tam={tam} />
+      </button>
+      {aberto && <ListaSemRetorno titulo={tituloDe(q)} k={k} fechar={() => setAberto(false)} />}
+    </>
+  );
+  return <div className="cd" style={caixa}><ConteudoKpi q={q} k={k} tam={tam} /></div>;
+}
+function ConteudoKpi({ q, k, tam }: { q: QuadroCfg; k: Kpi; tam: number }) {
+  const ruim = k.tom === "bad";
   return (
-    <div className="cd" style={{ flex: 1, padding: "20px 26px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 8, background: ruim ? "var(--vg-kpi-ruim-bg)" : "var(--vg-quadro)", borderColor: ruim ? "var(--vg-kpi-ruim-borda)" : C.linha }}>
+    <>
       <span className="lb" style={{ fontSize: 16, color: ruim ? TOM.bad.c : C.label, whiteSpace: "normal", lineHeight: 1.25 }}>{tituloDe(q)}</span>
       <span className="vl nw" style={{ fontSize: tam, color: k.valor === null ? C.mute : k.tom === "neutro" ? C.texto : TOM[k.tom].c }}>{k.valor ?? "—"}</span>
       {k.pct != null && <Barra pct={k.pct} tom={k.tom} />}
       <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>{k.selo && <Selo tom={k.tom}>{k.selo}</Selo>}<span className="mu" style={{ fontSize: 17 }}>{k.sub}</span></div>
-    </div>
+    </>
   );
 }
 function Pequenos({ d, lista, ao_lado }: { d: VisaoGeralDados; lista: QuadroCfg[]; ao_lado: boolean }) {

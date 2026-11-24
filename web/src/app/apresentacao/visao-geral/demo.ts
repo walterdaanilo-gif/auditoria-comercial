@@ -20,7 +20,11 @@ export const visaoGeralDemo: VisaoGeralDados = {
   conversao: { presentes: 40, total: 6, produtos: [{ produto: "imersao", vendas: 4 }, { produto: "incompany", vendas: 1 }, { produto: "plataforma", vendas: 1 }] },
   quadros: PADRAO_QUADROS,
   kpis: {
-    semretorno: { valor: "7", sub: "o lead escreveu e ficou mais de 15 min sem resposta", tom: "bad" },
+    semretorno: { valor: "7", sub: "o lead escreveu e ficou mais de 15 min sem resposta", tom: "bad", lista: [
+      { cliente: "Cliente A", vendedor: "SDR 1", quando: "24/11 09:12", espera: "3 h 40 min", texto: "Oi, queria saber o valor da imersão" },
+      { cliente: "Cliente B", vendedor: "SDR 2", quando: "24/11 11:05", espera: "1 h 47 min", texto: "Pode me ligar à tarde?" },
+      { cliente: "Cliente C", vendedor: "Closer 1", quando: "24/11 12:30", espera: "22 min", texto: "Combinado, aguardo o link" },
+    ] },
     primeira: { valor: "5min", sub: "média do período", tom: "ok", selo: "dentro de 15 min" },
     nota: { valor: "5,3", sub: "186 auditadas no período", tom: "warn" },
     tempo_medio: { valor: "12min", sub: "a cada vez que o lead escreve · média do período", tom: "warn" },

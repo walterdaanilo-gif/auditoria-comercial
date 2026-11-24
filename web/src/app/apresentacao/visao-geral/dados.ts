@@ -130,7 +130,19 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const tot = linhas.reduce((t, l) => ({ aud: t.aud + n(l.auditadas), nota: t.nota + n(l.nota_soma), lig: t.lig + n(l.ligacoes), atend: t.atend + n(l.ligacoes_atendidas) }), { aud: 0, nota: 0, lig: 0, atend: 0 });
   const sdrLinhas = linhas.filter((l) => sdrIds.has(l.vendedor_id));
   const conversasTime = sdrLinhas.reduce((s, l) => s + n(l.respostas), 0), marcacoesTime = sdrLinhas.reduce((s, l) => s + n(l.marcacoes), 0);
-  const semRetorno = rSem.error ? null : ((rSem.data ?? []) as { vendedor_id: string }[]).filter((c) => ids.has(c.vendedor_id)).length;
+  type Sem = { vendedor_id: string; contato: string; contato_nome: string | null; ultima_msg_em: string; texto: string | null };
+  const semLista = rSem.error ? null : ((rSem.data ?? []) as Sem[]).filter((c) => ids.has(c.vendedor_id));
+  const semRetorno = semLista ? semLista.length : null;
+  const espera = (iso: string) => {
+    const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+    if (min < 60) return `${min} min`;
+    if (min < 1440) return `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ""}`;
+    const d = Math.floor(min / 1440);
+    return `${d} dia${d === 1 ? "" : "s"}`;
+  };
+  // ja vem da mais antiga para a mais nova
+  const listaSem = (semLista ?? []).map((c) => ({ cliente: c.contato_nome || c.contato || "Cliente sem nome", vendedor: nomeDe.get(c.vendedor_id) ?? null,
+    quando: quandoBR(c.ultima_msg_em), espera: espera(c.ultima_msg_em), texto: String(c.texto ?? "").replace(/s+/g, " ").trim().slice(0, 140) }));
   const contraMeta = (v: number, metaDia: number): Kpi => {
     const meta = metaDia * diasUteisMes * sdrs.length;
     if (!meta) return { valor: inteiro(v), sub: "sem SDR cadastrado", tom: "neutro" };
@@ -139,7 +151,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   };
   const kpis: VisaoGeralDados["kpis"] = {
     semretorno: semRetorno === null ? { valor: null, sub: "não foi possível ler agora", tom: "neutro" }
-      : { valor: semRetorno >= 100 ? "100+" : String(semRetorno), sub: "o lead escreveu e ficou mais de 15 min sem resposta", tom: semRetorno > 0 ? "bad" : "ok" },
+      : { valor: semRetorno >= 100 ? "100+" : String(semRetorno), sub: "o lead escreveu e ficou mais de 15 min sem resposta", tom: semRetorno > 0 ? "bad" : "ok", lista: listaSem },
     primeira: priMedia === null ? { valor: null, sub: "sem conversas auditadas no período", tom: "neutro" }
       : { valor: duracao(priMedia), sub: "média do período", tom: priMedia / 60 <= sla ? "ok" : "bad", selo: priMedia / 60 <= sla ? `dentro de ${sla} min` : `acima de ${sla} min` },
     nota: tot.aud ? { valor: nota(tot.nota / tot.aud), sub: `${inteiro(tot.aud)} auditadas no período`, tom: tot.nota / tot.aud >= 7 ? "ok" : tot.nota / tot.aud >= 4 ? "warn" : "bad" } : { valor: null, sub: "sem auditorias no período", tom: "neutro" },

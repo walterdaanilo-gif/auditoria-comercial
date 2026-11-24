@@ -38,7 +38,9 @@ export type VisaoGeralDados = {
   kpis: Partial<Record<QuadroId, Kpi>>;       // quadros pequenos (semretorno, primeira, nota, ...)
 };
 // Quadro pequeno: um numero grande com legenda. valor null = sem dado (a tela escreve "sem dado ainda")
-export type Kpi = { valor: string | null; sub: string; tom: Tom; selo?: string; pct?: number | null };
+export type Kpi = { valor: string | null; sub: string; tom: Tom; selo?: string; pct?: number | null; lista?: LeadSemRetorno[] };
+// Leads sem retorno: quem e (clicar no quadro abre a lista)
+export type LeadSemRetorno = { cliente: string; vendedor: string | null; quando: string; espera: string; texto: string };
 
 // ---------- formatos ----------
 // Valor completo, com centavos: R$ 34.817,80
