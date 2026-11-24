@@ -165,6 +165,19 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
     && (!e.negocio.ganho_em || diaBR(e.negocio.ganho_em) >= somaDias(REGRA_ETAPAS_DESDE, -1))) entradaDoNegocio.set(e.negocio.deal_id, e);
   const etapasDoChat = new Map<string, EtapaVenda[]>();
   for (const e of entradas) etapasDoChat.set(e.conversa_id, [...(etapasDoChat.get(e.conversa_id) ?? []), e.etapa]);
+  // conversas que o Cabueta acompanha (tem linha em crm_conversas): so nelas existe historico de etapa. Negocio GANHO desde 24/11 cuja
+  // conversa nao foi lida do CRM (ex.: cartao movido para Venda fechada e conversa encerrada, ou nunca importada) nao tem como provar a
+  // etapa: conta pelo ganho do CRM. Conversa acompanhada que nunca entrou em etapa de venda continua fora (regra de 24/11).
+  const rastreadas = new Set<string>();
+  if (comEtapas) {
+    const cand = [...new Set(brutos.filter((v) => v.status === "won" && v.chat_id && v.ganho_em && diaBR(v.ganho_em) >= REGRA_ETAPAS_DESDE).map((v) => v.chat_id as string))];
+    for (let i = 0; i < cand.length; i += 200) {
+      const r = await db.from("crm_conversas").select("id").in("id", cand.slice(i, i + 200));
+      for (const c of (r.error ? [] : r.data ?? []) as { id: string }[]) rastreadas.add(c.id);
+    }
+  }
+  const semHistorico = (v: CrmCruzado & { chat_id?: string | null; status?: string }) =>
+    v.dia >= REGRA_ETAPAS_DESDE && !v.repetidaDe && v.status === "won" && !!v.chat_id && !rastreadas.has(v.chat_id) && !(etapasDoChat.get(v.chat_id)?.length);
 
   const negociosCrm = brutos
     .filter((v) => v.status !== "open" || (Array.isArray(v.produtos) && v.produtos.length > 0) || (entradaDoNegocio.has(v.deal_id) && (v.valor_cents ?? 0) > 0))
@@ -180,7 +193,7 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
   const foraDasEtapas = (v: CrmCruzado & { chat_id?: string | null }): string | null => {
     if (v.dia < REGRA_ETAPAS_DESDE || v.repetidaDe) return null;
     const ets = (v.chat_id ? etapasDoChat.get(v.chat_id) : undefined) ?? [];
-    if (!ets.length) return "não entrou nas etapas de venda do CRM (regra de 24/11)";
+    if (!ets.length) return semHistorico(v) ? null : "não entrou nas etapas de venda do CRM (regra de 24/11)";
     return ets.every((x) => x === "renovacao") ? "contada na etapa Renovação" : null;
   };
   // o cruzamento continua com todos os negocios (como antes de 24/11): so tira da conversa o que o CRM ja tem
@@ -195,7 +208,7 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
       produto: PRODUTOS.some(([k]) => k === v.tipo) ? v.tipo : "outro", forma: null, valor: v.valor_cents != null ? v.valor_cents / 100 : null,
       valorIA: null, ajustada: false, excluida: false, duplicada: v.repetidaDe ? "produtos já contados em outro negócio do cliente" : fora, naoLancada: false, naConversa: !!v.vista,
       indicadoPor: indicadorDoCrm(v.campos),
-      ...(ets.length ? { etapa: ets.includes("venda_fechada") ? "venda_fechada" : ets[0] } : {}),
+      ...(ets.length ? { etapa: ets.includes("venda_fechada") ? "venda_fechada" : ets[0] } : semHistorico(v) && !fora ? { etapa: v.tipo === "plataforma" ? "comprou_a_plataforma" : "venda_fechada" } : {}),
     });
   }
   // Renovacao (sempre) e entrada em etapa sem negocio no CRM: linha propria, do dia da entrada
