@@ -7,15 +7,21 @@ export type Tom = "ok" | "warn" | "bad" | "neutro";
 export type Pessoa = {
   id: string; nome: string; sigla: string; foto: string | null; tipo: "sdr" | "closer";
   conversas: { v: number; meta: number } | null;  // so SDR (meta do Walter por dia util x dias uteis do mes)
-  marcacoes: { v: number; meta: number } | null;  // so SDR
+  // so SDR: inscricoes no workshop. lista = quem se inscreveu (clicar no quadro na TV abre), do mais recente para o mais antigo
+  marcacoes: { v: number; meta: number; lista?: Inscricao[] } | null;
   vendasValor: number; vendasN: number;            // vendas pagas (Workshop pago e Imersao)
   // so closer: cartoes que entraram em "Diagnostico realizado" (funil Vendas 2 do CRM) no periodo, contra
   // meta_closer_reunioes x dias uteis. null = sem fonte ou sem meta
-  reunioes?: { v: number; meta: number } | null;
+  // so closer: cartoes que entraram em "Reuniao de diagnostico" (diagnostico agendado) no periodo; meta = a das reunioes realizadas
+  agendadas?: { v: number; meta: number | null; lista?: { cliente: string; data: string }[] } | null;
+  reunioes?: { v: number; meta: number; lista?: { cliente: string; data: string }[] } | null; // lista: os cartoes (DD/MM HH:MM da entrada)
   // so closer: clientes potenciais sem mensagem do time ha "dias" dias ou mais (retrato do worker, agora; nao segue o periodo)
   // lista: quem sao (clicar no quadro na TV abre), do mais parado para o menos; quando = ultima mensagem (DD/MM HH:MM)
   followups?: { qtd: number; maisAntigo: number | null; dias: number; lista?: { nome: string; quando: string; dias: number; semResposta: boolean }[] } | null;
 };
+
+// Uma inscricao no workshop: cliente, dia (DD/MM) e de onde veio (conversa = IA ate 24/11; crm = etapa "Inscrito no workshop" desde 25/11)
+export type Inscricao = { cliente: string; data: string; origem: "conversa" | "crm"; cortesia?: boolean };
 
 // Uma venda na lista do produto: cliente (e empresa), quem vendeu, dia (DD/MM) e valor
 export type VendaProduto = { cliente: string; empresa: string; vendedor: string | null; data: string; valor: number; cortesia?: boolean };

@@ -283,7 +283,11 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
 
 // ---------------- por pessoa ----------------
 // compacto: card do SDR com follow-ups (4 blocos no card): letras um pouco menores para nada passar da borda
-function MetaBarra({ rotulo, v, meta, ritmoPct, compacto = false }: { rotulo: string; v: number; meta: number; ritmoPct: number; compacto?: boolean }) {
+function MetaBarra({ rotulo, v, meta, ritmoPct, compacto = false }: { rotulo: string; v: number; meta: number | null; ritmoPct: number; compacto?: boolean }) {
+  // sem meta (ex.: reunioes agendadas): so o numero, na linha do titulo
+  if (meta == null) return (
+    <div className="row nw" style={{ alignItems: "baseline", gap: 8 }}><span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: compacto ? 17 : 19 }}>{rotulo}</span><div style={{ flex: 1 }} /><span className="vl" style={{ fontSize: compacto ? 32 : 40 }}>{inteiro(v)}</span></div>
+  );
   const pct = meta > 0 ? (v / meta) * 100 : 0;
   const dif = pct - ritmoPct, tom = tomPorDiferenca(dif);
   return (
@@ -340,24 +344,17 @@ function DetalheConversao({ c, fechar }: { c: NonNullable<VisaoGeralDados["conve
   );
 }
 function Conversao({ c }: { c: VisaoGeralDados["conversao"] }) {
-  const curto: Record<string, string> = { imersao: "Imersão", incompany: "In-Co.", plataforma: "Plat." };
   const [aberto, setAberto] = useState(false);
   return (
     <>
     {/* clicar no card abre o detalhe por produto (mesmo botao "pr" da faixa de produtos do faturamento) */}
     <button type="button" className="pr" onClick={() => c && setAberto(true)} disabled={!c} aria-haspopup="dialog" title={c ? "Ver a conversão por produto" : undefined}
-      style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "8px 14px", display: "flex", flexDirection: "column", gap: 2, minWidth: 0, width: "100%", textAlign: "left", color: "inherit", cursor: c ? "pointer" : "default" }} aria-label="Conversão do workshop">
+      style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "8px 14px", display: "flex", flexDirection: "column", gap: 2, minWidth: 0, width: "100%", height: "100%", textAlign: "left", color: "inherit", cursor: c ? "pointer" : "default" }} aria-label="Conversão do workshop">
       <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
         <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>Conversão do workshop</span><div style={{ flex: 1 }} />
         <span className="vl nw" style={{ fontSize: 34 }}>{c ? pct(c.total, c.presentes) : "—"}</span>
       </div>
-      {c ? (
-        <>
-          {/* texto curto para caber no card do closer; se ainda faltar espaco, quebra entre as duas partes (nunca passa da borda) */}
-          <span className="mu" style={{ fontSize: 14, display: "flex", flexWrap: "wrap", columnGap: 5 }}><span className="nw">{c.total} venda{c.total === 1 ? "" : "s"}</span><span className="nw">de {c.presentes} que vieram ao workshop</span></span>
-          <span className="mu" style={{ fontSize: 14, display: "flex", flexWrap: "wrap", columnGap: 10 }}>{c.produtos.map((x) => <span key={x.produto} className="nw">{curto[x.produto]} {pct(x.vendas, c.presentes)} ({x.vendas})</span>)}</span>
-        </>
-      ) : <span className="mu" style={{ fontSize: 14 }}>a conversão conta a partir de 24/11</span>}
+      {/* o detalhe (vendas / quem veio, por produto) fica so no modal */}
     </button>
     {aberto && c && <DetalheConversao c={c} fechar={() => setAberto(false)} />}
     </>
@@ -413,7 +410,7 @@ function QuadroFollowups({ f, nome, compacto = false }: { f: Fups; nome: string;
   return (
     <>
       <button type="button" className="pr row" onClick={() => clica && setAberto(true)} disabled={!clica} aria-haspopup="dialog" title={clica ? "Ver quem são" : undefined}
-        style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: compacto ? "7px 16px" : "10px 16px", gap: 12, minWidth: 0, width: "100%", textAlign: "left", color: "inherit", cursor: clica ? "pointer" : "default" }} aria-label="Follow-ups atrasados">
+        style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: compacto ? "7px 16px" : "10px 16px", gap: 12, minWidth: 0, width: "100%", height: "100%", textAlign: "left", color: "inherit", cursor: clica ? "pointer" : "default" }} aria-label="Follow-ups atrasados">
         <div style={{ display: "flex", flexDirection: "column", gap: compacto ? 0 : 2, minWidth: 0, flex: 1 }}>
           <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>Follow-ups atrasados</span>
           <span className="mu nw" style={{ fontSize: compacto ? 14 : 15, overflow: "hidden", textOverflow: "ellipsis" }}>{f.qtd > 0 ? `${f.dias}+ dias sem mensagem${f.maisAntigo != null ? ` · mais antigo ${f.maisAntigo} dias` : ""}` : "nenhum cliente esperando"}</span>
@@ -424,10 +421,64 @@ function QuadroFollowups({ f, nome, compacto = false }: { f: Fups; nome: string;
     </>
   );
 }
-function Cartao({ p, ritmoPct, q, conv }: { p: Pessoa; ritmoPct: number; q: QuadroCfg; conv: VisaoGeralDados["conversao"] }) {
+// Quadro de meta do cartao (inscricoes do SDR, reunioes do closer) que abre a lista de quem entrou na conta (mesmo padrao dos outros modais)
+type LinhaLista = { cliente: string; data: string; detalhe?: string };
+type ModalMeta = { titulo: string; sub: string; colDetalhe?: string; linhas: LinhaLista[] };
+function ListaMeta({ v, meta, modal, fechar }: { v: number; meta: number | null; modal: ModalMeta; fechar: () => void }) {
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => { if (e.key === "Escape") fechar(); };
+    document.addEventListener("keydown", f);
+    return () => document.removeEventListener("keydown", f);
+  }, [fechar]);
+  const grade = modal.colDetalhe ? "minmax(0,1fr) 170px 260px" : "minmax(0,1fr) 200px";
+  return (
+    // position fixed dentro da tela escalada: cobre a tela 1920x1080 inteira e escala junto
+    <div onClick={fechar} style={{ position: "fixed", inset: 0, zIndex: 50, background: "var(--vg-veu)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div role="dialog" aria-modal="true" aria-label={modal.titulo} onClick={(e) => e.stopPropagation()} className="cd"
+        style={{ width: 1000, maxHeight: 900, display: "flex", flexDirection: "column", padding: "26px 32px", gap: 18, borderColor: "var(--vg-borda-fat)" }}>
+        <div className="row" style={{ gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+            <span className="lb nw">{modal.titulo}</span>
+            <div className="row nw" style={{ alignItems: "baseline", gap: 10 }}><span className="vl" style={{ fontSize: 52 }}>{inteiro(v)}</span>{meta != null && <span className="mu" style={{ fontSize: 24, fontWeight: 600 }}>/ {inteiro(meta)} da meta</span>}</div>
+            <span className="mu nw">{modal.sub}</span>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button type="button" className="bt" onClick={fechar} aria-label="Fechar" autoFocus>✕ Fechar</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: grade, gap: "0 18px", padding: "0 16px", fontSize: 15, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.mute }}>
+          <span>Cliente</span><span>Dia</span>{modal.colDetalhe && <span>{modal.colDetalhe}</span>}
+        </div>
+        <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+          {modal.linhas.map((l, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: grade, gap: "0 18px", alignItems: "center", background: "var(--vg-dentro)", borderRadius: 12, padding: "12px 16px" }}>
+              <span className="nw" style={{ fontSize: 22, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis" }}>{l.cliente}</span>
+              <span className="nw" style={{ fontSize: 20, fontVariantNumeric: "tabular-nums" }}>{l.data}</span>
+              {modal.colDetalhe && <span className="mu nw" style={{ fontSize: 18 }}>{l.detalhe ?? ""}</span>}
+            </div>
+          ))}
+          {!modal.linhas.length && <span className="mu">Nenhum no período.</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+function QuadroMeta({ rotulo, v, meta, ritmoPct, compacto, modal }: { rotulo: string; v: number; meta: number | null; ritmoPct: number; compacto: boolean; modal: ModalMeta | null }) {
+  const [aberto, setAberto] = useState(false);
+  const barra = <MetaBarra rotulo={rotulo} v={v} meta={meta} ritmoPct={ritmoPct} compacto={compacto} />;
+  if (!modal) return barra; // sem a lista (erro ao ler): so o numero
+  return (
+    <>
+      <button type="button" className="pr" onClick={() => setAberto(true)} aria-haspopup="dialog" title="Ver quem são"
+        style={{ background: "none", border: 0, padding: 0, margin: 0, width: "100%", textAlign: "left", color: "inherit", cursor: "pointer", font: "inherit" }}>{barra}</button>
+      {aberto && <ListaMeta v={v} meta={meta} modal={modal} fechar={() => setAberto(false)} />}
+    </>
+  );
+}
+function Cartao({ p, ritmoPct, q, conv, largo }: { p: Pessoa; ritmoPct: number; q: QuadroCfg; conv: VisaoGeralDados["conversao"]; largo: boolean }) {
   const fup = !!p.followups && temItem(q, "followup");
-  // SDR com conversas, marcacoes, follow-ups e vendas: 4 blocos, entao tudo um pouco mais junto
-  const compacto = p.tipo === "sdr" && fup && temItem(q, "conversas") && temItem(q, "marcacoes");
+  const reun = p.tipo === "closer" && !!p.reunioes && temItem(q, "reunioes");
+  // 4 blocos (SDR: conversas, inscricoes, follow-ups e vendas; closer: reunioes, conversao, follow-ups e vendas): tudo um pouco mais junto
+  const compacto = (p.tipo === "sdr" && fup && temItem(q, "conversas") && temItem(q, "marcacoes")) || (reun && fup && temItem(q, "funil"));
   return (
     <div style={{ background: "var(--vg-caixa)", border: `1px solid ${C.linha}`, borderRadius: 16, padding: compacto ? "12px 20px" : "14px 20px", display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: compacto ? 9 : 12, minWidth: 0, minHeight: 0 }}>
       <div className="row" style={{ gap: 12 }}>
@@ -435,9 +486,17 @@ function Cartao({ p, ritmoPct, q, conv }: { p: Pessoa; ritmoPct: number; q: Quad
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}><span className="vl nw" style={{ fontSize: 28, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span><span className="lb nw" style={{ fontSize: 13, color: C.mute }}>{p.tipo === "sdr" ? "SDR" : "Closer"}</span></div>
       </div>
       {p.conversas && temItem(q, "conversas") && <MetaBarra rotulo="Conversas trocadas" v={p.conversas.v} meta={p.conversas.meta} ritmoPct={ritmoPct} compacto={compacto} />}
-      {p.marcacoes && temItem(q, "marcacoes") && <MetaBarra rotulo="Inscrições no workshop" v={p.marcacoes.v} meta={p.marcacoes.meta} ritmoPct={ritmoPct} compacto={compacto} />}
-      {p.tipo === "closer" && temItem(q, "funil") && <Conversao c={conv} />}
-      {fup && <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} />}
+      {p.marcacoes && temItem(q, "marcacoes") && <QuadroMeta rotulo="Inscrições no workshop" v={p.marcacoes.v} meta={p.marcacoes.meta} ritmoPct={ritmoPct} compacto={compacto}
+        modal={p.marcacoes.lista ? { titulo: `Inscrições no workshop · ${p.nome}`, sub: "no período · até 24/11 pela conversa (IA) · desde 25/11 pela etapa “Inscrito no workshop” do CRM", colDetalhe: "De onde veio",
+          linhas: p.marcacoes.lista.map((l) => ({ cliente: l.cliente, data: l.data, detalhe: l.origem === "crm" ? `CRM${l.cortesia ? " · cortesia" : ""}` : "Conversa" })) } : null} />}
+      {p.tipo === "closer" && p.agendadas && temItem(q, "agendadas") && <QuadroMeta rotulo="Reuniões agendadas" v={p.agendadas.v} meta={p.agendadas.meta} ritmoPct={ritmoPct} compacto={compacto}
+        modal={p.agendadas.lista ? { titulo: `Reuniões agendadas · ${p.nome}`, sub: "cartões que entraram na etapa “Reunião de diagnóstico” (diagnóstico agendado) do CRM no período", linhas: p.agendadas.lista } : null} />}
+      {reun && <QuadroMeta rotulo="Reuniões realizadas" v={p.reunioes!.v} meta={p.reunioes!.meta} ritmoPct={ritmoPct} compacto={compacto}
+        modal={p.reunioes!.lista ? { titulo: `Reuniões realizadas · ${p.nome}`, sub: "cartões que entraram na etapa “Diagnóstico realizado” do CRM no período (mais recente primeiro)", linhas: p.reunioes!.lista } : null} />}
+      {/* conversao e follow-ups lado a lado so com cartao largo (ate 3 pessoas); com 4+ nao cabe e fica um embaixo do outro */}
+      {p.tipo === "closer" && temItem(q, "funil") && fup && largo
+        ? <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10, alignItems: "stretch" }}><Conversao c={conv} /><QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} /></div>
+        : <>{p.tipo === "closer" && temItem(q, "funil") && <Conversao c={conv} />}{fup && <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} />}</>}
       {temItem(q, "vendas") && <div style={{ marginTop: "auto", background: "var(--vg-destaque)", borderRadius: 12, padding: compacto ? "8px 16px" : "10px 16px", display: "flex", flexDirection: "column", gap: compacto ? 2 : 4 }}>
         {/* compacto: a quantidade sobe para a linha do titulo (uma linha a menos) */}
         <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
@@ -456,7 +515,7 @@ function PorPessoa({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
     <div className="cd" style={{ padding: "16px 24px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
       <div className="row" style={{ gap: 16 }}><span className="lb nw" style={{ fontSize: 18 }}>{tituloDe(q)}</span><span className="mu nw">real / meta do período</span></div>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(d.pessoas.length, 1)},minmax(0,1fr))`, gridTemplateRows: "minmax(0,1fr)", columnGap: 14, flex: 1, minHeight: 0 }}>
-        {d.pessoas.map((p) => <Cartao key={p.id} p={p} ritmoPct={ritmoPct} q={q} conv={d.conversao ?? null} />)}
+        {d.pessoas.map((p) => <Cartao key={p.id} p={p} ritmoPct={ritmoPct} q={q} conv={d.conversao ?? null} largo={d.pessoas.length <= 3} />)}
         {!d.pessoas.length && <span className="mu" style={{ gridColumn: "1 / -1" }}>Nenhum vendedor com WhatsApp cadastrado em Usuários.</span>}
       </div>
     </div>

@@ -1,10 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { duracao, nota } from "@/lib/format";
+import { duracao, nota, somaDias } from "@/lib/format";
 import { diasUteis, ehUtil } from "@/lib/metas";
 import { diasEntre, type Periodo } from "@/lib/periodo";
 import { resolverQuadros } from "@/lib/quadrosTv";
 import { contaNaQuantidade, contaNoFaturamento, listarResultados, REGRA_ETAPAS_DESDE } from "@/lib/resultados";
-import { inteiro, tomPorDiferenca, type Kpi, type Pessoa, type VisaoGeralDados } from "./calc";
+import { inteiro, tomPorDiferenca, type Inscricao, type Kpi, type Pessoa, type VisaoGeralDados } from "./calc";
 
 // Tela fixa da TV com dados REAIS do mes atual. So leitura. Dado que o Cabueta nao mede nao entra na tela.
 type Perfil = { id: string; nome: string; funcao: string | null; ativo: boolean; foto_url: string | null };
@@ -31,7 +31,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const ritmoPct = (Math.max(diaUtil, 1) / diasUteisMes) * 100;
   const db = createAdminClient();
 
-  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem, rEtapas, rFup, rDiag, rPres] = await Promise.all([
+  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem, rEtapas, rFup, rPres, rIns] = await Promise.all([
     db.rpc("resumo_sdr2", { p_from: ini, p_to: hoje }),
     db.from("profiles").select("id,nome,funcao,ativo,foto_url").order("nome"),
     db.from("instancias_whatsapp").select("vendedor_id").eq("org_id", org),
@@ -42,16 +42,19 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     db.from("auditorias").select("vendedor_id,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,conversas!inner(data,canal)").eq("org_id", org).neq("conversas.canal", "importada").gte("conversas.data", ini).lte("conversas.data", hoje).limit(5000),
     db.rpc("conversas_sem_retorno", { p_from: ini, p_to: hoje, p_min: 15 }),
     // closer: cartoes que ENTRARAM em "Diagnostico realizado" (reuniao feita) no funil do CRM (tabela crm_etapas)
-    db.from("crm_etapas").select("conversa_id,vendedor_id,etapa").eq("org_id", org).like("etapa", "%diagnostico_realizado")
+    db.from("crm_etapas").select("conversa_id,vendedor_id,etapa,em,crm_conversas(contato_nome,telefone)").eq("org_id", org).or("etapa.like.%diagnostico_realizado,etapa.like.%reuniao_de_diagnostico")
       .gte("em", `${ini}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(5000),
     // follow-ups atrasados agora, por vendedor (retrato que o worker grava a cada 15 min, mesma regra do aviso)
     // "*": a coluna "leads" (lista dos clientes) pode ainda nao existir no banco; sem ela a TV mostra so o numero
     db.from("followups_atrasados").select("*").limit(1000),
-    // closer: negocios do CRM com "Data do diagnostico" (reuniao feita) e o campo Closer; cobre o que veio antes do historico de etapas
-    db.from("crm_vendas").select("deal_id,chat_id,contato_crm_id,closer,campos").eq("org_id", org).not("closer", "is", null).limit(5000),
     // conversao do workshop: quem veio ao workshop (etapa "Veio ao workshop" do funil Workshop), so de 24/11 em diante
     db.from("crm_etapas").select("conversa_id").eq("org_id", org).like("etapa", "%veio_ao_workshop")
       .gte("em", `${ini > REGRA_ETAPAS_DESDE ? ini : REGRA_ETAPAS_DESDE}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(5000),
+    // lista das inscricoes no workshop que a IA viu nas conversas (ate 24/11): as mesmas que o resumo_sdr2 conta na coluna workshop
+    ini < INSCRICOES_CRM_DESDE
+      ? db.from("auditorias").select("vendedor_id,conversas(data,canal,contato,contato_nome,telefone),ligacoes(iniciada_em,contato)").eq("org_id", org).eq("agendou", true)
+          .or("tipo_agendamento.is.null,tipo_agendamento.eq.workshop").gte("criado_em", `${somaDias(ini, -15)}T00:00:00-03:00`).limit(5000)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   const nomeDe = new Map(((rPerf.data ?? []) as Perfil[]).map((p) => [p.id, p.nome])); // quem vendeu, na lista de vendas do produto
@@ -89,28 +92,35 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const inscricoesDe = (id: string) =>
     linhas.filter((l) => l.vendedor_id === id && l.dia < INSCRICOES_CRM_DESDE).reduce((s, l) => s + n(l.workshop), 0)
     + inscritosCrm.filter((r) => r.vendedorId === id).length;
+  // lista das inscricoes (clicar no quadro do SDR na TV): conversa ate 24/11 + CRM desde 25/11, mais recente primeiro
+  type AudIns = { vendedor_id: string; conversas: { data: string; canal: string | null; contato: string | null; contato_nome: string | null; telefone: string | null } | null; ligacoes: { iniciada_em: string; contato: string | null } | null };
+  const diaSP = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(iso));
+  const insConversa = rIns.error ? null : ((rIns.data ?? []) as unknown as AudIns[]).map((a) => {
+    const dia = a.conversas?.data ?? (a.ligacoes ? diaSP(a.ligacoes.iniciada_em) : "");
+    const fone = a.conversas?.telefone || a.conversas?.contato || a.ligacoes?.contato || "";
+    return { vendedor_id: a.vendedor_id, dia, importada: a.conversas?.canal === "importada", cliente: a.conversas?.contato_nome?.trim() || fone };
+  }).filter((a) => !a.importada && a.dia >= ini && a.dia <= hoje && a.dia < INSCRICOES_CRM_DESDE);
+  const listaInscricoes = (id: string): Inscricao[] | undefined => insConversa ? [
+    ...inscritosCrm.filter((r) => r.vendedorId === id).map((r) => ({ cliente: r.cliente || "—", dia: r.data, origem: "crm" as const, cortesia: !!r.cortesia })),
+    ...insConversa.filter((a) => a.vendedor_id === id).map((a) => ({ cliente: a.cliente || "—", dia: a.dia, origem: "conversa" as const })),
+  ].sort((x, y) => y.dia.localeCompare(x.dia)).map(({ dia, ...r }) => ({ ...r, data: ddmm(dia) })) : undefined;
   const somaDe = (id: string) => ({ respostas: linhas.filter((l) => l.vendedor_id === id).reduce((s, l) => s + n(l.respostas), 0), marcacoes: inscricoesDe(id) });
   const metaConvDia = n(cfg.meta_sdr_conversas ?? 25), metaMarcDia = n(cfg.meta_sdr_marcacoes ?? 6);
   const metaConv = metaConvDia * diasUteisMes, metaMarc = metaMarcDia * diasUteisMes;
   const metaReun = n(cfg.meta_closer_reunioes) * diasUteisMes; // Configuracoes: reunioes de implementacao por dia util
   // funil do closer: cada cartao conta uma vez por etapa no periodo (vai e volta de coluna nao repete)
-  const etapas = rEtapas.error ? null : ((rEtapas.data ?? []) as { conversa_id: string; vendedor_id: string | null; etapa: string }[]);
-  // Reunioes realizadas = cartao que entrou em "Diagnostico realizado" (historico de etapas, desde 12/11/2026)
-  // + negocio do CRM com "Data do diagnostico" no periodo e o closer no campo Closer (pelo primeiro nome).
-  // A mesma conversa conta uma vez. "Como foi a reuniao" dizendo que nao aconteceu (nao foi feita, no-show) fica de fora.
-  const primeiro = (x: unknown) => String(x ?? "").trim().split(/\s+/)[0]?.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase() || "";
-  type Diag = { deal_id: string; chat_id: string | null; contato_crm_id: string | null; closer: string | null; campos: Record<string, unknown> | null };
-  const diagnosticos = ((rDiag.error ? [] : rDiag.data ?? []) as Diag[]).filter((v) => {
-    const dia = String(v.campos?.["data-do-diagnostico"] ?? "").slice(0, 10);
-    return dia >= ini && dia <= hoje && !/n[aã]o foi feit|no.?show|n[aã]o compareceu|n[aã]o aconteceu/i.test(String(v.campos?.["como-foi-a-reuniao-de-diagnostico"] ?? ""));
-  });
-  const noFunil = (id: string, fim: string) => {
-    const chaves = new Set((etapas ?? []).filter((e) => e.vendedor_id === id && e.etapa.endsWith(fim)).map((e) => e.conversa_id));
-    const nome = primeiro(time.find((p) => p.id === id)?.nome);
-    const xara = time.filter((p) => primeiro(p.nome) === nome).length > 1; // dois closers com o mesmo primeiro nome: nao da para saber de quem e
-    if (fim === "diagnostico_realizado" && nome && !xara)
-      for (const v of diagnosticos) if (primeiro(v.closer) === nome) chaves.add(v.chat_id || `d:${v.contato_crm_id || v.deal_id}|${String(v.campos?.["data-do-diagnostico"]).slice(0, 10)}`);
-    return chaves.size;
+  type Etapa = { conversa_id: string; vendedor_id: string | null; etapa: string; em: string; crm_conversas: { contato_nome: string | null; telefone: string | null } | null };
+  const etapas = rEtapas.error ? null : ((rEtapas.data ?? []) as unknown as Etapa[]);
+  // Reunioes realizadas (closer) = cartao que ENTROU em "Diagnostico realizado" no funil do CRM, no periodo (historico de etapas,
+  // desde 12/11/2026), do vendedor dono da conversa. So a etapa conta (pedido da gestao, 25/11). A mesma conversa conta uma vez.
+  const noFunil = (id: string, fim: string) => new Set((etapas ?? []).filter((e) => e.vendedor_id === id && e.etapa.endsWith(fim)).map((e) => e.conversa_id)).size;
+  // lista das reunioes (clicar no quadro do closer na TV): cada cartao uma vez, no dia da primeira entrada no periodo, mais recente primeiro
+  // reunioes agendadas = entrou em "Reuniao de diagnostico" (o diagnostico agendado do funil Vendas 2; codigo custom_vendas_2_reuniao_de_diagnostico)
+  const listaReunioes = (id: string, fim = "diagnostico_realizado") => {
+    const porConversa = new Map<string, Etapa>();
+    for (const e of etapas ?? []) if (e.vendedor_id === id && e.etapa.endsWith(fim) && (!porConversa.has(e.conversa_id) || e.em < porConversa.get(e.conversa_id)!.em)) porConversa.set(e.conversa_id, e);
+    return [...porConversa.values()].sort((x, y) => y.em.localeCompare(x.em))
+      .map((e) => ({ cliente: e.crm_conversas?.contato_nome?.trim() || e.crm_conversas?.telefone || "—", data: quandoBR(e.em) }));
   };
   // retrato com mais de 1 h = worker parado: melhor nao mostrar numero velho
   type Fup = { vendedor_id: string; qtd: number; mais_antigo_dias: number | null; dias_regra: number | null; calculado_em: string; leads?: { nome: string; desde: string | null; dias: number; sem_resposta: boolean }[] | null };
@@ -123,9 +133,11 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     return {
       id: p.id, nome: p.nome, sigla: sigla(p.nome), foto: p.foto_url, tipo,
       conversas: tipo === "sdr" ? { v: t.respostas, meta: metaConv } : null,
-      marcacoes: tipo === "sdr" ? { v: t.marcacoes, meta: metaMarc } : null,
+      marcacoes: tipo === "sdr" ? { v: t.marcacoes, meta: metaMarc, lista: listaInscricoes(p.id) } : null,
       vendasValor: vs.reduce((s, v) => s + (v.valor ?? 0), 0), vendasN: vs.length,
-      reunioes: tipo === "closer" && etapas && metaReun ? { v: noFunil(p.id, "diagnostico_realizado"), meta: metaReun } : null,
+      // meta das agendadas = a mesma das realizadas (Configuracoes: reunioes por dia util), ate ter meta propria
+      agendadas: tipo === "closer" && etapas ? { v: noFunil(p.id, "reuniao_de_diagnostico"), meta: metaReun || null, lista: listaReunioes(p.id, "reuniao_de_diagnostico") } : null,
+      reunioes: tipo === "closer" && etapas && metaReun ? { v: noFunil(p.id, "diagnostico_realizado"), meta: metaReun, lista: listaReunioes(p.id) } : null,
       followups: followupsDe(p.id), // SDR e closer: mesma regra (retrato do worker)
     };
   };
