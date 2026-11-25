@@ -282,13 +282,14 @@ function Faturamento({ d, q }: { d: VisaoGeralDados; q: QuadroCfg }) {
 }
 
 // ---------------- por pessoa ----------------
-function MetaBarra({ rotulo, v, meta, ritmoPct }: { rotulo: string; v: number; meta: number; ritmoPct: number }) {
+// compacto: card do SDR com follow-ups (4 blocos no card): letras um pouco menores para nada passar da borda
+function MetaBarra({ rotulo, v, meta, ritmoPct, compacto = false }: { rotulo: string; v: number; meta: number; ritmoPct: number; compacto?: boolean }) {
   const pct = meta > 0 ? (v / meta) * 100 : 0;
   const dif = pct - ritmoPct, tom = tomPorDiferenca(dif);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 19 }}>{rotulo}</span>
-      <div className="row nw" style={{ alignItems: "baseline", gap: 8 }}><span className="vl" style={{ fontSize: 40 }}>{inteiro(v)}</span><span className="mu" style={{ fontSize: 22, fontWeight: 600 }}>/ {inteiro(meta)}</span><div style={{ flex: 1 }} /><Selo tom={tom}>{seloRitmo(dif)}</Selo></div>
+    <div style={{ display: "flex", flexDirection: "column", gap: compacto ? 3 : 6 }}>
+      <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: compacto ? 17 : 19 }}>{rotulo}</span>
+      <div className="row nw" style={{ alignItems: "baseline", gap: 8 }}><span className="vl" style={{ fontSize: compacto ? 32 : 40 }}>{inteiro(v)}</span><span className="mu" style={{ fontSize: compacto ? 19 : 22, fontWeight: 600 }}>/ {inteiro(meta)}</span><div style={{ flex: 1 }} /><Selo tom={tom}>{seloRitmo(dif)}</Selo></div>
       <Barra pct={pct} tom={tom} />
     </div>
   );
@@ -405,38 +406,45 @@ function ListaFollowups({ f, nome, fechar }: { f: Fups; nome: string; fechar: ()
     </div>
   );
 }
-function QuadroFollowups({ f, nome }: { f: Fups; nome: string }) {
+function QuadroFollowups({ f, nome, compacto = false }: { f: Fups; nome: string; compacto?: boolean }) {
   const [aberto, setAberto] = useState(false);
   const tom = f.qtd > 0 ? TOM.bad : TOM.ok, clica = f.qtd > 0;
   return (
     <>
       <button type="button" className="pr row" onClick={() => clica && setAberto(true)} disabled={!clica} aria-haspopup="dialog" title={clica ? "Ver quem são" : undefined}
-        style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "10px 16px", gap: 12, minWidth: 0, width: "100%", textAlign: "left", color: "inherit", cursor: clica ? "pointer" : "default" }} aria-label="Follow-ups atrasados">
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
+        style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: compacto ? "7px 16px" : "10px 16px", gap: 12, minWidth: 0, width: "100%", textAlign: "left", color: "inherit", cursor: clica ? "pointer" : "default" }} aria-label="Follow-ups atrasados">
+        <div style={{ display: "flex", flexDirection: "column", gap: compacto ? 0 : 2, minWidth: 0, flex: 1 }}>
           <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>Follow-ups atrasados</span>
-          <span className="mu nw" style={{ fontSize: 15, overflow: "hidden", textOverflow: "ellipsis" }}>{f.qtd > 0 ? `${f.dias}+ dias sem mensagem${f.maisAntigo != null ? ` · mais antigo ${f.maisAntigo} dias` : ""}` : "nenhum cliente esperando"}</span>
+          <span className="mu nw" style={{ fontSize: compacto ? 14 : 15, overflow: "hidden", textOverflow: "ellipsis" }}>{f.qtd > 0 ? `${f.dias}+ dias sem mensagem${f.maisAntigo != null ? ` · mais antigo ${f.maisAntigo} dias` : ""}` : "nenhum cliente esperando"}</span>
         </div>
-        <span className="vl nw" style={{ fontSize: 40, color: tom.c }}>{inteiro(f.qtd)}</span>
+        <span className="vl nw" style={{ fontSize: compacto ? 34 : 40, color: tom.c }}>{inteiro(f.qtd)}</span>
       </button>
       {aberto && <ListaFollowups f={f} nome={nome} fechar={() => setAberto(false)} />}
     </>
   );
 }
 function Cartao({ p, ritmoPct, q, conv }: { p: Pessoa; ritmoPct: number; q: QuadroCfg; conv: VisaoGeralDados["conversao"] }) {
+  const fup = !!p.followups && temItem(q, "followup");
+  // SDR com conversas, marcacoes, follow-ups e vendas: 4 blocos, entao tudo um pouco mais junto
+  const compacto = p.tipo === "sdr" && fup && temItem(q, "conversas") && temItem(q, "marcacoes");
   return (
-    <div style={{ background: "var(--vg-caixa)", border: `1px solid ${C.linha}`, borderRadius: 16, padding: "14px 20px", display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 12, minWidth: 0, minHeight: 0 }}>
+    <div style={{ background: "var(--vg-caixa)", border: `1px solid ${C.linha}`, borderRadius: 16, padding: compacto ? "12px 20px" : "14px 20px", display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: compacto ? 9 : 12, minWidth: 0, minHeight: 0 }}>
       <div className="row" style={{ gap: 12 }}>
         {p.foto ? <img src={p.foto} alt="" style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover" }} /> : <span style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--vg-avatar)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, color: C.texto }}>{p.sigla}</span>}
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}><span className="vl nw" style={{ fontSize: 28, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span><span className="lb nw" style={{ fontSize: 13, color: C.mute }}>{p.tipo === "sdr" ? "SDR" : "Closer"}</span></div>
       </div>
-      {p.conversas && temItem(q, "conversas") && <MetaBarra rotulo="Conversas trocadas" v={p.conversas.v} meta={p.conversas.meta} ritmoPct={ritmoPct} />}
-      {p.marcacoes && temItem(q, "marcacoes") && <MetaBarra rotulo="Marcações" v={p.marcacoes.v} meta={p.marcacoes.meta} ritmoPct={ritmoPct} />}
+      {p.conversas && temItem(q, "conversas") && <MetaBarra rotulo="Conversas trocadas" v={p.conversas.v} meta={p.conversas.meta} ritmoPct={ritmoPct} compacto={compacto} />}
+      {p.marcacoes && temItem(q, "marcacoes") && <MetaBarra rotulo="Marcações" v={p.marcacoes.v} meta={p.marcacoes.meta} ritmoPct={ritmoPct} compacto={compacto} />}
       {p.tipo === "closer" && temItem(q, "funil") && <Conversao c={conv} />}
-      {p.followups && temItem(q, "followup") && <QuadroFollowups f={p.followups} nome={p.nome} />}
-      {temItem(q, "vendas") && <div style={{ marginTop: "auto", background: "var(--vg-destaque)", borderRadius: 12, padding: "10px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
-        <span className="mu" style={{ fontWeight: 600, color: C.texto, fontSize: 19 }}>Vendas pagas</span>
-        <span className="vl nw" style={{ fontSize: 32, fontVariantNumeric: "tabular-nums" }}>{moeda(p.vendasValor)}</span>
-        <span className="mu nw" style={{ fontSize: 17 }}>{p.vendasN} venda{p.vendasN === 1 ? "" : "s"}</span>
+      {fup && <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} />}
+      {temItem(q, "vendas") && <div style={{ marginTop: "auto", background: "var(--vg-destaque)", borderRadius: 12, padding: compacto ? "8px 16px" : "10px 16px", display: "flex", flexDirection: "column", gap: compacto ? 2 : 4 }}>
+        {/* compacto: a quantidade sobe para a linha do titulo (uma linha a menos) */}
+        <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
+          <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: compacto ? 17 : 19 }}>Vendas pagas</span>
+          {compacto && <><div style={{ flex: 1 }} /><span className="mu nw" style={{ fontSize: 15 }}>{p.vendasN} venda{p.vendasN === 1 ? "" : "s"}</span></>}
+        </div>
+        <span className="vl nw" style={{ fontSize: compacto ? 30 : 32, fontVariantNumeric: "tabular-nums" }}>{moeda(p.vendasValor)}</span>
+        {!compacto && <span className="mu nw" style={{ fontSize: 17 }}>{p.vendasN} venda{p.vendasN === 1 ? "" : "s"}</span>}
       </div>}
     </div>
   );

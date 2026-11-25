@@ -116,7 +116,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
       marcacoes: tipo === "sdr" ? { v: t.marcacoes, meta: metaMarc } : null,
       vendasValor: vs.reduce((s, v) => s + (v.valor ?? 0), 0), vendasN: vs.length,
       reunioes: tipo === "closer" && etapas && metaReun ? { v: noFunil(p.id, "diagnostico_realizado"), meta: metaReun } : null,
-      followups: tipo === "closer" ? followupsDe(p.id) : null,
+      followups: followupsDe(p.id), // SDR e closer: mesma regra (retrato do worker)
     };
   };
 
