@@ -17,7 +17,7 @@ export type Pessoa = {
   reunioes?: { v: number; meta: number; lista?: { cliente: string; data: string }[] } | null; // lista: os cartoes (DD/MM HH:MM da entrada)
   // so closer: clientes potenciais sem mensagem do time ha "dias" dias ou mais (retrato do worker, agora; nao segue o periodo)
   // lista: quem sao (clicar no quadro na TV abre), do mais parado para o menos; quando = ultima mensagem (DD/MM HH:MM)
-  // so SDR: leads dele sem retorno (o lead escreveu e ficou mais de 15 min sem resposta); lista = as 100 esperas mais longas
+  // SDR e closer: leads dele sem retorno (o lead escreveu e ficou mais de 15 min sem resposta); lista = as 100 esperas mais longas
   semRetorno?: { qtd: number; lista: LeadSemRetorno[] } | null;
   followups?: { qtd: number; maisAntigo: number | null; dias: number; lista?: { nome: string; quando: string; dias: number; semResposta: boolean }[] } | null;
 };
@@ -46,7 +46,9 @@ export type VisaoGeralDados = {
   kpis: Partial<Record<QuadroId, Kpi>>;       // quadros pequenos (semretorno, primeira, nota, ...)
 };
 // Quadro pequeno: um numero grande com legenda. valor null = sem dado (a tela escreve "sem dado ainda")
-export type Kpi = { valor: string | null; sub: string; tom: Tom; selo?: string; pct?: number | null; lista?: LeadSemRetorno[] };
+export type Kpi = { valor: string | null; sub: string; tom: Tom; selo?: string; pct?: number | null; lista?: LeadSemRetorno[]; funil?: EtapaFunil[] };
+// Uma etapa do funil da Conversao total: n = cartoes/pessoas no periodo (null = sem dado ainda); obs = de onde vem
+export type EtapaFunil = { etapa: string; n: number | null; obs: string };
 // Leads sem retorno: quem e (clicar no quadro abre a lista)
 export type LeadSemRetorno = { cliente: string; vendedor: string | null; quando: string; espera: string; texto: string };
 

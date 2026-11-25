@@ -1,7 +1,7 @@
 // Quadros da tela fixa da TV (Apresentacao). Catalogo, padrao e validacao, usados nas Configuracoes e na tela.
 // So entram quadros com dado real no Cabueta. Remover = tirar da lista; adicionar = escolher do catalogo.
 
-export type QuadroId = "faturamento" | "pessoas" | "semretorno" | "primeira" | "nota" | "tempo_medio" | "ligacoes" | "conversas_time" | "marcacoes_time" | "convites";
+export type QuadroId = "faturamento" | "pessoas" | "semretorno" | "primeira" | "nota" | "tempo_medio" | "ligacoes" | "conversas_time" | "marcacoes_time" | "convites" | "conversao_total";
 // itens = o que aparece dentro do quadro (ausente = tudo); titulo = nome mostrado na TV (ausente = nome padrao)
 export type QuadroCfg = { id: QuadroId; titulo?: string; itens?: string[] };
 
@@ -10,7 +10,7 @@ export const CATALOGO: Record<QuadroId, DefQuadro> = {
   faturamento: { nome: "Faturamento", grande: true, descricao: "Soma da aba Resultados no período (vendas da IA, com seus ajustes, e vendas manuais). No Mês atual: contra a meta do mês, com ritmo, projeção e gráfico.", meta: "meta_fat_mes",
     itens: [{ id: "precisa", rotulo: "Precisa por dia útil" }, { id: "projecao", rotulo: "Projeção do mês" }, { id: "grafico", rotulo: "Gráfico acumulado" }] },
   pessoas: { nome: "Por pessoa", grande: true, descricao: "Um cartão por vendedor: conversas e marcações contra a meta (SDR) e vendas pagas (da aba Resultados).",
-    itens: [{ id: "conversas", rotulo: "Conversas trocadas (SDR)" }, { id: "marcacoes", rotulo: "Inscrições no workshop (SDR)" }, { id: "agendadas", rotulo: "Reuniões agendadas (Closer, etapa Reunião de diagnóstico)" }, { id: "reunioes", rotulo: "Reuniões realizadas (Closer, etapa Diagnóstico realizado)" }, { id: "funil", rotulo: "Conversão do workshop (Closer, funil do CRM)" }, { id: "followup", rotulo: "Follow-ups atrasados (SDR e Closer)" }, { id: "semretorno_sdr", rotulo: "Leads sem retorno (SDR)" }, { id: "vendas", rotulo: "Vendas pagas" }] },
+    itens: [{ id: "conversas", rotulo: "Conversas trocadas (SDR)" }, { id: "marcacoes", rotulo: "Inscrições no workshop (SDR)" }, { id: "agendadas", rotulo: "Reuniões agendadas (Closer, etapa Reunião de diagnóstico)" }, { id: "reunioes", rotulo: "Reuniões realizadas (Closer, etapa Diagnóstico realizado)" }, { id: "funil", rotulo: "Conversão do workshop (Closer, funil do CRM)" }, { id: "followup", rotulo: "Follow-ups atrasados (SDR e Closer)" }, { id: "semretorno_sdr", rotulo: "Leads sem retorno (SDR e Closer)" }, { id: "vendas", rotulo: "Vendas pagas" }] },
   semretorno: { nome: "Leads sem retorno", grande: false, descricao: "Conversas em que o lead escreveu e ficou mais de 15 min sem resposta." },
   primeira: { nome: "Tempo de 1ª resposta", grande: false, descricao: "Média do período, comparada ao SLA da empresa.", meta: "sla_primeira_resposta_min" },
   nota: { nome: "Nota média da auditoria", grande: false, descricao: "Média das notas da IA nas conversas e ligações auditadas do período." },
@@ -18,6 +18,7 @@ export const CATALOGO: Record<QuadroId, DefQuadro> = {
   ligacoes: { nome: "Ligações atendidas", grande: false, descricao: "Ligações atendidas no período, do total de ligações feitas." },
   conversas_time: { nome: "Conversas trocadas do time", grande: false, descricao: "Soma dos SDRs contra a meta do período.", meta: "meta_sdr_conversas" },
   marcacoes_time: { nome: "Inscrições do time", grande: false, descricao: "Inscrições no workshop, soma dos SDRs contra a meta do período.", meta: "meta_sdr_marcacoes" },
+  conversao_total: { nome: "Conversão total", grande: false, descricao: "Vendas fechadas ÷ leads novos (cartões que entraram em Lead novo, Lead tráfego ou Formulário abandonado) no período. Clicar abre o funil: leads novos, inscritos, vieram ao workshop, diagnóstico agendado, realizado e vendas fechadas. Conta de 26/11 em diante." },
   convites: { nome: "Convites do workshop", grande: false, descricao: "Inscrições por cupom 100%, membro Carbone ou cortesia (inscrito no workshop com valor zerado no CRM, desde 24/11), R$ 0, no período." },
 };
 export const IDS_QUADROS = Object.keys(CATALOGO) as QuadroId[];

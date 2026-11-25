@@ -343,8 +343,19 @@ function DetalheConversao({ c, fechar }: { c: NonNullable<VisaoGeralDados["conve
     </div>
   );
 }
-function Conversao({ c }: { c: VisaoGeralDados["conversao"] }) {
+function Conversao({ c, selo = false }: { c: VisaoGeralDados["conversao"]; selo?: boolean }) {
   const [aberto, setAberto] = useState(false);
+  // selo: versao discreta no canto superior direito do cartao do closer (ao lado do nome)
+  if (selo) return (
+    <>
+      <button type="button" className="pr" onClick={() => c && setAberto(true)} disabled={!c} aria-haspopup="dialog" title={c ? "Ver a conversão por produto" : undefined} aria-label="Conversão do workshop"
+        style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "6px 14px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0, flexShrink: 0, color: "inherit", cursor: c ? "pointer" : "default" }}>
+        <span className="lb nw" style={{ fontSize: 12, color: C.mute }}>Conversão do workshop</span>
+        <span className="vl nw" style={{ fontSize: 26 }}>{c ? pct(c.total, c.presentes) : "—"}</span>
+      </button>
+      {aberto && c && <DetalheConversao c={c} fechar={() => setAberto(false)} />}
+    </>
+  );
   return (
     <>
     {/* clicar no card abre o detalhe por produto (mesmo botao "pr" da faixa de produtos do faturamento) */}
@@ -508,6 +519,7 @@ function Cartao({ p, ritmoPct, q, conv, largo }: { p: Pessoa; ritmoPct: number; 
       <div className="row" style={{ gap: 12 }}>
         {p.foto ? <img src={p.foto} alt="" style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover" }} /> : <span style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--vg-avatar)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, color: C.texto }}>{p.sigla}</span>}
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}><span className="vl nw" style={{ fontSize: 28, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span><span className="lb nw" style={{ fontSize: 13, color: C.mute }}>{p.tipo === "sdr" ? "SDR" : "Closer"}</span></div>
+        {p.tipo === "closer" && temItem(q, "funil") && <><div style={{ flex: 1 }} /><Conversao c={conv} selo /></>}
       </div>
       {p.conversas && temItem(q, "conversas") && <MetaBarra rotulo="Conversas trocadas" v={p.conversas.v} meta={p.conversas.meta} ritmoPct={ritmoPct} compacto={compacto} />}
       {p.marcacoes && temItem(q, "marcacoes") && <QuadroMeta rotulo="Inscrições no workshop" v={p.marcacoes.v} meta={p.marcacoes.meta} ritmoPct={ritmoPct} compacto={compacto}
@@ -518,12 +530,10 @@ function Cartao({ p, ritmoPct, q, conv, largo }: { p: Pessoa; ritmoPct: number; 
       {reun && <QuadroMeta rotulo="Reuniões realizadas" v={p.reunioes!.v} meta={p.reunioes!.meta} ritmoPct={ritmoPct} compacto={compacto}
         modal={p.reunioes!.lista ? { titulo: `Reuniões realizadas · ${p.nome}`, sub: "cartões que entraram na etapa “Diagnóstico realizado” do CRM no período (mais recente primeiro)", linhas: p.reunioes!.lista } : null} />}
       {/* lado a lado so com cartao largo (ate 3 pessoas); com 4+ nao cabe e fica um embaixo do outro
-          closer: conversao | follow-ups · SDR: follow-ups | leads sem retorno */}
+          SDR e closer: follow-ups | leads sem retorno (a conversao do workshop do closer fica no canto, ao lado do nome) */}
       <LadoALado largo={largo}
-        a={p.tipo === "closer" && temItem(q, "funil") ? <Conversao c={conv} /> : fup ? <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} /> : null}
-        b={p.tipo === "closer" ? (fup && temItem(q, "funil") ? <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} /> : null)
-          : p.semRetorno && temItem(q, "semretorno_sdr") ? <QuadroSemRetorno s={p.semRetorno} nome={p.nome} compacto={compacto} /> : null} />
-      {p.tipo === "closer" && fup && !temItem(q, "funil") && <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} />}
+        a={fup ? <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} /> : null}
+        b={p.semRetorno && temItem(q, "semretorno_sdr") ? <QuadroSemRetorno s={p.semRetorno} nome={p.nome} compacto={compacto} /> : null} />
       {temItem(q, "vendas") && <div style={{ marginTop: "auto", background: "var(--vg-destaque)", borderRadius: 12, padding: compacto ? "8px 16px" : "10px 16px", display: "flex", flexDirection: "column", gap: compacto ? 2 : 4 }}>
         {/* compacto: a quantidade sobe para a linha do titulo (uma linha a menos) */}
         <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
@@ -594,10 +604,59 @@ function ListaSemRetorno({ titulo, k, fechar }: { titulo: string; k: Kpi; fechar
     </div>
   );
 }
+// Funil da Conversao total: cada etapa com barra proporcional ao topo, quanto passou da etapa anterior e quanto e do topo
+function DetalheFunil({ titulo, k, fechar }: { titulo: string; k: Kpi; fechar: () => void }) {
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => { if (e.key === "Escape") fechar(); };
+    document.addEventListener("keydown", f);
+    return () => document.removeEventListener("keydown", f);
+  }, [fechar]);
+  const etapas = k.funil ?? [];
+  const topo = Math.max(1, ...etapas.map((e) => e.n ?? 0));
+  const taxa = (a: number | null, b: number | null) => (a == null || !b ? "—" : `${Math.round((a / b) * 100)}%`);
+  return (
+    <div onClick={fechar} style={{ position: "fixed", inset: 0, zIndex: 50, background: "var(--vg-veu)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div role="dialog" aria-modal="true" aria-label={titulo} onClick={(e) => e.stopPropagation()} className="cd"
+        style={{ width: 1200, maxHeight: 900, display: "flex", flexDirection: "column", padding: "26px 32px", gap: 18, borderColor: "var(--vg-borda-fat)" }}>
+        <div className="row" style={{ gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+            <span className="lb nw">{titulo}</span>
+            <span className="vl nw" style={{ fontSize: 52 }}>{k.valor ?? "—"}</span>
+            <span className="mu nw">{k.sub} · cada etapa conta quem entrou nela no período</span>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button type="button" className="bt" onClick={fechar} aria-label="Fechar" autoFocus>✕ Fechar</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "300px minmax(0,1fr) 110px 150px", gap: "0 18px", padding: "0 16px", fontSize: 15, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.mute }}>
+          <span>Etapa</span><span /><span style={{ textAlign: "right" }}>Da anterior</span><span style={{ textAlign: "right" }}>Dos leads</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {etapas.map((e, i) => (
+            <div key={e.etapa} style={{ display: "grid", gridTemplateColumns: "300px minmax(0,1fr) 110px 150px", gap: "0 18px", alignItems: "center", background: "var(--vg-dentro)", borderRadius: 12, padding: "12px 16px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                <span className="nw" style={{ fontSize: 22, fontWeight: 700 }}>{e.etapa}</span>
+                <span className="mu nw" style={{ fontSize: 14, overflow: "hidden", textOverflow: "ellipsis" }}>{e.obs}</span>
+              </div>
+              <div className="row" style={{ gap: 12, minWidth: 0 }}>
+                <div style={{ flex: 1, height: 26, background: "var(--vg-trilho)", borderRadius: 8, overflow: "hidden" }}>
+                  <div style={{ width: `${e.n == null ? 0 : Math.max(e.n ? 2 : 0, (e.n / topo) * 100)}%`, height: "100%", background: "var(--vg-ok-barra)", borderRadius: 8 }} />
+                </div>
+                <span className="vl nw" style={{ fontSize: 28, minWidth: 70, textAlign: "right" }}>{e.n == null ? "—" : inteiro(e.n)}</span>
+              </div>
+              <span className="nw" style={{ fontSize: 20, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{i === 0 ? "" : taxa(e.n, etapas[i - 1].n)}</span>
+              <span className="nw" style={{ fontSize: 20, textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{i === 0 ? "" : taxa(e.n, etapas[0].n)}</span>
+            </div>
+          ))}
+        </div>
+        <span className="mu" style={{ fontSize: 15 }}>Cada etapa conta quem entrou nela no período; não são as mesmas pessoas do topo até a venda (um lead de um mês pode fechar no outro). Etapa “—” = ainda sem dado.</span>
+      </div>
+    </div>
+  );
+}
 function KpiCard({ q, k, tam }: { q: QuadroCfg; k: Kpi; tam: number }) {
   const ruim = k.tom === "bad";
   const [aberto, setAberto] = useState(false);
-  const clica = !!k.lista?.length;
+  const clica = !!k.lista?.length || !!k.funil;
   const caixa: CSSProperties = { flex: 1, padding: "20px 26px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 8, background: ruim ? "var(--vg-kpi-ruim-bg)" : "var(--vg-quadro)", borderColor: ruim ? "var(--vg-kpi-ruim-borda)" : C.linha };
   if (clica) return (
     <>
@@ -605,7 +664,7 @@ function KpiCard({ q, k, tam }: { q: QuadroCfg; k: Kpi; tam: number }) {
         style={{ ...caixa, borderStyle: "solid", borderWidth: 1, textAlign: "left", color: "inherit", cursor: "pointer", alignItems: "stretch" }}>
         <ConteudoKpi q={q} k={k} tam={tam} />
       </button>
-      {aberto && <ListaSemRetorno titulo={tituloDe(q)} k={k} fechar={() => setAberto(false)} />}
+      {aberto && (k.funil ? <DetalheFunil titulo={tituloDe(q)} k={k} fechar={() => setAberto(false)} /> : <ListaSemRetorno titulo={tituloDe(q)} k={k} fechar={() => setAberto(false)} />)}
     </>
   );
   return <div className="cd" style={caixa}><ConteudoKpi q={q} k={k} tam={tam} /></div>;

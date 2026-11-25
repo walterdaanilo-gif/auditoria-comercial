@@ -14,6 +14,9 @@ type Tempos = { vendedor_id: string; primeira_resposta_seg: number | null; tempo
 const n = (x: unknown) => Number(x) || 0;
 // inscricoes no workshop (card do SDR e quadro do time) vem da etapa "Inscrito no workshop" do CRM a partir deste dia (pedido da gestao, 25/11/2026)
 const INSCRICOES_CRM_DESDE = "2026-11-25";
+// Conversao total (funil) conta de 26/11 em diante: e quando o aviso do CRM passa a gravar as etapas do topo
+// (Lead novo, Lead trafego, Formulario abandonado), que antes se perdiam quando a conversa era encerrada
+const FUNIL_DESDE = "2026-11-26";
 const ORDEM_PRODUTOS = ["plataforma", "imersao", "incompany", "workshop", "outro"]; // desempate (a TV ordena pelo valor vendido)
 const ddmm = (d: string) => d.slice(8, 10) + "/" + d.slice(5, 7);
 const util = ehUtil; // seg a sex, sem feriado nacional
@@ -31,7 +34,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const ritmoPct = (Math.max(diaUtil, 1) / diasUteisMes) * 100;
   const db = createAdminClient();
 
-  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem, rEtapas, rFup, rPres, rIns] = await Promise.all([
+  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem, rEtapas, rFup, rPres, rIns, rFunil] = await Promise.all([
     db.rpc("resumo_sdr2", { p_from: ini, p_to: hoje }),
     db.from("profiles").select("id,nome,funcao,ativo,foto_url").order("nome"),
     db.from("instancias_whatsapp").select("vendedor_id").eq("org_id", org),
@@ -49,13 +52,17 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     // "*": a coluna "leads" (lista dos clientes) pode ainda nao existir no banco; sem ela a TV mostra so o numero
     db.from("followups_atrasados").select("*").limit(1000),
     // conversao do workshop: quem veio ao workshop (etapa "Veio ao workshop" do funil Workshop), so de 24/11 em diante
-    db.from("crm_etapas").select("conversa_id").eq("org_id", org).like("etapa", "%veio_ao_workshop")
+    db.from("crm_etapas").select("conversa_id,em").eq("org_id", org).like("etapa", "%veio_ao_workshop")
       .gte("em", `${ini > REGRA_ETAPAS_DESDE ? ini : REGRA_ETAPAS_DESDE}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(5000),
     // lista das inscricoes no workshop que a IA viu nas conversas (ate 24/11): as mesmas que o resumo_sdr2 conta na coluna workshop
     ini < INSCRICOES_CRM_DESDE
       ? db.from("auditorias").select("vendedor_id,conversas(data,canal,contato,contato_nome,telefone),ligacoes(iniciada_em,contato)").eq("org_id", org).eq("agendou", true)
           .or("tipo_agendamento.is.null,tipo_agendamento.eq.workshop").gte("criado_em", `${somaDias(ini, -15)}T00:00:00-03:00`).limit(5000)
       : Promise.resolve({ data: [], error: null }),
+    // Conversao total (funil): cartoes que entraram no topo (Lead novo, Lead trafego, Formulario abandonado) e em Venda fechada
+    // (Ganho do Vendas 2) no periodo. O historico de etapas existe desde 12/11; o topo passou a ser gravado tambem pelo aviso do CRM em 25/11.
+    db.from("crm_etapas").select("conversa_id,etapa").eq("org_id", org).or("etapa.like.%lead_novo,etapa.like.%trafego%,etapa.like.%formulario%,etapa.like.%vendas_2_ganho,etapa.like.%vendas_2_venda_fechada")
+      .gte("em", `${ini > FUNIL_DESDE ? ini : FUNIL_DESDE}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(10000),
   ]);
 
   const nomeDe = new Map(((rPerf.data ?? []) as Perfil[]).map((p) => [p.id, p.nome])); // quem vendeu, na lista de vendas do produto
@@ -140,8 +147,8 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
       agendadas: tipo === "closer" && etapas ? { v: noFunil(p.id, "reuniao_de_diagnostico"), meta: metaReun || null, lista: listaReunioes(p.id, "reuniao_de_diagnostico") } : null,
       reunioes: tipo === "closer" && etapas && metaReun ? { v: noFunil(p.id, "diagnostico_realizado"), meta: metaReun, lista: listaReunioes(p.id) } : null,
       followups: followupsDe(p.id), // SDR e closer: mesma regra (retrato do worker)
-      // so SDR: leads dele sem retorno ha mais de 15 min (mesma conta do quadro do time), da espera mais longa para a mais curta
-      semRetorno: tipo === "sdr" && semLista ? { qtd: semLista.filter((c) => c.vendedor_id === p.id).length, lista: semLista.filter((c) => c.vendedor_id === p.id).slice(0, 100).map(itemSem) } : null,
+      // SDR e closer: leads dele sem retorno ha mais de 15 min (mesma conta do quadro do time), da espera mais longa para a mais curta
+      semRetorno: semLista ? { qtd: semLista.filter((c) => c.vendedor_id === p.id).length, lista: semLista.filter((c) => c.vendedor_id === p.id).slice(0, 100).map(itemSem) } : null,
     };
   };
 
@@ -202,6 +209,28 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     total: new Set(fechadas.map(negocio)).size,
     produtos: ALTOS.map((produto) => ({ produto, vendas: new Set(fechadas.filter((v) => v.produto === produto).map(negocio)).size })),
   };
+
+  // ---- Conversao total = vendas fechadas / leads novos, com o funil no modal ----
+  // Cada etapa conta quem ENTROU nela no periodo, de 26/11 em diante (FUNIL_DESDE), tudo pelas etapas do CRM
+  // (nao acompanha as mesmas pessoas do topo ate a venda). Periodo todo antes de 26/11: o quadro avisa quando comeca.
+  const desdeFunil = `${FUNIL_DESDE}T00:00:00-03:00`;
+  const funilEt = rFunil.error ? null : (rFunil.data ?? []) as { conversa_id: string; etapa: string }[];
+  const conta = (l: { conversa_id: string; etapa: string; em?: string }[] | null, re: RegExp) =>
+    (l ? new Set(l.filter((e) => re.test(e.etapa) && (!e.em || Date.parse(e.em) >= Date.parse(desdeFunil))).map((e) => e.conversa_id)).size : null);
+  const vieram = rPres.error ? null : new Set(((rPres.data ?? []) as { conversa_id: string; em: string }[]).filter((e) => Date.parse(e.em) >= Date.parse(desdeFunil)).map((e) => e.conversa_id)).size;
+  const leadsNovos = conta(funilEt, /lead_novo$|trafego|formulario/), vendasFechadas = conta(funilEt, /vendas_2_ganho$|vendas_2_venda_fechada$/);
+  const funil = [
+    { etapa: "Leads novos", n: leadsNovos, obs: "Lead novo + Lead tráfego + Formulário abandonado" },
+    { etapa: "Inscritos no workshop", n: inscritosCrm.filter((r) => r.data >= FUNIL_DESDE).length, obs: "etapa Inscrito no workshop" },
+    { etapa: "Vieram ao workshop", n: vieram, obs: "etapa Veio ao workshop" },
+    { etapa: "Diagnóstico agendado", n: conta(etapas, /reuniao_de_diagnostico$/), obs: "etapa Reunião de diagnóstico" },
+    { etapa: "Diagnóstico realizado", n: conta(etapas, /diagnostico_realizado$/), obs: "etapa Diagnóstico realizado" },
+    { etapa: "Vendas fechadas", n: vendasFechadas, obs: "etapa Ganho do funil Vendas" },
+  ];
+  kpis.conversao_total = hoje < FUNIL_DESDE ? { valor: null, sub: "o funil começa a contar em 26/11", tom: "neutro", funil }
+    : leadsNovos == null || vendasFechadas == null ? { valor: null, sub: "não foi possível ler o funil agora", tom: "neutro", funil }
+    : !leadsNovos ? { valor: null, sub: "nenhum lead novo registrado no período ainda", tom: "neutro", funil }
+    : { valor: `${Math.round((vendasFechadas / leadsNovos) * 1000) / 10}%`.replace(".", ","), sub: `${inteiro(vendasFechadas)} venda${vendasFechadas === 1 ? "" : "s"} fechada${vendasFechadas === 1 ? "" : "s"} de ${inteiro(leadsNovos)} leads novos`, tom: "neutro", funil };
 
   return {
     demo: false,

@@ -14,7 +14,7 @@ export const visaoGeralDemo: VisaoGeralDados = {
   pessoas: [
     { id: "s1", nome: "SDR 1", sigla: "S1", foto: null, tipo: "sdr", conversas: { v: 330, meta: 300 }, marcacoes: { v: 71, meta: 72 }, vendasValor: 6900, vendasN: 35, followups: { qtd: 3, maisAntigo: 9, dias: 6, lista: [{ nome: "Cliente E", quando: "15/11 10:20", dias: 9, semResposta: false }, { nome: "Cliente F", quando: "17/11 14:00", dias: 7, semResposta: true }, { nome: "Cliente G", quando: "18/11 09:30", dias: 6, semResposta: false }] }, semRetorno: { qtd: 2, lista: [{ cliente: "Cliente A", vendedor: "SDR 1", quando: "24/11 09:12", espera: "3 h 40 min", texto: "Oi, queria saber o valor da imersão" }, { cliente: "Cliente H", vendedor: "SDR 1", quando: "24/11 10:02", espera: "2 h 50 min", texto: "Tem vaga pro próximo workshop?" }] } },
     { id: "s2", nome: "SDR 2", sigla: "S2", foto: null, tipo: "sdr", conversas: { v: 290, meta: 300 }, marcacoes: { v: 52, meta: 72 }, vendasValor: 5700, vendasN: 29, followups: { qtd: 0, maisAntigo: null, dias: 6 }, semRetorno: { qtd: 0, lista: [] } },
-    { id: "c1", nome: "Closer 1", sigla: "C1", foto: null, tipo: "closer", conversas: null, marcacoes: null, vendasValor: 82000, vendasN: 15, agendadas: { v: 64, meta: 63 }, reunioes: { v: 52, meta: 63 }, followups: { qtd: 4, maisAntigo: 12, dias: 6, lista: [{ nome: "Cliente A", quando: "12/11 10:20", dias: 12, semResposta: false }, { nome: "Cliente B", quando: "14/11 16:05", dias: 10, semResposta: true }, { nome: "Cliente C", quando: "16/11 09:40", dias: 8, semResposta: false }, { nome: "Cliente D", quando: "18/11 11:15", dias: 6, semResposta: false }] } },
+    { id: "c1", nome: "Closer 1", sigla: "C1", foto: null, tipo: "closer", conversas: null, marcacoes: null, vendasValor: 82000, vendasN: 15, agendadas: { v: 64, meta: 63 }, reunioes: { v: 52, meta: 63 }, followups: { qtd: 4, maisAntigo: 12, dias: 6, lista: [{ nome: "Cliente A", quando: "12/11 10:20", dias: 12, semResposta: false }, { nome: "Cliente B", quando: "14/11 16:05", dias: 10, semResposta: true }, { nome: "Cliente C", quando: "16/11 09:40", dias: 8, semResposta: false }, { nome: "Cliente D", quando: "18/11 11:15", dias: 6, semResposta: false }] }, semRetorno: { qtd: 1, lista: [{ cliente: "Cliente C", vendedor: "Closer 1", quando: "24/11 12:30", espera: "22 min", texto: "Combinado, aguardo o link" }] } },
     { id: "c2", nome: "Closer 2", sigla: "C2", foto: null, tipo: "closer", conversas: null, marcacoes: null, vendasValor: 53000, vendasN: 8, agendadas: { v: 40, meta: 63 }, reunioes: { v: 31, meta: 63 }, followups: { qtd: 0, maisAntigo: null, dias: 6 } },
   ],
   conversao: { presentes: 40, total: 6, produtos: [{ produto: "imersao", vendas: 4 }, { produto: "incompany", vendas: 1 }, { produto: "plataforma", vendas: 1 }] },
@@ -31,6 +31,14 @@ export const visaoGeralDemo: VisaoGeralDados = {
     ligacoes: { valor: "79", sub: "de 120 ligações no período", tom: "neutro" },
     conversas_time: { valor: "620", sub: "de 600 · 103% da meta", tom: "ok", selo: "no ritmo", pct: 103 },
     marcacoes_time: { valor: "123", sub: "de 144 · 85% da meta", tom: "ok", selo: "no ritmo", pct: 85 },
+    conversao_total: { valor: "3,2%", sub: "16 vendas fechadas de 500 leads novos", tom: "neutro", funil: [
+      { etapa: "Leads novos", n: 500, obs: "Lead novo + Lead tráfego + Formulário abandonado" },
+      { etapa: "Inscritos no workshop", n: 123, obs: "etapa Inscrito no workshop" },
+      { etapa: "Vieram ao workshop", n: 80, obs: "etapa Veio ao workshop" },
+      { etapa: "Diagnóstico agendado", n: 64, obs: "etapa Reunião de diagnóstico" },
+      { etapa: "Diagnóstico realizado", n: 52, obs: "etapa Diagnóstico realizado" },
+      { etapa: "Vendas fechadas", n: 16, obs: "etapa Ganho do funil Vendas" },
+    ] },
     convites: { valor: "74", sub: "cupom 100% ou Carbone · R$ 0", tom: "neutro" },
   },
 };

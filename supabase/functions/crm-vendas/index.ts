@@ -218,6 +218,22 @@ async function varrerEmpresa(org: Org, ate: number) {
   return { empresa: org.slug, produtos: produtos.length, conversas_no_crm: chats, paginas, na_fila: fila.size, lidos, gravados, removidos, falhas, motivos };
 }
 
+// ---------- historico de etapas pelo aviso do CRM ----------
+// Etapa de funil = status "custom_..." (o resto, open/pending/closed/resolved/waiting, e so a situacao da conversa).
+// Vale a etapa que veio no aviso (data.status); sem ela, a da conversa lida agora. So grava se a conversa ja existe no
+// sistema (crm_etapas aponta para crm_conversas) e se a ultima etapa gravada for outra (o gatilho da sincronizacao pode
+// gravar a mesma depois: as contas usam conversa distinta por etapa, entao a repeticao nao conta duas vezes).
+async function gravarEtapa(org: Org, chat: any, corpo: any) {
+  const doAviso = typeof corpo?.data?.status === "string" ? corpo.data.status : null;
+  const etapa = String(doAviso ?? chat?.status ?? "");
+  if (!etapa.startsWith("custom_")) return;
+  const { data: conv } = await sb.from("crm_conversas").select("id,vendedor_id").eq("org_id", org.id).eq("id", chat.id).maybeSingle();
+  if (!conv) return;
+  const { data: ult } = await sb.from("crm_etapas").select("etapa").eq("conversa_id", conv.id).order("em", { ascending: false }).limit(1).maybeSingle();
+  if (ult?.etapa === etapa) return;
+  await sb.from("crm_etapas").insert({ org_id: org.id, conversa_id: conv.id, vendedor_id: conv.vendedor_id, etapa, anterior: ult?.etapa ?? null });
+}
+
 // ---------- aviso do CRM: um cartao mudou de etapa ----------
 async function tratarEvento(org: Org, corpo: any) {
   const chave = Deno.env.get(org.crm_segredo) || "";
@@ -240,6 +256,9 @@ async function tratarEvento(org: Org, corpo: any) {
     if (r.status === 200 && r.corpo?.contact?.id) { chat = r.corpo; break; }
   }
   if (!chat) { await registrar(null, "conversa_nao_achada"); return; }
+  // historico de etapas (25/11/2026): o aviso chega a cada mudanca de etapa, mesmo que logo depois a conversa seja
+  // encerrada (ai a sincronizacao so ve "closed" e a etapa se perde). Grava a etapa aqui tambem; falha nao atrapalha a venda.
+  await gravarEtapa(org, chat, corpo).catch((e) => console.error("[crm-vendas] etapa:", String((e as Error).message).slice(0, 120)));
 
   const contato = chat.contact.id as string;
   const salvos = ((await sb.from("crm_vendas").select("deal_id,chat_id,contato_crm_id,telefone,cliente,status,valor_cents,produto,produtos,campos").eq("org_id", org.id).eq("contato_crm_id", contato)).data ?? []) as any[];
