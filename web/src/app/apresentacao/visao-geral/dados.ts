@@ -40,7 +40,8 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     listarResultados(db, org, ini, hoje),
     // mesma conta do painel de atendimento: tempos de resposta das conversas auditadas
     db.from("auditorias").select("vendedor_id,primeira_resposta_seg,tempo_medio_resposta_seg,respostas_sdr,conversas!inner(data,canal)").eq("org_id", org).neq("conversas.canal", "importada").gte("conversas.data", ini).lte("conversas.data", hoje).limit(5000),
-    db.rpc("conversas_sem_retorno", { p_from: ini, p_to: hoje, p_min: 15 }),
+    // so desta empresa (conversas_sem_retorno_org, supabase/sem_retorno_org.sql): a conta antiga cortava em 100 de todas as empresas
+    db.rpc("conversas_sem_retorno_org", { p_org: org, p_from: ini, p_to: hoje, p_min: 15 }),
     // closer: cartoes que ENTRARAM em "Diagnostico realizado" (reuniao feita) no funil do CRM (tabela crm_etapas)
     db.from("crm_etapas").select("conversa_id,vendedor_id,etapa,em,crm_conversas(contato_nome,telefone)").eq("org_id", org).or("etapa.like.%diagnostico_realizado,etapa.like.%reuniao_de_diagnostico")
       .gte("em", `${ini}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(5000),
@@ -139,6 +140,8 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
       agendadas: tipo === "closer" && etapas ? { v: noFunil(p.id, "reuniao_de_diagnostico"), meta: metaReun || null, lista: listaReunioes(p.id, "reuniao_de_diagnostico") } : null,
       reunioes: tipo === "closer" && etapas && metaReun ? { v: noFunil(p.id, "diagnostico_realizado"), meta: metaReun, lista: listaReunioes(p.id) } : null,
       followups: followupsDe(p.id), // SDR e closer: mesma regra (retrato do worker)
+      // so SDR: leads dele sem retorno ha mais de 15 min (mesma conta do quadro do time), da espera mais longa para a mais curta
+      semRetorno: tipo === "sdr" && semLista ? { qtd: semLista.filter((c) => c.vendedor_id === p.id).length, lista: semLista.filter((c) => c.vendedor_id === p.id).slice(0, 100).map(itemSem) } : null,
     };
   };
 
@@ -163,8 +166,10 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     return `${d} dia${d === 1 ? "" : "s"}`;
   };
   // ja vem da mais antiga para a mais nova
-  const listaSem = (semLista ?? []).map((c) => ({ cliente: c.contato_nome || c.contato || "Cliente sem nome", vendedor: nomeDe.get(c.vendedor_id) ?? null,
-    quando: quandoBR(c.ultima_msg_em), espera: espera(c.ultima_msg_em), texto: String(c.texto ?? "").replace(/s+/g, " ").trim().slice(0, 140) }));
+  const itemSem = (c: Sem) => ({ cliente: c.contato_nome || c.contato || "Cliente sem nome", vendedor: nomeDe.get(c.vendedor_id) ?? null,
+    quando: quandoBR(c.ultima_msg_em), espera: espera(c.ultima_msg_em), texto: String(c.texto ?? "").replace(/s+/g, " ").trim().slice(0, 140) });
+  // modal do quadro do time: as 100 esperas mais longas (o numero do quadro e o total)
+  const listaSem = (semLista ?? []).slice(0, 100).map(itemSem);
   const contraMeta = (v: number, metaDia: number): Kpi => {
     const meta = metaDia * diasUteisMes * sdrs.length;
     if (!meta) return { valor: inteiro(v), sub: "sem SDR cadastrado", tom: "neutro" };
@@ -173,7 +178,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   };
   const kpis: VisaoGeralDados["kpis"] = {
     semretorno: semRetorno === null ? { valor: null, sub: "não foi possível ler agora", tom: "neutro" }
-      : { valor: semRetorno >= 100 ? "100+" : String(semRetorno), sub: "o lead escreveu e ficou mais de 15 min sem resposta", tom: semRetorno > 0 ? "bad" : "ok", lista: listaSem },
+      : { valor: semRetorno >= 500 ? "500+" : String(semRetorno), sub: "o lead escreveu e ficou mais de 15 min sem resposta", tom: semRetorno > 0 ? "bad" : "ok", lista: listaSem },
     primeira: priMedia === null ? { valor: null, sub: "sem conversas auditadas no período", tom: "neutro" }
       : { valor: duracao(priMedia), sub: "média do período", tom: priMedia / 60 <= sla ? "ok" : "bad", selo: priMedia / 60 <= sla ? `dentro de ${sla} min` : `acima de ${sla} min` },
     nota: tot.aud ? { valor: nota(tot.nota / tot.aud), sub: `${inteiro(tot.aud)} auditadas no período`, tom: tot.nota / tot.aud >= 7 ? "ok" : tot.nota / tot.aud >= 4 ? "warn" : "bad" } : { valor: null, sub: "sem auditorias no período", tom: "neutro" },

@@ -474,6 +474,30 @@ function QuadroMeta({ rotulo, v, meta, ritmoPct, compacto, modal }: { rotulo: st
     </>
   );
 }
+// dois quadros na mesma linha (cartao largo) ou um embaixo do outro; so um: ocupa a linha toda
+function LadoALado({ largo, a, b }: { largo: boolean; a: ReactNode; b: ReactNode }) {
+  if (a && b && largo) return <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10, alignItems: "stretch" }}>{a}{b}</div>;
+  return <>{a}{b}</>;
+}
+// Leads sem retorno do SDR (mesma conta do quadro do time): clicar abre a lista, igual ao modal do quadro do time
+function QuadroSemRetorno({ s, nome, compacto = false }: { s: NonNullable<Pessoa["semRetorno"]>; nome: string; compacto?: boolean }) {
+  const [aberto, setAberto] = useState(false);
+  const tom = s.qtd > 0 ? TOM.bad : TOM.ok, clica = s.qtd > 0;
+  const k: Kpi = { valor: String(s.qtd), sub: "", tom: s.qtd > 0 ? "bad" : "ok", lista: s.lista };
+  return (
+    <>
+      <button type="button" className="pr row" onClick={() => clica && setAberto(true)} disabled={!clica} aria-haspopup="dialog" title={clica ? "Ver quem são" : undefined}
+        style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: compacto ? "7px 16px" : "10px 16px", gap: 12, minWidth: 0, width: "100%", height: "100%", textAlign: "left", color: "inherit", cursor: clica ? "pointer" : "default" }} aria-label="Leads sem retorno">
+        <div style={{ display: "flex", flexDirection: "column", gap: compacto ? 0 : 2, minWidth: 0, flex: 1 }}>
+          <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>Leads sem retorno</span>
+          <span className="mu nw" style={{ fontSize: compacto ? 14 : 15, overflow: "hidden", textOverflow: "ellipsis" }}>{s.qtd > 0 ? "mais de 15 min sem resposta" : "ninguém esperando"}</span>
+        </div>
+        <span className="vl nw" style={{ fontSize: compacto ? 34 : 40, color: tom.c }}>{inteiro(s.qtd)}</span>
+      </button>
+      {aberto && <ListaSemRetorno titulo={`Leads sem retorno · ${nome}`} k={k} fechar={() => setAberto(false)} />}
+    </>
+  );
+}
 function Cartao({ p, ritmoPct, q, conv, largo }: { p: Pessoa; ritmoPct: number; q: QuadroCfg; conv: VisaoGeralDados["conversao"]; largo: boolean }) {
   const fup = !!p.followups && temItem(q, "followup");
   const reun = p.tipo === "closer" && !!p.reunioes && temItem(q, "reunioes");
@@ -493,10 +517,13 @@ function Cartao({ p, ritmoPct, q, conv, largo }: { p: Pessoa; ritmoPct: number; 
         modal={p.agendadas.lista ? { titulo: `Reuniões agendadas · ${p.nome}`, sub: "cartões que entraram na etapa “Reunião de diagnóstico” (diagnóstico agendado) do CRM no período", linhas: p.agendadas.lista } : null} />}
       {reun && <QuadroMeta rotulo="Reuniões realizadas" v={p.reunioes!.v} meta={p.reunioes!.meta} ritmoPct={ritmoPct} compacto={compacto}
         modal={p.reunioes!.lista ? { titulo: `Reuniões realizadas · ${p.nome}`, sub: "cartões que entraram na etapa “Diagnóstico realizado” do CRM no período (mais recente primeiro)", linhas: p.reunioes!.lista } : null} />}
-      {/* conversao e follow-ups lado a lado so com cartao largo (ate 3 pessoas); com 4+ nao cabe e fica um embaixo do outro */}
-      {p.tipo === "closer" && temItem(q, "funil") && fup && largo
-        ? <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10, alignItems: "stretch" }}><Conversao c={conv} /><QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} /></div>
-        : <>{p.tipo === "closer" && temItem(q, "funil") && <Conversao c={conv} />}{fup && <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} />}</>}
+      {/* lado a lado so com cartao largo (ate 3 pessoas); com 4+ nao cabe e fica um embaixo do outro
+          closer: conversao | follow-ups · SDR: follow-ups | leads sem retorno */}
+      <LadoALado largo={largo}
+        a={p.tipo === "closer" && temItem(q, "funil") ? <Conversao c={conv} /> : fup ? <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} /> : null}
+        b={p.tipo === "closer" ? (fup && temItem(q, "funil") ? <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} /> : null)
+          : p.semRetorno && temItem(q, "semretorno_sdr") ? <QuadroSemRetorno s={p.semRetorno} nome={p.nome} compacto={compacto} /> : null} />
+      {p.tipo === "closer" && fup && !temItem(q, "funil") && <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} />}
       {temItem(q, "vendas") && <div style={{ marginTop: "auto", background: "var(--vg-destaque)", borderRadius: 12, padding: compacto ? "8px 16px" : "10px 16px", display: "flex", flexDirection: "column", gap: compacto ? 2 : 4 }}>
         {/* compacto: a quantidade sobe para a linha do titulo (uma linha a menos) */}
         <div className="row" style={{ alignItems: "baseline", gap: 8 }}>
@@ -561,7 +588,7 @@ function ListaSemRetorno({ titulo, k, fechar }: { titulo: string; k: Kpi; fechar
               <span className="nw" style={{ fontSize: 22, fontWeight: 800, textAlign: "right", fontVariantNumeric: "tabular-nums", color: TOM.bad.c }}>{l.espera}</span>
             </div>
           ))}
-          {k.valor === "100+" && <span className="mu">Mostrando as 100 esperas mais longas.</span>}
+          {lista.length > 0 && (Number(k.valor) > lista.length || k.valor === "500+") && <span className="mu">Mostrando as {lista.length} esperas mais longas.</span>}
         </div>
       </div>
     </div>

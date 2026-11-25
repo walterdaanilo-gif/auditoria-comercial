@@ -17,6 +17,8 @@ export type Pessoa = {
   reunioes?: { v: number; meta: number; lista?: { cliente: string; data: string }[] } | null; // lista: os cartoes (DD/MM HH:MM da entrada)
   // so closer: clientes potenciais sem mensagem do time ha "dias" dias ou mais (retrato do worker, agora; nao segue o periodo)
   // lista: quem sao (clicar no quadro na TV abre), do mais parado para o menos; quando = ultima mensagem (DD/MM HH:MM)
+  // so SDR: leads dele sem retorno (o lead escreveu e ficou mais de 15 min sem resposta); lista = as 100 esperas mais longas
+  semRetorno?: { qtd: number; lista: LeadSemRetorno[] } | null;
   followups?: { qtd: number; maisAntigo: number | null; dias: number; lista?: { nome: string; quando: string; dias: number; semResposta: boolean }[] } | null;
 };
 
