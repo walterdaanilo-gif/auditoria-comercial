@@ -353,7 +353,8 @@ function Conversao({ c }: { c: VisaoGeralDados["conversao"] }) {
       </div>
       {c ? (
         <>
-          <span className="mu nw" style={{ fontSize: 14 }}>{c.total} venda{c.total === 1 ? "" : "s"} fechada{c.total === 1 ? "" : "s"} / {c.presentes} que vieram ao workshop</span>
+          {/* texto curto para caber no card do closer; se ainda faltar espaco, quebra entre as duas partes (nunca passa da borda) */}
+          <span className="mu" style={{ fontSize: 14, display: "flex", flexWrap: "wrap", columnGap: 5 }}><span className="nw">{c.total} venda{c.total === 1 ? "" : "s"}</span><span className="nw">de {c.presentes} que vieram ao workshop</span></span>
           <span className="mu" style={{ fontSize: 14, display: "flex", flexWrap: "wrap", columnGap: 10 }}>{c.produtos.map((x) => <span key={x.produto} className="nw">{curto[x.produto]} {pct(x.vendas, c.presentes)} ({x.vendas})</span>)}</span>
         </>
       ) : <span className="mu" style={{ fontSize: 14 }}>a conversão conta a partir de 24/11</span>}
