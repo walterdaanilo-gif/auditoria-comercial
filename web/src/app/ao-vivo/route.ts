@@ -141,7 +141,7 @@ function pinta(d){
   }
   $("graf").innerHTML=grafico(d);
   $("prods").innerHTML=(f.produtos||[]).map(function(p){return '<div class="card" style="padding:12px 16px"><span class="mu">'+esc(NOME[p.produto]||p.produto)+'</span><div class="num">'+moeda(p.valor)+'</div><span class="mu">'+p.n+' venda'+(p.n===1?"":"s")+'</span></div>'}).join("")||'<div class="card mu">Nenhuma venda no período.</div>';
-  var k=d.kpis,ks=[["Marcações do time",k.marcacoes],["Conversas trocadas",k.conversas],["Convites (R$ 0)",k.convites],["Nota média da auditoria",k.nota]];
+  var k=d.kpis,ks=[["Inscrições do time",k.marcacoes],["Conversas trocadas",k.conversas],["Convites (R$ 0)",k.convites],["Nota média da auditoria",k.nota]];
   $("kpis").innerHTML=ks.map(function(a){return '<div class="card"><span class="lb" style="font-size:12px">'+a[0]+'</span><div class="num">'+esc(a[1]&&a[1].valor!=null?a[1].valor:"—")+'</div><span class="mu">'+esc(a[1]?a[1].sub:"")+'</span></div>'}).join("");
   var c=d.conversao;
   $("conv").innerHTML=c?'<div class="num" style="margin-top:6px">'+pct(c.total,c.presentes)+'</div><div class="mu">'+c.total+' venda'+(c.total===1?"":"s")+' fechada'+(c.total===1?"":"s")+' / '+c.presentes+' que vieram ao workshop</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">'+c.produtos.map(function(x){return '<div class="prod">'+esc(NOME[x.produto])+'<b>'+pct(x.vendas,c.presentes)+'</b><span class="mu">'+x.vendas+' venda'+(x.vendas===1?"":"s")+'</span></div>'}).join("")+'</div><p class="mu" style="margin-bottom:0">Desde 24/11/2026: etapas Venda fechada (funil Vendas) e Veio ao workshop (funil Workshop) do CRM.</p>':'<p class="mu">A conversão conta a partir de 24/11.</p>';

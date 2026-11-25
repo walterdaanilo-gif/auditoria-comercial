@@ -435,7 +435,7 @@ function Cartao({ p, ritmoPct, q, conv }: { p: Pessoa; ritmoPct: number; q: Quad
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}><span className="vl nw" style={{ fontSize: 28, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span><span className="lb nw" style={{ fontSize: 13, color: C.mute }}>{p.tipo === "sdr" ? "SDR" : "Closer"}</span></div>
       </div>
       {p.conversas && temItem(q, "conversas") && <MetaBarra rotulo="Conversas trocadas" v={p.conversas.v} meta={p.conversas.meta} ritmoPct={ritmoPct} compacto={compacto} />}
-      {p.marcacoes && temItem(q, "marcacoes") && <MetaBarra rotulo="Marcações" v={p.marcacoes.v} meta={p.marcacoes.meta} ritmoPct={ritmoPct} compacto={compacto} />}
+      {p.marcacoes && temItem(q, "marcacoes") && <MetaBarra rotulo="Inscrições no workshop" v={p.marcacoes.v} meta={p.marcacoes.meta} ritmoPct={ritmoPct} compacto={compacto} />}
       {p.tipo === "closer" && temItem(q, "funil") && <Conversao c={conv} />}
       {fup && <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} />}
       {temItem(q, "vendas") && <div style={{ marginTop: "auto", background: "var(--vg-destaque)", borderRadius: 12, padding: compacto ? "8px 16px" : "10px 16px", display: "flex", flexDirection: "column", gap: compacto ? 2 : 4 }}>

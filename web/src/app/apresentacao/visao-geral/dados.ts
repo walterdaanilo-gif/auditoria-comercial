@@ -8,10 +8,12 @@ import { inteiro, tomPorDiferenca, type Kpi, type Pessoa, type VisaoGeralDados }
 
 // Tela fixa da TV com dados REAIS do mes atual. So leitura. Dado que o Cabueta nao mede nao entra na tela.
 type Perfil = { id: string; nome: string; funcao: string | null; ativo: boolean; foto_url: string | null };
-type Linha = { vendedor_id: string; respostas: number; marcacoes: number; ligacoes: number; ligacoes_atendidas: number; auditadas: number; nota_soma: number };
+type Linha = { dia: string; vendedor_id: string; respostas: number; marcacoes: number; workshop: number; ligacoes: number; ligacoes_atendidas: number; auditadas: number; nota_soma: number };
 type Tempos = { vendedor_id: string; primeira_resposta_seg: number | null; tempo_medio_resposta_seg: number | null; respostas_sdr: number | null };
 
 const n = (x: unknown) => Number(x) || 0;
+// inscricoes no workshop (card do SDR e quadro do time) vem da etapa "Inscrito no workshop" do CRM a partir deste dia (pedido da gestao, 25/11/2026)
+const INSCRICOES_CRM_DESDE = "2026-11-25";
 const ORDEM_PRODUTOS = ["plataforma", "imersao", "incompany", "workshop", "outro"]; // desempate (a TV ordena pelo valor vendido)
 const ddmm = (d: string) => d.slice(8, 10) + "/" + d.slice(5, 7);
 const util = ehUtil; // seg a sex, sem feriado nacional
@@ -79,7 +81,15 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   if (serie.length) serie[serie.length - 1].real = acc; // venda de fim de semana entra no ultimo ponto
 
   // ---- pessoas ----
-  const somaDe = (id: string) => linhas.filter((l) => l.vendedor_id === id).reduce((t, l) => ({ respostas: t.respostas + n(l.respostas), marcacoes: t.marcacoes + n(l.marcacoes) }), { respostas: 0, marcacoes: 0 });
+  // "marcacoes" na TV = so inscricoes no workshop (reuniao de imersao marcada nao entra; pedido da gestao 25/11).
+  // Ate 24/11: inscricoes que a IA viu nas conversas (coluna workshop do resumo_sdr2).
+  // De 25/11 em diante: o mesmo modelo do faturamento do workshop = cartao que entrou em "Inscrito no workshop" no CRM
+  // (pagas e cortesias, sem duplicar), do vendedor da linha de Resultados.
+  const inscritosCrm = noTime.filter((r) => r.etapa === "inscrito_no_workshop" && r.produto === "workshop" && r.data >= INSCRICOES_CRM_DESDE);
+  const inscricoesDe = (id: string) =>
+    linhas.filter((l) => l.vendedor_id === id && l.dia < INSCRICOES_CRM_DESDE).reduce((s, l) => s + n(l.workshop), 0)
+    + inscritosCrm.filter((r) => r.vendedorId === id).length;
+  const somaDe = (id: string) => ({ respostas: linhas.filter((l) => l.vendedor_id === id).reduce((s, l) => s + n(l.respostas), 0), marcacoes: inscricoesDe(id) });
   const metaConvDia = n(cfg.meta_sdr_conversas ?? 25), metaMarcDia = n(cfg.meta_sdr_marcacoes ?? 6);
   const metaConv = metaConvDia * diasUteisMes, metaMarc = metaMarcDia * diasUteisMes;
   const metaReun = n(cfg.meta_closer_reunioes) * diasUteisMes; // Configuracoes: reunioes de implementacao por dia util
@@ -129,7 +139,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const medio = pesoMedio ? comMedio.reduce((s, t) => s + n(t.tempo_medio_resposta_seg) * n(t.respostas_sdr), 0) / pesoMedio : null;
   const tot = linhas.reduce((t, l) => ({ aud: t.aud + n(l.auditadas), nota: t.nota + n(l.nota_soma), lig: t.lig + n(l.ligacoes), atend: t.atend + n(l.ligacoes_atendidas) }), { aud: 0, nota: 0, lig: 0, atend: 0 });
   const sdrLinhas = linhas.filter((l) => sdrIds.has(l.vendedor_id));
-  const conversasTime = sdrLinhas.reduce((s, l) => s + n(l.respostas), 0), marcacoesTime = sdrLinhas.reduce((s, l) => s + n(l.marcacoes), 0);
+  const conversasTime = sdrLinhas.reduce((s, l) => s + n(l.respostas), 0), marcacoesTime = sdrs.reduce((s, p) => s + inscricoesDe(p.id), 0);
   type Sem = { vendedor_id: string; contato: string; contato_nome: string | null; ultima_msg_em: string; texto: string | null };
   const semLista = rSem.error ? null : ((rSem.data ?? []) as Sem[]).filter((c) => ids.has(c.vendedor_id));
   const semRetorno = semLista ? semLista.length : null;
