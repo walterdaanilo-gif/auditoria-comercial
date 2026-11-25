@@ -1,5 +1,5 @@
 -- "Leads sem retorno" (Painel e Apresentacao) com a mesma regra dos follow-ups:
--- 1) cliente em Perdido ou Ganho (qualquer funil do CRM) nao conta;
+-- 1) cliente em Perdido ou Ganho (qualquer funil do CRM), ou com a conversa encerrada no CRM (closed/resolved), nao conta;
 -- 2) resposta dada pelo CRM (mensagem enviada pelo time, sem nota interna, automatica ou apagada) depois da ultima
 --    mensagem do cliente conta como retorno. O mesmo cliente e achado pelos 8 ultimos digitos do telefone.
 create or replace function public.conversas_sem_retorno(p_from date, p_to date, p_min integer default 15)
@@ -28,11 +28,12 @@ language sql stable security invoker set search_path = public as $$
       where cc.org_id = c.org_id and right(regexp_replace(cc.telefone, '\D', '', 'g'), 8) = t.tel
         and cm.direcao = 'outbound' and not coalesce(cm.nota_interna, false) and not coalesce(cm.automatica, false)
         and cm.apagada_em is null and cm.enviada_em > u.enviada_em)
-    -- cliente em Perdido ou Ganho no CRM
+    -- cliente em Perdido ou Ganho no CRM, ou com a conversa encerrada no CRM (closed/resolved): o CRM manda so "closed"
+    -- quando o cartao vai para Perdido/Ganho e a conversa e encerrada junto (pedido da gestao, 25/11/2026)
     and not exists (
       select 1 from public.crm_conversas cc
       where cc.org_id = c.org_id and right(regexp_replace(cc.telefone, '\D', '', 'g'), 8) = t.tel
-        and cc.status ~ '_(perdido|ganho)$')
+        and (cc.status ~ '_(perdido|ganho)$' or cc.status in ('closed', 'resolved')))
   order by u.enviada_em
   limit 100
 $$;
