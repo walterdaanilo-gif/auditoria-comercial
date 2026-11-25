@@ -398,7 +398,7 @@ function ListaFollowups({ f, nome, fechar }: { f: Fups; nome: string; fechar: ()
               <span className="nw" style={{ fontSize: 24, fontWeight: 800, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{l.dias} dias</span>
             </div>
           ))}
-          {f.qtd > lista.length && <span className="mu">{lista.length ? `...e mais ${f.qtd - lista.length} no sistema.` : "A lista aparece no próximo cálculo dos follow-ups (a cada 15 min)."}</span>}
+          {f.qtd > lista.length && <span className="mu">{lista.length ? `...e mais ${f.qtd - lista.length} no sistema.` : "A lista aparece no próximo cálculo dos follow-ups (a cada 10 min ou ao clicar em Atualizar)."}</span>}
         </div>
       </div>
     </div>

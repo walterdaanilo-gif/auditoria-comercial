@@ -1,7 +1,7 @@
 // Edge Function "worker" do Supabase: substitui o servidor ligado 24h.
 //   POST /worker/webhook/uazapi?k=<WEBHOOK_SECRET>  -> mensagens e chamadas que a Uazapi manda na hora
 //   POST /worker/resumo/agora                        -> manda o resumo do dia agora (chave worker_token)
-//   POST /worker/tick?t=rapido|ciclo|crm            -> relogios do banco (pg_cron), com a chave interna worker_token
+//   POST /worker/tick?t=rapido|ciclo|crm|followups            -> relogios do banco (pg_cron), com a chave interna worker_token
 //     rapido (1 min): conexoes da Uazapi (QR/status), transcricao, fila rapida de auditoria, agenda, analise do time
 //     ciclo  (5 min): auditoria das conversas paradas, resumos das 13h e 19h, follow-up, aviso de diagnostico pendente (6h antes da turma)
 //     crm   (15 min): historico do CRM Q5
@@ -53,11 +53,13 @@ const TAREFAS = {
     const out = { auditorias: await cicloDeAuditoria(db, { ate: Date.now() + LIMITE_MS }) };
     // aviso de diagnostico 6h antes de cada turma; uma falha aqui nao atrapalha a auditoria
     try { out.diagnostico = await avisarDiagnosticos(db); } catch (e) { console.error("[diagnostico]", e.message); out.diagnostico = `erro: ${e.message}`; }
-    // retrato dos follow-ups atrasados para a TV (no maximo a cada 15 min)
+    // retrato dos follow-ups atrasados para a TV (no maximo a cada 10 min)
     try { out.followup_tv = await fotografarFollowups(db); } catch (e) { console.error("[followup_tv]", e.message); out.followup_tv = `erro: ${e.message}`; }
     return out;
   },
   async crm() { return await importarHistoricoCrm(db); },
+  // botao Atualizar da TV: refaz o retrato dos follow-ups agora, sem esperar os 10 min
+  async followups() { return { followup_tv: await fotografarFollowups(db, { forcar: true }) }; },
 };
 
 Deno.serve(async req => {

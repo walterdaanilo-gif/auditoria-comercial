@@ -44,7 +44,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     // closer: cartoes que ENTRARAM em "Diagnostico realizado" (reuniao feita) no funil do CRM (tabela crm_etapas)
     db.from("crm_etapas").select("conversa_id,vendedor_id,etapa,em,crm_conversas(contato_nome,telefone)").eq("org_id", org).or("etapa.like.%diagnostico_realizado,etapa.like.%reuniao_de_diagnostico")
       .gte("em", `${ini}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(5000),
-    // follow-ups atrasados agora, por vendedor (retrato que o worker grava a cada 15 min, mesma regra do aviso)
+    // follow-ups atrasados agora, por vendedor (retrato que o worker grava a cada 10 min e o Atualizar refaz na hora, mesma regra do aviso)
     // "*": a coluna "leads" (lista dos clientes) pode ainda nao existir no banco; sem ela a TV mostra so o numero
     db.from("followups_atrasados").select("*").limit(1000),
     // conversao do workshop: quem veio ao workshop (etapa "Veio ao workshop" do funil Workshop), so de 24/11 em diante

@@ -126,12 +126,12 @@ export function textoGestao(porVendedor, nomes, funcao, dias, modelos) {
 }
 
 // Retrato dos follow-ups atrasados por vendedor (tabela followups_atrasados), para a TV so ler: a conta e pesada demais
-// para rodar a cada recarga da tela. Mesma regra do aviso (leadsParados). No maximo a cada 15 min; troca o retrato inteiro.
-export const RETRATO_MIN = 15;
+// para rodar a cada recarga da tela. Mesma regra do aviso (leadsParados). No maximo a cada 10 min (ou na hora, pelo Atualizar da TV); troca o retrato inteiro.
+export const RETRATO_MIN = 10; // retrato a cada 10 min (o ciclo do pg_cron roda a cada 5); o Atualizar da TV forca na hora
 const RETRATO_LISTA = 100; // no maximo 100 clientes por vendedor na lista da TV
-export async function fotografarFollowups(db, { agora = Date.now() } = {}) {
+export async function fotografarFollowups(db, { agora = Date.now(), forcar = false } = {}) {
   const [ult] = await db.select("followups_atrasados", { select: "calculado_em", order: "calculado_em.desc", limit: 1 });
-  if (ult && agora - Date.parse(ult.calculado_em) < (RETRATO_MIN - 1) * 60_000) return "retrato recente"; // 1 min de folga para o relogio do laco
+  if (!forcar && ult && agora - Date.parse(ult.calculado_em) < (RETRATO_MIN - 1) * 60_000) return "retrato recente"; // 1 min de folga para o relogio do laco
   const R = await carregarRegras(db);
   const porVendedor = new Map();
   for (const l of await leadsParados(db, R, { agora })) {

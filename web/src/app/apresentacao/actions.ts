@@ -12,6 +12,7 @@ export async function atualizarTudoAgora(): Promise<{ ids?: number[]; erro?: str
   const pedidos = await Promise.all([
     db.rpc("crm_disparar_vendas"), db.rpc("crm_disparar_sync"),
     db.rpc("worker_disparar", { p_tarefa: "rapido" }), db.rpc("worker_disparar", { p_tarefa: "ciclo" }), db.rpc("worker_disparar", { p_tarefa: "crm" }),
+    db.rpc("worker_disparar", { p_tarefa: "followups" }), // refaz o retrato dos follow-ups atrasados na hora
   ]);
   const ids = pedidos.filter((r) => !r.error && r.data != null).map((r) => Number(r.data));
   if (!ids.length) return { erro: "Não foi possível pedir a atualização agora." };

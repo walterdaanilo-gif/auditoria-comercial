@@ -92,7 +92,7 @@ assert.equal(parados[0].semResposta, true); assert.equal(parados[0].dias, 8);
 }
 console.log("OK: historico do CRM sem duplicar, revisao so de clientes potenciais, follow-up juntando WhatsApp e CRM");
 
-// retrato para a TV: 1 lead parado do Nick; rodar de novo antes de 15 min nao recalcula; vendedor que saiu do time some
+// retrato para a TV: 1 lead parado do Nick; rodar de novo antes de 10 min nao recalcula (o Atualizar forca); vendedor que saiu do time some
 {
   const { fotografarFollowups } = await import("../src/followup.js");
   db.tables.followups_atrasados = [{ vendedor_id: "saiu", qtd: 3, calculado_em: new Date(Date.now() - 3600_000).toISOString() }];
@@ -103,6 +103,7 @@ console.log("OK: historico do CRM sem duplicar, revisao so de clientes potenciai
   const [lista] = db.tables.followups_atrasados.map(f => f.leads);
   assert.equal(lista.length, 1); assert.equal(lista[0].nome, "Lia"); assert.equal(lista[0].dias, 8); assert.equal(lista[0].sem_resposta, true); assert.ok(lista[0].desde);
   assert.equal(await fotografarFollowups(db, { agora: agora + 5 * 60_000 }), "retrato recente");
+  assert.notEqual(await fotografarFollowups(db, { agora: agora + 5 * 60_000, forcar: true }), "retrato recente", "Atualizar da TV refaz na hora");
   console.log("OK: retrato dos follow-ups atrasados para a TV");
 }
 
