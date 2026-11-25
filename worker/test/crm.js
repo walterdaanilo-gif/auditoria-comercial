@@ -81,6 +81,15 @@ assert.equal(parados[0].semResposta, true); assert.equal(parados[0].dias, 8);
   assert.deepEqual((await leadsParados(db, R)).map(l => l.nome), ["Lia"], "nota apagada nao conta");
   db.tables.crm_mensagens = db.tables.crm_mensagens.filter(x => x !== nota);
 }
+// ligacao atendida conta como contato do time; nao atendida (so tentativa) nao conta
+{
+  const lig = { id: "l1", vendedor_id: NICK, contato: "5584922223333", iniciada_em: new Date().toISOString(), atendida: false };
+  db.tables.ligacoes = [lig];
+  assert.deepEqual((await leadsParados(db, R)).map(l => l.nome), ["Lia"], "ligacao nao atendida nao conta");
+  lig.atendida = true;
+  assert.deepEqual((await leadsParados(db, R)).map(l => l.nome), [], "ligacao atendida: nao esta atrasado");
+  db.tables.ligacoes = [];
+}
 console.log("OK: historico do CRM sem duplicar, revisao so de clientes potenciais, follow-up juntando WhatsApp e CRM");
 
 // retrato para a TV: 1 lead parado do Nick; rodar de novo antes de 15 min nao recalcula; vendedor que saiu do time some

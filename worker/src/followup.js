@@ -52,6 +52,10 @@ export async function leadsParados(db, R, { agora = Date.now() } = {}) {
   // de 23/11 ficam de fora.
   for (const m of await db.selectAll("crm_mensagens", { select: "conversa_id,enviada_em", filters: { nota_interna: "is.true", apagada_em: "is.null", enviada_em: `gte.${NOTAS_DESDE}` } }))
     viu(cardCrm.get(m.conversa_id)?.fone, m.enviada_em);
+  // ligacao ATENDIDA (feita ou recebida pelo time, registrada no Cabueta) tambem conta como contato (pedido da gestao, 25/11/2026).
+  // Ligacao nao atendida nao conta: foi so tentativa.
+  for (const l of await db.selectAll("ligacoes", { select: "contato,iniciada_em", filters: { atendida: "is.true", iniciada_em: `gte.${desde}T00:00:00-03:00`, ...(s.org_id ? { org_id: `eq.${s.org_id}` } : {}) } }))
+    if (l.contato) viu(chaveTelefone(digitos(l.contato)), l.iniciada_em);
   for (const c of convs) viu(c.telefone ? chaveTelefone(c.telefone) : c.contato, ultVend.get(c.id));
 
   const leads = new Map();
