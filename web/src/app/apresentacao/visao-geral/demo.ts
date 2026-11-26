@@ -37,7 +37,7 @@ export const visaoGeralDemo: VisaoGeralDados = {
       { etapa: "Vieram ao workshop", n: 80, obs: "etapa Veio ao workshop" },
       { etapa: "Diagnóstico agendado", n: 64, obs: "etapa Reunião de diagnóstico" },
       { etapa: "Diagnóstico realizado", n: 52, obs: "etapa Diagnóstico realizado" },
-      { etapa: "Vendas fechadas", n: 16, obs: "etapa Ganho do funil Vendas" },
+      { etapa: "Vendas fechadas", n: 16, obs: "etapa Venda fechada, só vendas do time" },
     ] },
     convites: { valor: "74", sub: "cupom 100% ou Carbone · R$ 0", tom: "neutro" },
   },

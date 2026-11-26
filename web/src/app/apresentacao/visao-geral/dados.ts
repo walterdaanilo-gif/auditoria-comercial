@@ -202,7 +202,8 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   // "Venda fechada" (Ganho do funil Vendas) / cartoes que entraram em "Veio ao workshop" (funil Workshop).
   // Periodo todo antes de 24/11: null (o card avisa que a conversao comeca em 24/11).
   const ALTOS = ["imersao", "incompany", "plataforma"];
-  const fechadas = vendas.filter((v) => v.data >= REGRA_ETAPAS_DESDE && v.etapa === "venda_fechada");
+  // venda de numero que o Cabueta nao acompanha (ex.: o do Rai, CEO) so entra na conversao se o Closer/SDR do negocio for do time
+  const fechadas = vendas.filter((v) => v.data >= REGRA_ETAPAS_DESDE && v.etapa === "venda_fechada" && (!v.naoAcompanhada || (v.vendedorId != null && ids.has(v.vendedorId))));
   const negocio = (v: { chave: string }) => v.chave.replace(/#\d+$/, ""); // um negocio com 2 produtos e uma venda fechada so
   const conversao = rPres.error || hoje < REGRA_ETAPAS_DESDE ? null : {
     presentes: new Set(((rPres.data ?? []) as { conversa_id: string }[]).map((e) => e.conversa_id)).size,
@@ -218,17 +219,20 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const conta = (l: { conversa_id: string; etapa: string; em?: string }[] | null, re: RegExp) =>
     (l ? new Set(l.filter((e) => re.test(e.etapa) && (!e.em || Date.parse(e.em) >= Date.parse(desdeFunil))).map((e) => e.conversa_id)).size : null);
   const vieram = rPres.error ? null : new Set(((rPres.data ?? []) as { conversa_id: string; em: string }[]).filter((e) => Date.parse(e.em) >= Date.parse(desdeFunil)).map((e) => e.conversa_id)).size;
-  const leadsNovos = conta(funilEt, /lead_novo$|trafego|formulario/), vendasFechadas = conta(funilEt, /vendas_2_ganho$|vendas_2_venda_fechada$/);
+  const leadsNovos = conta(funilEt, /lead_novo$|trafego|formulario/);
+  // vendas fechadas: as MESMAS da conversao do workshop (etapa Venda fechada, so do time: venda de numero nao conectado, como o do
+  // Rai, so entra se o Closer/SDR do negocio for do time), de 26/11 em diante, um negocio = uma venda
+  const vendasFechadas = new Set(fechadas.filter((v) => v.data >= FUNIL_DESDE).map(negocio)).size;
   const funil = [
     { etapa: "Leads novos", n: leadsNovos, obs: "Lead novo + Lead tráfego + Formulário abandonado" },
     { etapa: "Inscritos no workshop", n: inscritosCrm.filter((r) => r.data >= FUNIL_DESDE).length, obs: "etapa Inscrito no workshop" },
     { etapa: "Vieram ao workshop", n: vieram, obs: "etapa Veio ao workshop" },
     { etapa: "Diagnóstico agendado", n: conta(etapas, /reuniao_de_diagnostico$/), obs: "etapa Reunião de diagnóstico" },
     { etapa: "Diagnóstico realizado", n: conta(etapas, /diagnostico_realizado$/), obs: "etapa Diagnóstico realizado" },
-    { etapa: "Vendas fechadas", n: vendasFechadas, obs: "etapa Ganho do funil Vendas" },
+    { etapa: "Vendas fechadas", n: vendasFechadas, obs: "etapa Venda fechada, só vendas do time" },
   ];
   kpis.conversao_total = hoje < FUNIL_DESDE ? { valor: null, sub: "o funil começa a contar em 26/11", tom: "neutro", funil }
-    : leadsNovos == null || vendasFechadas == null ? { valor: null, sub: "não foi possível ler o funil agora", tom: "neutro", funil }
+    : leadsNovos == null ? { valor: null, sub: "não foi possível ler o funil agora", tom: "neutro", funil }
     : !leadsNovos ? { valor: null, sub: "nenhum lead novo registrado no período ainda", tom: "neutro", funil }
     : { valor: `${Math.round((vendasFechadas / leadsNovos) * 1000) / 10}%`.replace(".", ","), sub: `${inteiro(vendasFechadas)} venda${vendasFechadas === 1 ? "" : "s"} fechada${vendasFechadas === 1 ? "" : "s"} de ${inteiro(leadsNovos)} leads novos`, tom: "neutro", funil };
 

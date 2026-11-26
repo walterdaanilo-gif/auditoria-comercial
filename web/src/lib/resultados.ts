@@ -40,6 +40,8 @@ export type Resultado = {
   indicadoPor?: string;             // so na venda do CRM: "Indicado por" do negocio (vazio = nao foi indicado ou nao informado)
   etapa?: EtapaVenda;               // a partir de 24/11/2026: etapa do funil em que a venda entrou (ver ETAPAS_VENDA)
   cortesia?: boolean;               // desde 24/11: inscrito no workshop com valor zerado no CRM (R$ 0): conta como inscrito, nao soma
+  naoAcompanhada?: boolean;         // desde 24/11: negocio ganho numa conversa que o Cabueta nao acompanha (numero nao conectado, ex.: o do Rai).
+                                    // Soma no faturamento da empresa, mas so vai para um vendedor pelo campo Closer/SDR do negocio (nunca pelo vendedor do workshop)
 };
 
 // ---------- regra das etapas do funil (a partir de 24/11/2026, pedido da gestao) ----------
@@ -208,6 +210,7 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
       produto: PRODUTOS.some(([k]) => k === v.tipo) ? v.tipo : "outro", forma: null, valor: v.valor_cents != null ? v.valor_cents / 100 : null,
       valorIA: null, ajustada: false, excluida: false, duplicada: v.repetidaDe ? "produtos já contados em outro negócio do cliente" : fora, naoLancada: false, naConversa: !!v.vista,
       indicadoPor: indicadorDoCrm(v.campos),
+      ...(semHistorico(v) ? { naoAcompanhada: true } : {}),
       ...(ets.length ? { etapa: ets.includes("venda_fechada") ? "venda_fechada" : ets[0] } : semHistorico(v) && !fora ? { etapa: v.tipo === "plataforma" ? "comprou_a_plataforma" : "venda_fechada" } : {}),
     });
   }
@@ -247,7 +250,7 @@ export async function listarResultados(db: SupabaseClient, org: string, de: stri
     const doCrm = r.fone ? pagoNoCrm.get(r.fone)?.v : undefined;
     if (doCrm) { r.valor = doCrm; r.valorEstimado = "crm"; } else if (padrao && padrao > 0) { r.valor = padrao; r.valorEstimado = "padrao"; }
   }
-  if (doWorkshop) for (const r of linhas) if (r.produto === "workshop") r.vendedorId = doWorkshop;
+  if (doWorkshop) for (const r of linhas) if (r.produto === "workshop" && !r.naoAcompanhada) r.vendedorId = doWorkshop;
   // desde 24/11: inscrito no workshop com valor zerado no CRM e cortesia (R$ 0): continua na lista (conta como inscrito)
   // e nos convites, mas nao soma no faturamento
   for (const r of linhas) {
