@@ -62,9 +62,9 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     // Conversao total (funil), topo: TELEFONES que entraram em Lead novo, Lead trafego ou Formulario abandonado, de duas fontes:
     // cartoes dos vendedores (crm_etapas, desde 12/11) e de qualquer numero do CRM, inclusive o Comercial inbound (crm_entradas, 26/11).
     // Sem limite de inicio: o telefone que ja tinha entrado antes do periodo nao e lead novo.
-    db.from("crm_etapas").select("etapa,em,crm_conversas(telefone)").eq("org_id", org).or("etapa.like.%lead_novo,etapa.like.%trafego%,etapa.like.%formulario%")
+    db.from("crm_etapas").select("etapa,em,crm_conversas(telefone,criada_crm_em)").eq("org_id", org).or("etapa.like.%lead_novo,etapa.like.%trafego%,etapa.like.%formulario%")
       .lte("em", `${hoje}T23:59:59.999-03:00`).limit(20000),
-    db.from("crm_entradas").select("telefone_chave,em").eq("org_id", org).lte("em", `${hoje}T23:59:59.999-03:00`).limit(20000),
+    db.from("crm_entradas").select("telefone_chave,em,criada_crm_em").eq("org_id", org).lte("em", `${hoje}T23:59:59.999-03:00`).limit(20000),
   ]);
 
   const nomeDe = new Map(((rPerf.data ?? []) as Perfil[]).map((p) => [p.id, p.nome])); // quem vendeu, na lista de vendas do produto
@@ -222,12 +222,18 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   // crm_entradas com erro (ex.: tabela ainda nao criada): conta so pelos cartoes dos vendedores.
   const chaveTel = (t: unknown) => { const d = String(t ?? "").replace(/\D/g, "").replace(/^55/, ""); return d.length >= 10 ? d.slice(0, 2) + d.slice(-8) : null; };
   const primeiraEntrada = new Map<string, number>();
-  const viuEntrada = (tel: string | null, em: string) => { const t = Date.parse(em); if (tel && !Number.isNaN(t) && (!primeiraEntrada.has(tel) || t < primeiraEntrada.get(tel)!)) primeiraEntrada.set(tel, t); };
-  for (const e of (rFunil.data ?? []) as { em: string; crm_conversas: { telefone: string | null } | { telefone: string | null }[] | null }[]) {
+  // A data do lead e quando ele CHEGOU: a criacao do cartao (primeira mensagem) se for antes de quando o vimos na etapa.
+  // Sem isso, um cartao parado ha dias em Lead novo (ex.: criado 20/11 no Comercial inbound) contava no dia em que o sistema o viu.
+  const viuEntrada = (tel: string | null, ...datas: (string | null | undefined)[]) => {
+    const t = Math.min(...datas.map((d) => (d ? Date.parse(d) : NaN)).filter((x) => !Number.isNaN(x)));
+    if (tel && Number.isFinite(t) && (!primeiraEntrada.has(tel) || t < primeiraEntrada.get(tel)!)) primeiraEntrada.set(tel, t);
+  };
+  type Cc = { telefone: string | null; criada_crm_em: string | null };
+  for (const e of (rFunil.data ?? []) as { em: string; crm_conversas: Cc | Cc[] | null }[]) {
     const cc = Array.isArray(e.crm_conversas) ? e.crm_conversas[0] : e.crm_conversas;
-    viuEntrada(chaveTel(cc?.telefone), e.em);
+    viuEntrada(chaveTel(cc?.telefone), e.em, cc?.criada_crm_em);
   }
-  if (!rEnt.error) for (const e of (rEnt.data ?? []) as { telefone_chave: string; em: string }[]) viuEntrada(e.telefone_chave, e.em);
+  if (!rEnt.error) for (const e of (rEnt.data ?? []) as { telefone_chave: string; em: string; criada_crm_em: string | null }[]) viuEntrada(e.telefone_chave, e.em, e.criada_crm_em);
   const desdeLeads = Date.parse(`${ini > FUNIL_DESDE ? ini : FUNIL_DESDE}T00:00:00-03:00`);
   const conta =(l: { conversa_id: string; etapa: string; em?: string }[] | null, re: RegExp) =>
     (l ? new Set(l.filter((e) => re.test(e.etapa) && (!e.em || Date.parse(e.em) >= Date.parse(desdeFunil))).map((e) => e.conversa_id)).size : null);
@@ -237,7 +243,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   // Rai, so entra se o Closer/SDR do negocio for do time), de 26/11 em diante, um negocio = uma venda
   const vendasFechadas = new Set(fechadas.filter((v) => v.data >= FUNIL_DESDE).map(negocio)).size;
   const funil = [
-    { etapa: "Leads novos", n: leadsNovos, obs: "telefones únicos em Lead novo, Lead tráfego ou Formulário abandonado, de todos os números (inclui Comercial inbound)" },
+    { etapa: "Leads novos", n: leadsNovos, obs: "telefones únicos que chegaram no período (1ª mensagem), de qualquer número" },
     { etapa: "Inscritos no workshop", n: inscritosCrm.filter((r) => r.data >= FUNIL_DESDE).length, obs: "etapa Inscrito no workshop" },
     { etapa: "Vieram ao workshop", n: vieram, obs: "etapa Veio ao workshop" },
     { etapa: "Diagnóstico agendado", n: conta(etapas, /reuniao_de_diagnostico$/), obs: "etapa Reunião de diagnóstico" },

@@ -651,6 +651,7 @@ function ListaSemRetorno({ titulo, k, fechar }: { titulo: string; k: Kpi; fechar
   );
 }
 // Funil da Conversao total: cada etapa com barra proporcional ao topo, quanto passou da etapa anterior e quanto e do topo
+const GRADE_FUNIL = "minmax(0,1fr) 110px 150px 150px";
 function DetalheFunil({ titulo, k, fechar }: { titulo: string; k: Kpi; fechar: () => void }) {
   useEffect(() => {
     const f = (e: KeyboardEvent) => { if (e.key === "Escape") fechar(); };
@@ -658,43 +659,38 @@ function DetalheFunil({ titulo, k, fechar }: { titulo: string; k: Kpi; fechar: (
     return () => document.removeEventListener("keydown", f);
   }, [fechar]);
   const etapas = k.funil ?? [];
-  const topo = Math.max(1, ...etapas.map((e) => e.n ?? 0));
   const taxa = (a: number | null, b: number | null) => (a == null || !b ? "—" : `${Math.round((a / b) * 100)}%`);
   return (
     <div onClick={fechar} style={{ position: "fixed", inset: 0, zIndex: 50, background: "var(--vg-veu)", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div role="dialog" aria-modal="true" aria-label={titulo} onClick={(e) => e.stopPropagation()} className="cd"
-        style={{ width: 1200, maxHeight: 900, display: "flex", flexDirection: "column", padding: "26px 32px", gap: 18, borderColor: "var(--vg-borda-fat)" }}>
+        style={{ width: 1000, maxHeight: 900, display: "flex", flexDirection: "column", padding: "26px 32px", gap: 18, borderColor: "var(--vg-borda-fat)" }}>
         <div className="row" style={{ gap: 16 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
             <span className="lb nw">{titulo}</span>
             <span className="vl nw" style={{ fontSize: 52 }}>{k.valor ?? "—"}</span>
-            <span className="mu nw">{k.sub} · cada etapa conta quem entrou nela no período</span>
+            <span className="mu nw">{k.sub}</span>
           </div>
           <div style={{ flex: 1 }} />
           <button type="button" className="bt" onClick={fechar} aria-label="Fechar" autoFocus>✕ Fechar</button>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "300px minmax(0,1fr) 110px 150px", gap: "0 18px", padding: "0 16px", fontSize: 15, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.mute }}>
-          <span>Etapa</span><span /><span style={{ textAlign: "right" }}>Da anterior</span><span style={{ textAlign: "right" }}>Dos leads</span>
+        {/* mesmo padrao das outras listas: cabecalho em uma linha, linhas com o nome em cima e a explicacao embaixo, numeros a direita */}
+        <div style={{ display: "grid", gridTemplateColumns: GRADE_FUNIL, gap: "0 18px", padding: "0 16px", fontSize: 15, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: C.mute }}>
+          <span>Etapa</span><span className="nw" style={{ textAlign: "right" }}>Qtd.</span><span className="nw" style={{ textAlign: "right" }}>Da anterior</span><span className="nw" style={{ textAlign: "right" }}>Dos leads</span>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
           {etapas.map((e, i) => (
-            <div key={e.etapa} style={{ display: "grid", gridTemplateColumns: "300px minmax(0,1fr) 110px 150px", gap: "0 18px", alignItems: "center", background: "var(--vg-dentro)", borderRadius: 12, padding: "12px 16px" }}>
+            <div key={e.etapa} style={{ display: "grid", gridTemplateColumns: GRADE_FUNIL, gap: "0 18px", alignItems: "center", background: "var(--vg-dentro)", borderRadius: 12, padding: "12px 16px" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                <span className="nw" style={{ fontSize: 22, fontWeight: 700 }}>{e.etapa}</span>
-                <span className="mu nw" style={{ fontSize: 14, overflow: "hidden", textOverflow: "ellipsis" }}>{e.obs}</span>
+                <span className="nw" style={{ fontSize: 22, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis" }}>{e.etapa}</span>
+                <span className="mu" style={{ fontSize: 15 }}>{e.obs}</span>
               </div>
-              <div className="row" style={{ gap: 12, minWidth: 0 }}>
-                <div style={{ flex: 1, height: 26, background: "var(--vg-trilho)", borderRadius: 8, overflow: "hidden" }}>
-                  <div style={{ width: `${e.n == null ? 0 : Math.max(e.n ? 2 : 0, (e.n / topo) * 100)}%`, height: "100%", background: "var(--vg-ok-barra)", borderRadius: 8 }} />
-                </div>
-                <span className="vl nw" style={{ fontSize: 28, minWidth: 70, textAlign: "right" }}>{e.n == null ? "—" : inteiro(e.n)}</span>
-              </div>
+              <span className="nw" style={{ fontSize: 24, fontWeight: 800, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{e.n == null ? "—" : inteiro(e.n)}</span>
               <span className="nw" style={{ fontSize: 20, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{i === 0 ? "" : taxa(e.n, etapas[i - 1].n)}</span>
               <span className="nw" style={{ fontSize: 20, textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{i === 0 ? "" : taxa(e.n, etapas[0].n)}</span>
             </div>
           ))}
         </div>
-        <span className="mu" style={{ fontSize: 15 }}>Cada etapa conta quem entrou nela no período; não são as mesmas pessoas do topo até a venda (um lead de um mês pode fechar no outro). Etapa “—” = ainda sem dado.</span>
+        <span className="mu">Cada etapa conta quem entrou nela no período (não são as mesmas pessoas do topo até a venda). “—” = ainda sem dado.</span>
       </div>
     </div>
   );
