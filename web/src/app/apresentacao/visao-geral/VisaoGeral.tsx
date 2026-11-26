@@ -381,9 +381,9 @@ function Conversao({ c, selo = false }: { c: VisaoGeralDados["conversao"]; selo?
   if (selo) return (
     <>
       <button type="button" className="pr" onClick={() => c && setAberto(true)} disabled={!c} aria-haspopup="dialog" title={c ? "Ver a conversão por produto" : undefined} aria-label="Conversão do workshop"
-        style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: "6px 14px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0, flexShrink: 0, color: "inherit", cursor: c ? "pointer" : "default" }}>
-        <span className="lb nw" style={{ fontSize: 12, color: C.mute }}>Conversão do workshop</span>
-        <span className="vl nw" style={{ fontSize: 26 }}>{c ? pct(c.total, c.presentes) : "—"}</span>
+        style={{ background: "var(--vg-dentro)", borderRadius: 10, padding: "4px 10px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0, flexShrink: 0, color: "inherit", cursor: c ? "pointer" : "default" }}>
+        <span className="lb nw" style={{ fontSize: 10, letterSpacing: ".06em", color: C.mute }}>Conversão do workshop</span>
+        <span className="vl nw" style={{ fontSize: 22 }}>{c ? pct(c.total, c.presentes) : "—"}</span>
       </button>
       {aberto && c && <DetalheConversao c={c} fechar={() => setAberto(false)} />}
     </>
@@ -447,19 +447,39 @@ function ListaFollowups({ f, nome, fechar }: { f: Fups; nome: string; fechar: ()
     </div>
   );
 }
-function QuadroFollowups({ f, nome, compacto = false }: { f: Fups; nome: string; compacto?: boolean }) {
+// quadro pequeno (follow-ups, leads sem retorno). estreito (lado a lado): titulo em cima e numero embaixo, para o titulo
+// nunca passar por cima do numero; largo: titulo e explicacao a esquerda, numero a direita
+function QuadroNumero({ titulo, sub, subCurto, qtd, tom, clica, abrir, compacto, estreito }: { titulo: string; sub: string; subCurto: string; qtd: number; tom: { c: string }; clica: boolean; abrir: () => void; compacto: boolean; estreito: boolean }) {
+  const base = { background: "var(--vg-dentro)", borderRadius: 12, minWidth: 0, width: "100%", height: "100%", textAlign: "left" as const, color: "inherit", cursor: clica ? "pointer" : "default" };
+  if (estreito) return (
+    <button type="button" className="pr" onClick={() => clica && abrir()} disabled={!clica} aria-haspopup="dialog" title={clica ? "Ver quem são" : undefined} aria-label={titulo}
+      style={{ ...base, padding: compacto ? "6px 12px" : "8px 12px", display: "flex", flexDirection: "column", gap: 0 }}>
+      <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 16, overflow: "hidden", textOverflow: "ellipsis" }}>{titulo}</span>
+      <div className="row nw" style={{ alignItems: "baseline", gap: 8, minWidth: 0 }}>
+        <span className="vl" style={{ fontSize: compacto ? 30 : 34, color: tom.c }}>{inteiro(qtd)}</span>
+        <span className="mu nw" style={{ fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{subCurto}</span>
+      </div>
+    </button>
+  );
+  return (
+    <button type="button" className="pr row" onClick={() => clica && abrir()} disabled={!clica} aria-haspopup="dialog" title={clica ? "Ver quem são" : undefined} aria-label={titulo}
+      style={{ ...base, padding: compacto ? "7px 16px" : "10px 16px", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: compacto ? 0 : 2, minWidth: 0, flex: 1 }}>
+        <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>{titulo}</span>
+        <span className="mu nw" style={{ fontSize: compacto ? 14 : 15, overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</span>
+      </div>
+      <span className="vl nw" style={{ fontSize: compacto ? 34 : 40, color: tom.c }}>{inteiro(qtd)}</span>
+    </button>
+  );
+}
+function QuadroFollowups({ f, nome, compacto = false, estreito = false }: { f: Fups; nome: string; compacto?: boolean; estreito?: boolean }) {
   const [aberto, setAberto] = useState(false);
   const tom = f.qtd > 0 ? TOM.bad : TOM.ok, clica = f.qtd > 0;
   return (
     <>
-      <button type="button" className="pr row" onClick={() => clica && setAberto(true)} disabled={!clica} aria-haspopup="dialog" title={clica ? "Ver quem são" : undefined}
-        style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: compacto ? "7px 16px" : "10px 16px", gap: 12, minWidth: 0, width: "100%", height: "100%", textAlign: "left", color: "inherit", cursor: clica ? "pointer" : "default" }} aria-label="Follow-ups atrasados">
-        <div style={{ display: "flex", flexDirection: "column", gap: compacto ? 0 : 2, minWidth: 0, flex: 1 }}>
-          <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>Follow-ups atrasados</span>
-          <span className="mu nw" style={{ fontSize: compacto ? 14 : 15, overflow: "hidden", textOverflow: "ellipsis" }}>{f.qtd > 0 ? `${f.dias}+ dias sem mensagem${f.maisAntigo != null ? ` · mais antigo ${f.maisAntigo} dias` : ""}` : "nenhum cliente esperando"}</span>
-        </div>
-        <span className="vl nw" style={{ fontSize: compacto ? 34 : 40, color: tom.c }}>{inteiro(f.qtd)}</span>
-      </button>
+      <QuadroNumero titulo="Follow-ups atrasados" qtd={f.qtd} tom={tom} clica={clica} abrir={() => setAberto(true)} compacto={compacto} estreito={estreito}
+        sub={f.qtd > 0 ? `${f.dias}+ dias sem mensagem${f.maisAntigo != null ? ` · mais antigo ${f.maisAntigo} dias` : ""}` : "nenhum cliente esperando"}
+        subCurto={f.qtd > 0 ? `${f.dias}+ dias sem msg` : "ninguém esperando"} />
       {aberto && <ListaFollowups f={f} nome={nome} fechar={() => setAberto(false)} />}
     </>
   );
@@ -523,20 +543,14 @@ function LadoALado({ largo, a, b }: { largo: boolean; a: ReactNode; b: ReactNode
   return <>{a}{b}</>;
 }
 // Leads sem retorno do SDR (mesma conta do quadro do time): clicar abre a lista, igual ao modal do quadro do time
-function QuadroSemRetorno({ s, nome, compacto = false }: { s: NonNullable<Pessoa["semRetorno"]>; nome: string; compacto?: boolean }) {
+function QuadroSemRetorno({ s, nome, compacto = false, estreito = false }: { s: NonNullable<Pessoa["semRetorno"]>; nome: string; compacto?: boolean; estreito?: boolean }) {
   const [aberto, setAberto] = useState(false);
   const tom = s.qtd > 0 ? TOM.bad : TOM.ok, clica = s.qtd > 0;
   const k: Kpi = { valor: String(s.qtd), sub: "", tom: s.qtd > 0 ? "bad" : "ok", lista: s.lista };
   return (
     <>
-      <button type="button" className="pr row" onClick={() => clica && setAberto(true)} disabled={!clica} aria-haspopup="dialog" title={clica ? "Ver quem são" : undefined}
-        style={{ background: "var(--vg-dentro)", borderRadius: 12, padding: compacto ? "7px 16px" : "10px 16px", gap: 12, minWidth: 0, width: "100%", height: "100%", textAlign: "left", color: "inherit", cursor: clica ? "pointer" : "default" }} aria-label="Leads sem retorno">
-        <div style={{ display: "flex", flexDirection: "column", gap: compacto ? 0 : 2, minWidth: 0, flex: 1 }}>
-          <span className="mu nw" style={{ fontWeight: 600, color: C.texto, fontSize: 17 }}>Leads sem retorno</span>
-          <span className="mu nw" style={{ fontSize: compacto ? 14 : 15, overflow: "hidden", textOverflow: "ellipsis" }}>{s.qtd > 0 ? "mais de 15 min sem resposta" : "ninguém esperando"}</span>
-        </div>
-        <span className="vl nw" style={{ fontSize: compacto ? 34 : 40, color: tom.c }}>{inteiro(s.qtd)}</span>
-      </button>
+      <QuadroNumero titulo="Leads sem retorno" qtd={s.qtd} tom={tom} clica={clica} abrir={() => setAberto(true)} compacto={compacto} estreito={estreito}
+        sub={s.qtd > 0 ? "mais de 15 min sem resposta" : "ninguém esperando"} subCurto={s.qtd > 0 ? "esperando 15+ min" : "ninguém esperando"} />
       {aberto && <ListaSemRetorno titulo={`Leads sem retorno · ${nome}`} k={k} fechar={() => setAberto(false)} />}
     </>
   );
@@ -564,8 +578,8 @@ function Cartao({ p, ritmoPct, q, conv, largo }: { p: Pessoa; ritmoPct: number; 
       {/* lado a lado so com cartao largo (ate 3 pessoas); com 4+ nao cabe e fica um embaixo do outro
           SDR e closer: follow-ups | leads sem retorno (a conversao do workshop do closer fica no canto, ao lado do nome) */}
       <LadoALado largo={largo}
-        a={fup ? <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} /> : null}
-        b={p.semRetorno && temItem(q, "semretorno_sdr") ? <QuadroSemRetorno s={p.semRetorno} nome={p.nome} compacto={compacto} /> : null} />
+        a={fup ? <QuadroFollowups f={p.followups!} nome={p.nome} compacto={compacto} estreito={largo && !!p.semRetorno && temItem(q, "semretorno_sdr")} /> : null}
+        b={p.semRetorno && temItem(q, "semretorno_sdr") ? <QuadroSemRetorno s={p.semRetorno} nome={p.nome} compacto={compacto} estreito={largo && fup} /> : null} />
       {temItem(q, "vendas") && <div style={{ marginTop: "auto", background: "var(--vg-destaque)", borderRadius: 12, padding: compacto ? "8px 16px" : "10px 16px", display: "flex", flexDirection: "column", gap: compacto ? 2 : 4 }}>
         {/* compacto: a quantidade sobe para a linha do titulo (uma linha a menos) */}
         <div className="row" style={{ alignItems: "baseline", gap: 8 }}>

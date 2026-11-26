@@ -223,10 +223,46 @@ async function varrerEmpresa(org: Org, ate: number) {
 // Vale a etapa que veio no aviso (data.status); sem ela, a da conversa lida agora. So grava se a conversa ja existe no
 // sistema (crm_etapas aponta para crm_conversas) e se a ultima etapa gravada for outra (o gatilho da sincronizacao pode
 // gravar a mesma depois: as contas usam conversa distinta por etapa, entao a repeticao nao conta duas vezes).
+// A etapa pode vir em qualquer ponto do aviso (ex.: data.status, data.changes.status.to): vale o primeiro "custom_..." achado,
+// preferindo chaves de valor novo (to/new/current/after) as de valor antigo (from/old/previous/before). 26/11/2026: o aviso da
+// Nita (Interessado no workshop, 09:00) chegou mas a etapa nao foi gravada.
+const SITUACAO = /^(custom_[a-z0-9_]+|open|pending|waiting|resolved|closed)$/;
+function etapaDoAviso(corpo: any): string | null {
+  const achadas: { caminho: string; v: string }[] = [];
+  const andar = (v: any, caminho: string, nivel: number) => {
+    if (v == null || nivel > 6) return;
+    if (typeof v === "string") { if (v.startsWith("custom_")) achadas.push({ caminho, v }); return; }
+    if (Array.isArray(v)) { v.slice(0, 10).forEach((x, i) => andar(x, `${caminho}[${i}]`, nivel + 1)); return; }
+    if (typeof v === "object") for (const [k, x] of Object.entries(v)) andar(x, caminho ? `${caminho}.${k}` : k, nivel + 1);
+  };
+  andar(corpo?.data, "data", 0);
+  const nova = achadas.find((a) => /(^|\.)(to|new|current|after|novo|atual)\b/i.test(a.caminho));
+  const velha = (a: { caminho: string }) => /(^|\.)(from|old|previous|before|anterior)\b/i.test(a.caminho);
+  return (nova ?? achadas.find((a) => !velha(a)))?.v ?? null;
+}
+// formato do aviso, sem dados pessoais: caminho=valor so para situacao/etapa; o resto so o tipo (ex.: data.contact.name:string)
+function formaDoAviso(corpo: any): string[] {
+  const out: string[] = [];
+  const andar = (v: any, caminho: string, nivel: number) => {
+    if (out.length >= 60 || nivel > 6) return;
+    if (v === null || typeof v !== "object") { out.push(typeof v === "string" && SITUACAO.test(v) ? `${caminho}=${v}` : `${caminho}:${v === null ? "null" : typeof v}`); return; }
+    if (Array.isArray(v)) { if (!v.length) out.push(`${caminho}:[]`); v.slice(0, 3).forEach((x, i) => andar(x, `${caminho}[${i}]`, nivel + 1)); return; }
+    for (const [k, x] of Object.entries(v)) andar(x, caminho ? `${caminho}.${k}` : k, nivel + 1);
+  };
+  andar(corpo, "", 0);
+  return out;
+}
+
 async function gravarEtapa(org: Org, chat: any, corpo: any) {
-  const doAviso = typeof corpo?.data?.status === "string" ? corpo.data.status : null;
+  const doAviso = etapaDoAviso(corpo) ?? (typeof corpo?.data?.status === "string" ? corpo.data.status : null);
   const etapa = String(doAviso ?? chat?.status ?? "");
   if (!etapa.startsWith("custom_")) return;
+  // entrada de lead (Lead novo, Lead trafego, Formulario abandonado) de qualquer numero, mesmo sem vendedor no sistema
+  // (ex.: Comercial inbound): vai para crm_entradas, que o KPI "Leads novos" conta por telefone (supabase/crm_entradas.sql)
+  const fone = String(chat?.contact?.phoneE164 ?? "").replace(/\D/g, "").replace(/^55/, "");
+  if (/lead_novo$|trafego|formulario/.test(etapa) && fone.length >= 10)
+    await sb.from("crm_entradas").upsert({ org_id: org.id, conversa_crm_id: chat.id, etapa, telefone_chave: fone.slice(0, 2) + fone.slice(-8), instancia: chat?.instance?.name ?? null, criada_crm_em: chat?.createdAt ?? null },
+      { onConflict: "conversa_crm_id,etapa", ignoreDuplicates: true });
   const { data: conv } = await sb.from("crm_conversas").select("id,vendedor_id").eq("org_id", org.id).eq("id", chat.id).maybeSingle();
   if (!conv) return;
   const { data: ult } = await sb.from("crm_etapas").select("etapa").eq("conversa_id", conv.id).order("em", { ascending: false }).limit(1).maybeSingle();
@@ -238,7 +274,7 @@ async function gravarEtapa(org: Org, chat: any, corpo: any) {
 async function tratarEvento(org: Org, corpo: any) {
   const chave = Deno.env.get(org.crm_segredo) || "";
   const evento = String(corpo?.event ?? corpo?.type ?? corpo?.eventType ?? corpo?.name ?? "").slice(0, 60);
-  const registrar = (chat: string | null, acao: string) => sb.from("crm_eventos").insert({ org: org.slug, evento, chaves: Object.keys(corpo ?? {}).slice(0, 20), chat_id: chat, acao });
+  const registrar = (chat: string | null, acao: string) => sb.from("crm_eventos").insert({ org: org.slug, evento, chaves: formaDoAviso(corpo ?? {}), chat_id: chat, acao });
   if (!chave || !corpo || typeof corpo !== "object") { await registrar(null, "sem_corpo_ou_chave"); return; }
 
   // candidatos a id da conversa: primeiro as chaves que falam de chat/conversa, depois qualquer id

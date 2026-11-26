@@ -34,7 +34,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const ritmoPct = (Math.max(diaUtil, 1) / diasUteisMes) * 100;
   const db = createAdminClient();
 
-  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem, rEtapas, rFup, rPres, rIns, rFunil] = await Promise.all([
+  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem, rEtapas, rFup, rPres, rIns, rFunil, rEnt] = await Promise.all([
     db.rpc("resumo_sdr2", { p_from: ini, p_to: hoje }),
     db.from("profiles").select("id,nome,funcao,ativo,foto_url").order("nome"),
     db.from("instancias_whatsapp").select("vendedor_id").eq("org_id", org),
@@ -59,10 +59,12 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
       ? db.from("auditorias").select("vendedor_id,conversas(data,canal,contato,contato_nome,telefone),ligacoes(iniciada_em,contato)").eq("org_id", org).eq("agendou", true)
           .or("tipo_agendamento.is.null,tipo_agendamento.eq.workshop").gte("criado_em", `${somaDias(ini, -15)}T00:00:00-03:00`).limit(5000)
       : Promise.resolve({ data: [], error: null }),
-    // Conversao total (funil): cartoes que entraram no topo (Lead novo, Lead trafego, Formulario abandonado) e em Venda fechada
-    // (Ganho do Vendas 2) no periodo. O historico de etapas existe desde 12/11; o topo passou a ser gravado tambem pelo aviso do CRM em 25/11.
-    db.from("crm_etapas").select("conversa_id,etapa").eq("org_id", org).or("etapa.like.%lead_novo,etapa.like.%trafego%,etapa.like.%formulario%,etapa.like.%vendas_2_ganho,etapa.like.%vendas_2_venda_fechada")
-      .gte("em", `${ini > FUNIL_DESDE ? ini : FUNIL_DESDE}T00:00:00-03:00`).lte("em", `${hoje}T23:59:59.999-03:00`).limit(10000),
+    // Conversao total (funil), topo: TELEFONES que entraram em Lead novo, Lead trafego ou Formulario abandonado, de duas fontes:
+    // cartoes dos vendedores (crm_etapas, desde 12/11) e de qualquer numero do CRM, inclusive o Comercial inbound (crm_entradas, 26/11).
+    // Sem limite de inicio: o telefone que ja tinha entrado antes do periodo nao e lead novo.
+    db.from("crm_etapas").select("etapa,em,crm_conversas(telefone)").eq("org_id", org).or("etapa.like.%lead_novo,etapa.like.%trafego%,etapa.like.%formulario%")
+      .lte("em", `${hoje}T23:59:59.999-03:00`).limit(20000),
+    db.from("crm_entradas").select("telefone_chave,em").eq("org_id", org).lte("em", `${hoje}T23:59:59.999-03:00`).limit(20000),
   ]);
 
   const nomeDe = new Map(((rPerf.data ?? []) as Perfil[]).map((p) => [p.id, p.nome])); // quem vendeu, na lista de vendas do produto
@@ -215,16 +217,27 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   // Cada etapa conta quem ENTROU nela no periodo, de 26/11 em diante (FUNIL_DESDE), tudo pelas etapas do CRM
   // (nao acompanha as mesmas pessoas do topo ate a venda). Periodo todo antes de 26/11: o quadro avisa quando comeca.
   const desdeFunil = `${FUNIL_DESDE}T00:00:00-03:00`;
-  const funilEt = rFunil.error ? null : (rFunil.data ?? []) as { conversa_id: string; etapa: string }[];
-  const conta = (l: { conversa_id: string; etapa: string; em?: string }[] | null, re: RegExp) =>
+  // Leads novos = TELEFONES (DDD + 8 digitos) cuja PRIMEIRA entrada no topo caiu no periodo (e de 26/11 em diante). O mesmo lead
+  // com cartao na API (Comercial inbound) e outro recriado no numero da SDR conta uma vez, na data do primeiro (pedido da gestao, 26/11).
+  // crm_entradas com erro (ex.: tabela ainda nao criada): conta so pelos cartoes dos vendedores.
+  const chaveTel = (t: unknown) => { const d = String(t ?? "").replace(/\D/g, "").replace(/^55/, ""); return d.length >= 10 ? d.slice(0, 2) + d.slice(-8) : null; };
+  const primeiraEntrada = new Map<string, number>();
+  const viuEntrada = (tel: string | null, em: string) => { const t = Date.parse(em); if (tel && !Number.isNaN(t) && (!primeiraEntrada.has(tel) || t < primeiraEntrada.get(tel)!)) primeiraEntrada.set(tel, t); };
+  for (const e of (rFunil.data ?? []) as { em: string; crm_conversas: { telefone: string | null } | { telefone: string | null }[] | null }[]) {
+    const cc = Array.isArray(e.crm_conversas) ? e.crm_conversas[0] : e.crm_conversas;
+    viuEntrada(chaveTel(cc?.telefone), e.em);
+  }
+  if (!rEnt.error) for (const e of (rEnt.data ?? []) as { telefone_chave: string; em: string }[]) viuEntrada(e.telefone_chave, e.em);
+  const desdeLeads = Date.parse(`${ini > FUNIL_DESDE ? ini : FUNIL_DESDE}T00:00:00-03:00`);
+  const conta =(l: { conversa_id: string; etapa: string; em?: string }[] | null, re: RegExp) =>
     (l ? new Set(l.filter((e) => re.test(e.etapa) && (!e.em || Date.parse(e.em) >= Date.parse(desdeFunil))).map((e) => e.conversa_id)).size : null);
   const vieram = rPres.error ? null : new Set(((rPres.data ?? []) as { conversa_id: string; em: string }[]).filter((e) => Date.parse(e.em) >= Date.parse(desdeFunil)).map((e) => e.conversa_id)).size;
-  const leadsNovos = conta(funilEt, /lead_novo$|trafego|formulario/);
+  const leadsNovos = rFunil.error ? null : [...primeiraEntrada.values()].filter((t) => t >= desdeLeads).length;
   // vendas fechadas: as MESMAS da conversao do workshop (etapa Venda fechada, so do time: venda de numero nao conectado, como o do
   // Rai, so entra se o Closer/SDR do negocio for do time), de 26/11 em diante, um negocio = uma venda
   const vendasFechadas = new Set(fechadas.filter((v) => v.data >= FUNIL_DESDE).map(negocio)).size;
   const funil = [
-    { etapa: "Leads novos", n: leadsNovos, obs: "Lead novo + Lead tráfego + Formulário abandonado" },
+    { etapa: "Leads novos", n: leadsNovos, obs: "telefones únicos em Lead novo, Lead tráfego ou Formulário abandonado, de todos os números (inclui Comercial inbound)" },
     { etapa: "Inscritos no workshop", n: inscritosCrm.filter((r) => r.data >= FUNIL_DESDE).length, obs: "etapa Inscrito no workshop" },
     { etapa: "Vieram ao workshop", n: vieram, obs: "etapa Veio ao workshop" },
     { etapa: "Diagnóstico agendado", n: conta(etapas, /reuniao_de_diagnostico$/), obs: "etapa Reunião de diagnóstico" },
