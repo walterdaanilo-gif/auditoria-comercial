@@ -91,6 +91,7 @@ function Cabecalho({ d, tema, trocarTema }: { d: VisaoGeralDados; tema: Tema; tr
 // ---------------- faturamento ----------------
 function Grafico({ d }: { d: VisaoGeralDados }) {
   const { fat, periodo } = d;
+  const [foco, setFoco] = useState<number | null>(null); // dia com o mouse em cima (indice em "dias")
   const N = periodo.diasUteisMes, du = periodo.diaUtil;
   const r = calcularRitmo(fat.real, fat.meta, du, N);
   const eixo = eixoY(Math.max(fat.meta ?? 0, r.projecao ?? 0, fat.real));
@@ -159,6 +160,37 @@ function Grafico({ d }: { d: VisaoGeralDados }) {
         {rotulosFim.map((l) => <g key={l.nome}><text x={XF + 16} y={l.y - 6} fill={l.nome === "meta" ? "var(--vg-meta)" : C.mute} fontSize="25" fontWeight="600">{l.nome}</text><text x={XF + 16} y={l.y + 25} fill={l.cor} fontSize="29" fontWeight="800">{l.valor}</text></g>)}
         {/* datas de 7 em 7 dias, como no painel de referencia */}
         <g fill={C.mute} fontSize="26" textAnchor="middle">{dias.map((x, k) => (k % 7 === 0 ? <text key={x.iso} x={X(k)} y="520">{ddmm(x.iso)}</text> : null))}</g>
+        {/* mouse em cima de um dia: linha do dia, pontos e o quadro com os valores daquele dia */}
+        {foco !== null && dias[foco] && (() => {
+          const k = foco, x = dias[k], xk = X(k);
+          const acum = (i: number) => (i === hojeK ? fat.real : realAte(dias[i].du));
+          const passado = k <= hojeK;
+          const noDia = passado ? acum(k) - (k > 0 ? acum(k - 1) : 0) : null;
+          const metaAte = fat.meta ? (fat.meta * x.du) / N : null;
+          const proj = !passado && du < N ? fat.real + ritmoDia * Math.max(x.du - du, 0) : null;
+          const semana = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][new Date(x.iso + "T12:00:00Z").getUTCDay()];
+          const util = uteis.has(x.iso);
+          const linhas: [string, string, string][] = [
+            ...(passado ? [["Vendido no dia", moeda(noDia ?? 0), C.texto] as [string, string, string], ["Acumulado", moeda(acum(k)), C.real] as [string, string, string]] : []),
+            ...(proj !== null ? [["Projeção", moeda(proj), C.texto] as [string, string, string]] : []),
+            ...(metaAte !== null ? [["Meta até o dia", moeda(metaAte), "var(--vg-meta)"] as [string, string, string]] : []),
+          ];
+          const W = 400, H = 62 + linhas.length * 40, bx = xk + 20 + W > 1230 ? xk - 20 - W : xk + 20, by = 24;
+          return (
+            <g pointerEvents="none">
+              <line x1={xk} y1={Y(eixo.topo)} x2={xk} y2="480" stroke={C.texto} strokeWidth="2" opacity=".5" />
+              {passado && <circle cx={xk} cy={Y(acum(k))} r="9" fill={C.real} stroke="var(--vg-quadro)" strokeWidth="3" />}
+              {metaAte !== null && <circle cx={xk} cy={Y(metaAte)} r="7" fill="var(--vg-meta)" stroke="var(--vg-quadro)" strokeWidth="3" />}
+              <rect x={bx} y={by} width={W} height={H} rx="14" fill="var(--vg-quadro)" stroke="var(--vg-linha)" strokeWidth="2" />
+              <text x={bx + 20} y={by + 40} fill={C.texto} fontSize="27" fontWeight="800">{semana}, {ddmm(x.iso)}{util ? "" : " · sem expediente"}</text>
+              {linhas.map(([rot, val, cor], i) => <g key={rot}><text x={bx + 20} y={by + 84 + i * 40} fill={C.mute} fontSize="24">{rot}</text><text x={bx + W - 20} y={by + 84 + i * 40} fill={cor} fontSize="25" fontWeight="800" textAnchor="end">{val}</text></g>)}
+            </g>
+          );
+        })()}
+        {/* areas invisiveis por dia para o mouse */}
+        <g onMouseLeave={() => setFoco(null)}>
+          {dias.map((x, k) => <rect key={x.iso} x={X(k) - (XF - X0) / (D - 1) / 2} y={Y(eixo.topo)} width={(XF - X0) / (D - 1)} height={480 - Y(eixo.topo) + 50} fill="transparent" onMouseEnter={() => setFoco(k)} onClick={() => setFoco(k)} />)}
+        </g>
       </svg>
     </div>
   );
