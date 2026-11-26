@@ -253,18 +253,43 @@ function formaDoAviso(corpo: any): string[] {
   return out;
 }
 
+// 26/11/2026: "Inscrito no workshop" NAO e etapa custom: e a coluna padrao "waiting" do funil Workshop (o funil principal),
+// renomeada. O selo "Aguardando Xm" da tela e outra coisa (cronometro) e nao chega pela API. Por isso "waiting" tambem e gravado.
+const ehEtapa = (s: string) => s.startsWith("custom_") || s === "waiting";
 async function gravarEtapa(org: Org, chat: any, corpo: any) {
-  const doAviso = etapaDoAviso(corpo) ?? (typeof corpo?.data?.status === "string" ? corpo.data.status : null);
+  const patch = corpo?.data?.patch?.status ?? corpo?.data?.status;
+  const doAviso = etapaDoAviso(corpo) ?? (typeof patch === "string" ? patch : null);
   const etapa = String(doAviso ?? chat?.status ?? "");
-  if (!etapa.startsWith("custom_")) return;
+  if (!ehEtapa(etapa)) return;
   // entrada de lead (Lead novo, Lead trafego, Formulario abandonado) de qualquer numero, mesmo sem vendedor no sistema
   // (ex.: Comercial inbound): vai para crm_entradas, que o KPI "Leads novos" conta por telefone (supabase/crm_entradas.sql)
   const fone = String(chat?.contact?.phoneE164 ?? "").replace(/\D/g, "").replace(/^55/, "");
   if (/lead_novo$|trafego|formulario/.test(etapa) && fone.length >= 10)
     await sb.from("crm_entradas").upsert({ org_id: org.id, conversa_crm_id: chat.id, etapa, telefone_chave: fone.slice(0, 2) + fone.slice(-8), instancia: chat?.instance?.name ?? null, criada_crm_em: chat?.createdAt ?? null },
       { onConflict: "conversa_crm_id,etapa", ignoreDuplicates: true });
-  const { data: conv } = await sb.from("crm_conversas").select("id,vendedor_id").eq("org_id", org.id).eq("id", chat.id).maybeSingle();
-  if (!conv) return;
+  let { data: conv } = await sb.from("crm_conversas").select("id,vendedor_id").eq("org_id", org.id).eq("id", chat.id).maybeSingle();
+  if (!conv) {
+    // cartao novo que a sincronizacao (volta de ~45 min) ainda nao puxou (ex.: Francisco Celio, 26/11, inscrito 17 min apos
+    // criado): cria a conversa aqui se o numero e de vendedor com conversas no CRM; o gatilho de crm_etapas grava a etapa.
+    const k = String(chat?.instance?.phoneE164 ?? "").replace(/\D/g, "").replace(/^55/, "");
+    if (k.length < 10) return;
+    const { data: insts } = await sb.from("instancias_whatsapp").select("id,numero,vendedor_id,profiles!inner(fonte_conversas,org_id)")
+      .eq("profiles.fonte_conversas", "crm").eq("profiles.org_id", org.id);
+    const chave = (n: unknown) => { const d = String(n ?? "").replace(/\D/g, "").replace(/^55/, ""); return d.length >= 10 ? d.slice(0, 2) + d.slice(-8) : null; };
+    const dono = ((insts ?? []) as any[]).find((i) => chave(i.numero) === k.slice(0, 2) + k.slice(-8));
+    if (!dono) return;
+    await sb.from("crm_instancias").upsert({ id: chat.instance.id, nome: chat.instance.name, telefone: chat.instance.phoneE164, status: chat.instance.status,
+      provider: chat.instance.provider, instancia_id: dono.id, vendedor_id: dono.vendedor_id, atualizado_em: new Date().toISOString() });
+    const { error } = await sb.from("crm_conversas").insert({
+      id: chat.id, org_id: org.id, crm_instancia_id: chat.instance.id, vendedor_id: dono.vendedor_id, status: etapa,
+      responsavel_crm_id: chat.assignedAgentUserId ?? null, contato_crm_id: chat.contact?.id ?? null, contato_nome: chat.contact?.name ?? null,
+      telefone: chat.contact?.phoneE164 ?? null, tags: (chat.tags || []).map((t: any) => t.name), origem: chat.deal?.originLabel ?? null,
+      negocio_status: chat.deal?.status ?? null, negocio_valor_cents: chat.deal?.valueCents ?? null, ultima_msg_em: chat.lastMessageAt ?? null,
+      criada_crm_em: chat.createdAt ?? null, raw: chat, sincronizada_em: new Date().toISOString(),
+    });
+    if (error) console.error("[crm-vendas] conversa nova:", error.message.slice(0, 120));
+    return; // o gatilho ja gravou a etapa
+  }
   const { data: ult } = await sb.from("crm_etapas").select("etapa").eq("conversa_id", conv.id).order("em", { ascending: false }).limit(1).maybeSingle();
   if (ult?.etapa === etapa) return;
   await sb.from("crm_etapas").insert({ org_id: org.id, conversa_id: conv.id, vendedor_id: conv.vendedor_id, etapa, anterior: ult?.etapa ?? null });

@@ -59,7 +59,8 @@ export const ETAPAS_VENDA = { inscrito_no_workshop: "workshop", venda_fechada: n
 export type EtapaVenda = keyof typeof ETAPAS_VENDA;
 // fim do codigo da etapa no CRM -> etapa de venda
 const CODIGOS_ETAPA: [string, EtapaVenda][] = [
-  ["inscrito_no_workshop", "inscrito_no_workshop"],
+  // "Inscrito no workshop" chega da API como "waiting" (coluna padrao do funil Workshop renomeada; confirmado 26/11/2026)
+  ["inscrito_no_workshop", "inscrito_no_workshop"], ["waiting", "inscrito_no_workshop"],
   ["vendas_2_ganho", "venda_fechada"], ["vendas_2_venda_fechada", "venda_fechada"],
   ["pos_vendas_ganho", "comprou_a_plataforma"], ["comprou_a_plataforma", "comprou_a_plataforma"],
   ["plataforma_ganho", "renovacao"], ["renovacao", "renovacao"],
