@@ -34,7 +34,7 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const ritmoPct = (Math.max(diaUtil, 1) / diasUteisMes) * 100;
   const db = createAdminClient();
 
-  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem, rEtapas, rFup, rPres, rIns, rFunil, rEnt] = await Promise.all([
+  const [rRes, rPerf, rInst, rCfg, resultados, rTem, rSem, rEtapas, rFup, rPres, rIns, rFunil, rEnt, rInterno] = await Promise.all([
     db.rpc("resumo_sdr2", { p_from: ini, p_to: hoje }),
     db.from("profiles").select("id,nome,funcao,ativo,foto_url").order("nome"),
     db.from("instancias_whatsapp").select("vendedor_id").eq("org_id", org),
@@ -65,6 +65,8 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
     db.from("crm_etapas").select("etapa,em,crm_conversas(telefone,criada_crm_em)").eq("org_id", org).or("etapa.like.%lead_novo,etapa.like.%trafego%,etapa.like.%formulario%")
       .lte("em", `${hoje}T23:59:59.999-03:00`).limit(20000),
     db.from("crm_entradas").select("telefone_chave,em,criada_crm_em").eq("org_id", org).lte("em", `${hoje}T23:59:59.999-03:00`).limit(20000),
+    // cartoes no funil Interno do CRM (conversa do time, nao e cliente): saem dos Leads sem retorno (pedido da gestao 27/11/2026)
+    db.from("crm_conversas").select("telefone").eq("org_id", org).like("status", "custom_interno_%").limit(5000),
   ]);
 
   const nomeDe = new Map(((rPerf.data ?? []) as Perfil[]).map((p) => [p.id, p.nome])); // quem vendeu, na lista de vendas do produto
@@ -165,7 +167,9 @@ export async function montarVisaoGeral(org: string, periodo: Periodo): Promise<V
   const sdrLinhas = linhas.filter((l) => sdrIds.has(l.vendedor_id));
   const conversasTime = sdrLinhas.reduce((s, l) => s + n(l.respostas), 0), marcacoesTime = sdrs.reduce((s, p) => s + inscricoesDe(p.id), 0);
   type Sem = { vendedor_id: string; contato: string; contato_nome: string | null; ultima_msg_em: string; texto: string | null };
-  const semLista = rSem.error ? null : ((rSem.data ?? []) as Sem[]).filter((c) => ids.has(c.vendedor_id));
+  const fim8 = (t: unknown) => String(t ?? "").replace(/D/g, "").slice(-8);
+  const interno = new Set(((rInterno.data ?? []) as { telefone: string | null }[]).map((c) => fim8(c.telefone)).filter((t) => t.length === 8));
+  const semLista = rSem.error ? null : ((rSem.data ?? []) as Sem[]).filter((c) => ids.has(c.vendedor_id) && !interno.has(fim8(c.contato)));
   const semRetorno = semLista ? semLista.length : null;
   const espera = (iso: string) => {
     const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
