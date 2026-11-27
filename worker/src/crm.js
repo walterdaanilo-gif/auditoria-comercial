@@ -7,7 +7,9 @@ import { carregarRegras, chaveTelefone } from "./auditor.js";
 // Mensagens copiadas levam wa_id "crm:<id>" (nunca duplicam). Notas internas, mensagens automaticas, apagadas e de sistema ficam de fora.
 const FORA = ["custom_chat_interno"]; // conversa interna do time
 const NAO_POTENCIAL = ["custom_chat_interno", "custom_pos_vendas_perdido", "resolved", "closed"];
-export const crmPotencial = status => !NAO_POTENCIAL.includes(String(status || ""));
+// funil "Interno" do CRM (custom_interno_entrada, custom_interno_ganho...): conversa interna, nao e cliente (pedido da gestao 27/11/2026)
+export const crmInterno = status => /^custom_interno_/.test(String(status || ""));
+export const crmPotencial = status => !NAO_POTENCIAL.includes(String(status || "")) && !crmInterno(status);
 const TIPO = { text: "texto", audio: "audio", image: "imagem", video: "video", document: "documento" };
 const digitos = t => String(t || "").replace(/\D/g, "");
 
